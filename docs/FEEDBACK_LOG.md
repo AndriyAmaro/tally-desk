@@ -30,6 +30,7 @@ Status words: **open** (still reproduces), **worked around** (our client handles
     -d '{"model":"openai/gpt-oss-120b","max_tokens":8,"user":"bull","messages":[{"role":"user","content":"ok"}]}'
   ```
 - **Why it hurts.** Per-user budgets are one of the headline features, and the first thing a developer tries is the `user` field. The text says "does not match", which reads like a typo in the id, not like "this key cannot name end users".
+- **What the docs say.** The text matches the deployment-wide `reject_user_mismatch` setting and the per-key override of the same name on `POST /organizations/me/keys`, which the message does not mention. Setting the override to `false` would make the field accepted, but spend then binds to the key's owner, so it gives no per-user budget; only a service key does.
 - **Suggestion.** A stable `Otari-Error-Code` such as `end_user_requires_service_key`, and a detail that says "end users need a service key; this key is not one". A pointer from the key-creation screen to the fact that `is_service_key` cannot be changed later would save a key rotation.
 - **Our handling.** `config/otari.json` has `send_user: false`; the role name goes in the `user` field only after `send_user` (or `OTARI_SEND_USER=1`) is switched on for a service key.
 
@@ -68,12 +69,31 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - **Suggestion.** Answer 409 here with `Retry-After`; better, hold the second request open until the first finishes (the key already identifies it); and consider `202` or a documented polling route for completions longer than the edge allows. Document the non-streaming ceiling next to the idempotency section.
 - **Our handling.** The client retries that exact 409 with a 5 s growing wait on the same key; the stored reply then comes back with `Otari-Idempotent-Replayed: true`, which the receipt records. In the final cycle one batch needed three tries (`client_attempts: 3`) and all nine succeeded.
 
-### 8. Three credential headers all work, and the docs could say which one to prefer (note)
+### 8. Management routes answer an ordinary key with `401 Invalid master key` (open)
+
+- **Symptom.** With an ordinary inference key, `GET /api/v1/organizations/me`, `/organizations/me/budgets`, `/organizations/me/routing-policies`, `/organizations/me/keys`, `/wallet`, `/usage`, `/usage/summary` and `/traces/requests/{id}` all answer `HTTP 401 {"detail":"Invalid master key"}`. A tenant on the hosted service has no master key, so the text points at a credential that does not exist for them. By contrast `GET /api/v1/models`, `/tools`, `/providers/catalog` and `GET /api/v1/usage/requests/{request_id}` answer 200 with the same key, and `/end-users` answers `403 This endpoint requires a service key`, which is the clear kind of message.
+- **Reproduce.** `curl -sS -H "Otari-Key: $OTARI_API_KEY" https://otari.ai/api/v1/organizations/me/budgets`.
+- **Suggestion.** A 403 with a code such as `requires_dashboard_session` and a sentence saying that budgets, routing policies, keys and the wallet are managed from the dashboard (or by a session) on the hosted service. The same sentence in the budgets and routing docs, which today say "master key".
+- **Also.** The F0 reading of the docs allowed an inference key to read the traces of its own requests; on the hosted gateway `/traces/requests/{id}` answers 401 for a request the key just made. Only `/usage/requests/{id}` (cost, tokens, status, `row_count`) is readable, and it is enough to recover the cost of a failed call.
+
+### 9. There is no per-request fallback list, so a fallback chain of our own needs the dashboard first (open, worked around)
+
+- **Symptom.** `POST /chat/completions` has no field or header for a list of fallback models (the request schema has `model`, `tools`, `guardrails`, `mcp_servers`, `user` and similar, no `models`). The only per-request controls in the routing docs are `Otari-Router: off`, `Otari-Router-Task` and `Otari-Conversation-Id`. A catalog id gets Otari's automatic fallback across providers of the same model, and anything else needs a policy created by an owner or admin in the dashboard (`/organizations/me/routing-policies` takes a session, not a key). A developer testing the fallback from code with a key cannot create the policy or force the failure.
+- **Suggestion.** An optional `models` array (as other gateways offer) or an `Otari-Fallback-Models` header, subject to the same allow-list, pricing and budget checks as a policy, so an app can state its own chain per request and a test can force one.
+- **Our handling.** Each role may name a policy as its `model` (`sent_model` in the receipt, `served_model` and `Otari-Fallback` for what happened), and one role can be pointed at a drill policy with `OTARI_POLICY_<ROLE>`.
+
+### 10. A model that does not exist answers 402 `pricing_required` on a pinned selector (open)
+
+- **Symptom.** `model: "deepinfra:drill/does-not-exist"` answers `HTTP 402`, `Otari-Error-Code: pricing_required`, "No pricing is configured for model ... and require_pricing is on". The same name without the provider (`drill/does-not-exist`) answers `400 invalid_model` with a better message, and a known provider with no credential (`anthropic:claude-haiku-4-5`) answers `424 provider_not_configured` ("An operator can add the provider as a hosted provider, or the organization can add its own provider key").
+- **Why it hurts.** A typo in a model id looks like a billing problem, and it is unclear whether a policy whose first target is such a name moves on to its backup (the routing doc says any failure moves on) or stops the whole request with the 402.
+- **Suggestion.** Answer `404 model_not_found` for a pinned selector the roster does not list, and state in the routing doc which of 400, 402, 404 and 424 on a first candidate moves on to `on_failure`.
+
+### 11. Three credential headers all work, and the docs could say which one to prefer (note)
 
 - Measured on 2026-11-01: `Otari-Key: <key>`, `Authorization: Bearer <key>` and `x-api-key: <key>` each answered HTTP 200 on `/chat/completions`.
 - We use `Otari-Key` because it cannot be confused with a provider key in a shared environment, and `Authorization: Bearer` stays one config line away (`auth_header` in `config/otari.json`). A sentence in the quickstart on which header the team recommends, and whether the others stay supported, would remove a guess.
 
-### 9. Request fields and headers that worked on the first try (what to keep)
+### 12. Request fields and headers that worked on the first try (what to keep)
 
 - `Idempotency-Key`: the second call with the same key came back in 0.27 s with `Otari-Idempotent-Replayed: true` and the same `Otari-Request-ID`, with no second charge visible in `usage`. It makes retrying a 504 safe, which is exactly where we needed it (entries 1 and 7).
 - `Otari-Tags: role=bull` and `Otari-Conversation-Id` were accepted without error. We could not see them anywhere with an inference key, so we do not yet know whether they are visible in the dashboard or in `usage/summary` (to check in F2 with the panel).

@@ -17,6 +17,7 @@ tenta de novo em 429 e 5xx. Nenhuma excecao deste modulo carrega a chave.
 """
 
 import datetime
+import decimal
 import email.utils
 import functools
 import hashlib
@@ -111,6 +112,93 @@ def role_model(role: str | None, cfg: dict | None = None) -> str:
     return cfg["roles"][name]["model"]
 
 
+def _flag(name: str, default) -> bool:
+    value = os.environ.get(name, "").strip()
+    return value == "1" if value in ("0", "1") else bool(default)
+
+
+def sent_model(role: str | None, cfg: dict | None = None) -> str:
+    """The `model` field of a call: a routing policy name when one is set for the role, else the role's catalog id.
+
+    A policy (created once in the Otari dashboard, for example `vd-judge` with backups) is what gives a role a fallback
+    chain of our choosing; the bare catalog id keeps Otari's automatic fallback across offerings of the same model.
+    `OTARI_POLICY_<ROLE>` names one for a single role (a drill); `use_policies` in the config (or OTARI_USE_POLICIES=1)
+    turns on every entry of `policies`.
+    """
+    cfg = cfg or otari_config()
+    name = role or cfg["default_role"]
+    chosen = os.environ.get(f"OTARI_POLICY_{name.upper()}", "").strip()
+    if not chosen and _flag("OTARI_USE_POLICIES", cfg.get("use_policies")):
+        chosen = str((cfg.get("policies") or {}).get(name) or "").strip()
+    if chosen and (not chosen.isprintable() or " " in chosen):
+        raise LLMError(f"the routing policy name for role {name!r} has spaces or control characters")
+    return chosen or role_model(name, cfg)
+
+
+def _end_user(role: str, cfg: dict) -> str | None:
+    """The `user` field: the role name once send_user is on (a service key), or OTARI_USER_<ROLE> for a drill user."""
+    chosen = os.environ.get(f"OTARI_USER_{role.upper()}", "").strip()
+    if chosen:
+        return chosen[:256]
+    return role if _send_user(cfg) else None
+
+
+_cycle_lock = threading.Lock()
+_cycle = {"spent": decimal.Decimal(0), "calls": 0, "refused": 0, "unpriced": 0}
+
+
+def reset_cycle() -> None:
+    """Starts a decision cycle: the spend counted against the app's own cycle cap goes back to zero."""
+    with _cycle_lock:
+        _cycle.update(spent=decimal.Decimal(0), calls=0, refused=0, unpriced=0)
+
+
+def cycle_cap(cfg: dict | None = None) -> decimal.Decimal | None:
+    """The most one cycle may spend through Otari, in USD: OTARI_CYCLE_CAP_USD, else `cycle_cap_usd` in the config; none if 0 or unset."""
+    raw = os.environ.get("OTARI_CYCLE_CAP_USD", "").strip() or str((cfg or otari_config()).get("cycle_cap_usd") or "")
+    try:
+        cap = decimal.Decimal(raw)
+    except decimal.InvalidOperation:
+        return None
+    return cap if cap.is_finite() and cap > 0 else None
+
+
+def cycle_status() -> dict | None:
+    """What this cycle has spent through Otari, for the dossier: the cap, the settled spend, calls, calls the cap refused."""
+    if not otari_active():
+        return None
+    cap = cycle_cap()
+    with _cycle_lock:
+        return {"cap_usd": None if cap is None else format(cap, "f"), "spent_usd": f"{_cycle['spent']:.6f}", "calls": _cycle["calls"],
+                "refused": _cycle["refused"], "unpriced_calls": _cycle["unpriced"]}
+
+
+def _cycle_check(cap, role: str, sent: str, end_user: str | None) -> None:
+    """The app's own second line behind Otari's budgets: once the cycle has spent its cap, no further call is sent."""
+    if cap is None:
+        return
+    with _cycle_lock:
+        spent = _cycle["spent"]
+        over = spent >= cap
+        if over:
+            _cycle["refused"] += 1
+    if over:
+        _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, "request_id": None, "sent_model": sent, "end_user": end_user,
+                           "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"},
+                           "captured_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        raise OtariError(f"cycle cap reached: ${spent:.6f} spent of ${cap} for this decision cycle; no call was sent for role {role}",
+                         code="cycle_cap_exceeded", scope="cycle")
+
+
+def _cycle_add(receipt: dict) -> None:
+    with _cycle_lock:
+        _cycle["calls"] += 1
+        try:
+            _cycle["spent"] += decimal.Decimal(str(receipt.get("cost_usd")))
+        except (decimal.InvalidOperation, TypeError):
+            _cycle["unpriced"] += 1
+
+
 def otari_base(cfg: dict | None = None) -> str:
     """The gateway base URL: OTARI_BASE_URL or the config value, https only (the key travels in a header), no trailing slash."""
     cfg = cfg or otari_config()
@@ -132,7 +220,9 @@ def otari_summary() -> dict | None:
     cfg = otari_config()
     return {"schema": "otari-run/1", "base_url": otari_base(cfg),
             "config_sha256": hashlib.sha256(OTARI_CONFIG.read_bytes()).hexdigest(),
-            "roles": {name: spec["model"] for name, spec in cfg["roles"].items()}}
+            "roles": {name: spec["model"] for name, spec in cfg["roles"].items()},
+            "sent": {name: sent_model(name, cfg) for name in cfg["roles"]},
+            "cycle_cap_usd": None if cycle_cap(cfg) is None else format(cycle_cap(cfg), "f")}
 
 
 def model_name() -> str:
@@ -218,15 +308,16 @@ def served_receipt() -> dict | None:
 def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, role: str | None) -> str:
     cfg = otari_config()
     role = role or cfg["default_role"]
-    model = role_model(role, cfg)
+    model = sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
     key = _otari_key()
     if not key.isprintable() or " " in key:
         raise LLMError("OTARI_API_KEY has spaces or control characters; paste only the key")
     spec = cfg["roles"][role]
     base = otari_base(cfg)
     interval = _otari_interval(cfg)
-    end_user = role if _send_user(cfg) else None
-    payload = {"model": model, "temperature": 0, "max_tokens": max_tokens or spec.get("max_tokens") or MAX_TOKENS,
+    end_user = _end_user(role, cfg)
+    tokens = _number(f"OTARI_MAX_TOKENS_{role.upper()}", 0, int, lambda v: v >= 0) or max_tokens or spec.get("max_tokens") or MAX_TOKENS
+    payload = {"model": model, "temperature": 0, "max_tokens": tokens,
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     if end_user:
         payload["user"] = end_user  # per-user budgets bill this id; only a service key may send it
@@ -236,10 +327,14 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key,
                "Content-Type": "application/json", "User-Agent": OTARI_USER_AGENT, "Otari-Tags": f"role={role}",
                "Idempotency-Key": uuid.uuid4().hex}  # one per logical call, so a retry after a lost reply is not billed twice
+    budget = os.environ.get(f"OTARI_END_USER_BUDGET_{role.upper()}", "").strip() or str(spec.get("end_user_budget") or "")
+    if end_user and budget:
+        headers["Otari-End-User-Budget"] = budget  # applies only when this call creates the end user
     body = json.dumps(payload).encode("utf-8")
     _served.model = None
     _served.route = None
     _served.receipt = None
+    _cycle_check(cycle_cap(cfg), role, model, end_user)
     for attempt in range(MAX_RETRIES + 1):
         _wait_turn(interval)
         _served.receipt = None  # each try starts clean: what is kept is the outcome of the LAST try, never an earlier one
@@ -251,6 +346,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             data = json.loads(raw.decode("utf-8"))
             receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=attempt + 1)
             _served.receipt = receipt
+            _cycle_add(receipt)
             _served.model = receipt["served_by"] or (data.get("model") if isinstance(data, dict) else None)
             # No `route` is sealed in Otari mode: Otari sends counts (attempt_count, fallback), not the list of attempts,
             # and a list built from the receipt would look like routing data the gateway never gave. The receipt is the record.

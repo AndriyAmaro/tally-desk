@@ -284,7 +284,12 @@ def extract(voices: list[dict], ask) -> dict:
 
     def one(chunk: list[str]) -> tuple[list[dict], str | None, dict | None, dict | None]:
         user = "\n".join(f"{vid}: {labeled[vid]['title']}" for vid in chunk)
-        text = ask(SYSTEM, user)
+        try:
+            text = ask(SYSTEM, user)
+        except (OSError, ValueError, KeyError) as err:
+            # a refusal (budget, credit, cycle cap) leaves its receipt on this worker thread: carry it to the block
+            err.otari_receipt = llm_mod.served_receipt() if hasattr(llm_mod, "served_receipt") else None
+            raise
         route = llm_mod.served_route() if hasattr(llm_mod, "served_route") else None
         receipt = llm_mod.served_receipt() if hasattr(llm_mod, "served_receipt") else None
         return parse_extractions(text), llm_mod.served_by(), route, receipt  # the worker thread's own last reply
@@ -308,8 +313,12 @@ def extract(voices: list[dict], ask) -> dict:
                     receipts.append({"batch": n, **receipt})
             except (OSError, ValueError, KeyError) as err:
                 errors.append(f"batch {n} of {len(chunks)}: {err}")
+                if getattr(err, "otari_receipt", None):
+                    receipts.append({"batch": n, **err.otari_receipt})
     if chunks and len(errors) == len(chunks):
-        raise ValueError("; ".join(errors))
+        failure = ValueError("; ".join(errors))
+        failure.otari_receipts = receipts  # the refusals stay on record even when no batch worked
+        raise failure
     result = validate_extractions(items, labeled)
     result["chunk_errors"] = errors
     result["served_by"] = sorted(served)
@@ -383,7 +392,10 @@ def build(voices: list[dict], ask=None, model: str = "") -> dict:
         result = extract(voices, ask)
     except (OSError, ValueError, KeyError) as err:
         # Falha do LLM nao derruba a decisao: volta ao modo por palavras-chave, dizendo isso.
-        return {"method": "keywords", "index_version": INDEX_VERSION, "voices": voices, "convergence": converge(voices), "llm_error": str(err)}
+        fallback = {"method": "keywords", "index_version": INDEX_VERSION, "voices": voices, "convergence": converge(voices), "llm_error": str(err)}
+        if getattr(err, "otari_receipts", None):
+            fallback["receipts"] = err.otari_receipts
+        return fallback
     block = {
         "method": "llm",
         "index_version": INDEX_VERSION,

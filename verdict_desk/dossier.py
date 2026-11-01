@@ -73,6 +73,8 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
         layer["checker"] = _checker_layer(m, layer, items)
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
         layer["judge"] = _judge_layer(m, layer, items, ask)
+    if summary and hasattr(m["llm"], "cycle_status"):  # what the app's own cycle cap has counted so far in this cycle
+        layer["otari"]["cycle"] = m["llm"].cycle_status()
     return layer
 
 

@@ -61,6 +61,7 @@ def write_head_dossier(folder: Path, ledger: list[dict]) -> None:
 def cmd_decide(opts) -> int:
     if not may_append(opts.ledger):
         return 2
+    llm.reset_cycle()
     feeds = dict(narrative.DEFAULT_FEEDS) if opts.default_feeds else {}
     for spec in opts.feed or []:
         name, _, url = spec.partition("=")
@@ -110,6 +111,7 @@ def _decide_flow(opts, rules_version: str) -> int:
     """Run the decide flow with the agents/features of the requested rules version."""
     if not may_append(opts.ledger):
         return 2
+    llm.reset_cycle()  # the app's own spend cap counts one decision cycle at a time
     feeds = dict(narrative.DEFAULT_FEEDS) if opts.default_feeds else {}
     for spec in opts.feed or []:
         name, _, url = spec.partition("=")
@@ -313,6 +315,17 @@ def print_record(record: dict) -> None:
             ruling = judge.get("ruling") or {}
             print(f"  [llm judge] lean {ruling.get('lean')} ({ruling.get('conviction')}) on {ruling.get('relied_on')}: "
                   + (f"counts {judge['weight']}" if judge.get("accepted") else f"voided ({judge.get('rejected_because') or judge.get('error')})"))
+        for part in ("bull", "bear", "checker", "judge"):
+            receipt = (layer.get(part) or {}).get("receipt") or {}
+            refused = receipt.get("refusal") or receipt.get("error")
+            if refused:  # a call Otari (or the cycle cap) refused is shown, not hidden; the decision still recorded
+                what = refused.get("code") or refused.get("kind") or refused.get("status")
+                print(f"  [otari {part}] NOT answered: {what}" + (f", budget scope {refused['budget_scope']}" if refused.get("budget_scope") else "")
+                      + (f", retry after {refused['retry_after']} s" if refused.get("retry_after") else "") + f" (request {receipt.get('request_id') or 'none'})")
+        cycle = (layer.get("otari") or {}).get("cycle")
+        if cycle:
+            print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"
+                  + (f", cap ${cycle['cap_usd']}" if cycle.get("cap_usd") else "") + (f", {cycle['refused']} refused by the cap" if cycle.get("refused") else ""))
     else:
         print("  LLM analysts off (no MISTRAL_API_KEY): deterministic core only")
 
