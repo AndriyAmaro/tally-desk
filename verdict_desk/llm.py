@@ -150,8 +150,17 @@ _cycle = {"spent": decimal.Decimal(0), "calls": 0, "refused": 0, "unpriced": 0,
           "tspent": decimal.Decimal(0), "tcalls": 0, "trefused": 0, "tunpriced": 0}
 
 
+_clock = {"t0": time.monotonic()}  # when the current decision cycle started, for the timeline of its calls
+
+
+def _offset_ms(moment: float | None = None) -> int:
+    """Milliseconds from the start of the cycle to `moment` (now by default): where a call sits on the timeline."""
+    return int(round(((moment if moment is not None else time.monotonic()) - _clock["t0"]) * 1000))
+
+
 def reset_cycle() -> None:
-    """Starts a decision cycle: the spend counted against the app's own caps goes back to zero."""
+    """Starts a decision cycle: the spend counted against the app's own caps goes back to zero, and so does the timeline clock."""
+    _clock["t0"] = time.monotonic()
     with _cycle_lock:
         _cycle.update(spent=decimal.Decimal(0), calls=0, refused=0, unpriced=0, tspent=decimal.Decimal(0), tcalls=0, trefused=0, tunpriced=0)
 
@@ -435,6 +444,8 @@ def served_receipt() -> dict | None:
     """The Otari receipt of the last call made on this thread, read once. None outside Otari mode."""
     receipt = getattr(_served, "receipt", None)
     _served.receipt = None
+    if isinstance(receipt, dict) and getattr(_served, "started_ms", None) is not None:
+        receipt.setdefault("started_offset_ms", _served.started_ms)  # when this call began, from the start of the cycle (new dossiers only)
     return receipt
 
 
@@ -477,6 +488,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     _served.model = None
     _served.route = None
     _served.receipt = None
+    _served.started_ms = _offset_ms()
     _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, headers["Idempotency-Key"])
     for attempt in range(MAX_RETRIES + 1):
         _wait_turn(interval)
@@ -561,6 +573,8 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
         headers["Otari-End-User-Budget"] = budget
     body = json.dumps(payload).encode("utf-8")
     _served.receipt = None
+    started_ms = _offset_ms()
+    _served.started_ms = started_ms
     _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, local_id)
     for attempt in range(MAX_RETRIES + 1):
         _wait_turn(interval)
@@ -590,6 +604,7 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
     if isinstance(data, dict):
         text = "".join(str(b.get("text", "")) for b in data.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
         _seal_exchange(receipt, system, user, data.get("stop_reason"), text)
+    receipt["started_offset_ms"] = started_ms
     _served.receipt = receipt
     _cycle_add(receipt)
     return {"data": data, "stream": streamed, "receipt": receipt}

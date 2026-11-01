@@ -16,43 +16,52 @@
   "roles": {
     "bull": {
       "model": "openai/gpt-oss-120b",
-      "vendor": "OpenAI"
+      "vendor": "OpenAI",
+      "open_weights": true
     },
     "bear": {
       "model": "nvidia/nemotron-3-super-120b-a12b",
-      "vendor": "NVIDIA"
+      "vendor": "NVIDIA",
+      "open_weights": true
     },
     "judge": {
       "model": "deepseek/deepseek-v4-flash-0731",
-      "vendor": "DeepSeek"
+      "vendor": "DeepSeek",
+      "open_weights": true
     },
     "checker": {
       "model": "google/gemma-3-27b-it",
-      "vendor": "Google"
+      "vendor": "Google",
+      "open_weights": true
     },
     "narrator": {
       "model": "alibaba/qwen3-235b-a22b-instruct-2507",
-      "vendor": "Alibaba"
+      "vendor": "Alibaba",
+      "open_weights": true
     },
     "searcher": {
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
-      "tool_role": true
+      "tool_role": true,
+      "open_weights": true
     },
     "sandbox": {
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
-      "tool_role": true
+      "tool_role": true,
+      "open_weights": true
     },
     "mcp": {
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
-      "tool_role": true
+      "tool_role": true,
+      "open_weights": true
     },
     "fetcher": {
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
-      "tool_role": true
+      "tool_role": true,
+      "open_weights": true
     }
   },
   "rejected": {
@@ -79,5 +88,11 @@
     "margin_below": 1.0,
     "claims_at_least": 8
   },
-  "_judge_route_doc": "The judge is routed by a deterministic rule sealed with its ruling (llm.judge.route_rule). A hard case (the deterministic bull and bear scores less than `margin_below` apart, the most a judge's vote can add, or `claims_at_least` validated claims, the most the analysts can bring) goes to `hard_model`, the larger DeepSeek, sent by its catalog id (Otari falls back across its providers); every other case goes to the standard judge, the vd-judge policy. No dashboard policy is created for it, and the hard route does not pass through vd-judge's guardrail. OTARI_JUDGE_ROUTE=0 turns the rule off."
+  "_judge_route_doc": "The judge is routed by a deterministic rule sealed with its ruling (llm.judge.route_rule). A hard case (the deterministic bull and bear scores less than `margin_below` apart, the most a judge's vote can add, or `claims_at_least` validated claims, the most the analysts can bring) goes to `hard_model`, the larger DeepSeek, sent by its catalog id (Otari falls back across its providers); every other case goes to the standard judge, the vd-judge policy. No dashboard policy is created for it, and the hard route does not pass through vd-judge's guardrail. OTARI_JUDGE_ROUTE=0 turns the rule off.",
+  "models_open_weights": {
+    "deepseek/deepseek-v4-pro": true,
+    "vd-judge": true,
+    "vd-judge-drill": true
+  },
+  "_models_open_weights_doc": "Whether each id that can appear as a receipt's sent_model is an open-weight model: every role's catalog id (flag on the role, checked by tools/otari_catalog_check.py), the larger judge, and the two routing policies, which only list open DeepSeek models."
 }

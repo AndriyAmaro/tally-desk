@@ -214,6 +214,26 @@ def cmd_otari_drill(opts) -> int:
     return 0 if all(r["pass"] for r in records) else 1
 
 
+def cmd_otari_audit(opts) -> int:
+    """Prints the eight resources with PASS or NAO and the request ids that prove them; with --reconcile also compares receipts with Otari's usage."""
+    from . import otari_report
+    ledger = dossier.read_ledger(opts.ledger)
+    print(otari_report.render_audit(otari_report.audit(ledger, otari_report.read_evidence(opts.evidence) if opts.evidence else None)))
+    if not opts.reconcile:
+        return 0
+    if not llm.otari_active():
+        print("--reconcile reads Otari's usage endpoint: set OTARI_API_KEY (a GET, no cost)", file=sys.stderr)
+        return 2
+    receipts = [c["receipt"] for d in otari_report.era(ledger)[-max(1, opts.last):] for c in otari_report.calls_of(d)]
+    result = otari_report.reconcile(receipts, lambda rid: llm.usage_for(rid, tries=2))
+    print(f"reconciliation with Otari's usage records: {result['checked']} request ids compared, {len(result['unsettled'])} not found (not settled, or not this key's)")
+    for item in result["divergences"]:
+        print(f"  DIVERGES {item['request_id']} ({item['role']}): " + "; ".join(item["problems"]))
+    if not result["divergences"]:
+        print("  no divergence: status, tokens, cost and usage rows agree (Otari's usage record does not carry the model, so the model is not compared)")
+    return 1 if result["divergences"] else 0
+
+
 def cmd_trust(opts) -> int:
     """Per-voice track record, measured from the ledger alone."""
     result = trust.compute(dossier.read_ledger(opts.ledger))
@@ -939,6 +959,11 @@ def main() -> int:
     p.add_argument("which", choices=["fallback", "budget", "mcp", "users", "all"])
     p.add_argument("--evidence", type=Path, default=None, help="evidence file to append to (default docs/evidence/otari-drills.jsonl)")
     p.set_defaults(func=cmd_otari_drill)
+    p = sub.add_parser("otari-audit", help="the eight Otari resources proven from the sealed receipts, with the request id of each proof; --reconcile compares receipts with Otari's own usage records")
+    p.add_argument("--reconcile", action="store_true", help="GET /usage/requests/{id} for the receipts of the newest dossiers (free, needs OTARI_API_KEY) and list divergences")
+    p.add_argument("--last", type=int, default=3, help="how many of the newest Otari-era dossiers to reconcile (default 3)")
+    p.add_argument("--evidence", type=Path, default=None, help="drill evidence file (default docs/evidence/otari-drills.jsonl)")
+    p.set_defaults(func=cmd_otari_audit)
     p = sub.add_parser("verify", help="check the hash chain")
     p.set_defaults(func=cmd_verify)
     p = sub.add_parser("head", help="print the verified head of the chain as JSON, for the CRE anchor workflow")

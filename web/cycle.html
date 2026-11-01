@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · one cycle, call by call</title>
+<meta name="description" content="One decision cycle of the Otari era as a timeline: every model call with its role, the model asked for and the one that answered, provider, fallback, cost, request id and what a refusal means.">
+<meta property="og:title" content="Verdict Desk · one cycle, call by call">
+<meta property="og:description" content="Every call of a decision cycle, read from the receipts sealed in the ledger: who answered, what it cost, and who saw the prompt.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0 auto;max-width:1000px;padding:16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:26px 0 6px}.mut{color:var(--mut)}
+nav a{margin-right:14px}code,.mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
+select,button,input[type=file]{font:inherit}
+button,select{padding:6px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.summary div{border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--card)}
+.summary b{display:block;font-size:20px}
+.call{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0;background:var(--card);display:grid;gap:6px}
+.call.fail{border-color:var(--bad)}
+.head{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline}
+.role{font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:.04em}
+.chip{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--mut)}
+.chip.ok{color:var(--ok);border-color:var(--ok)}.chip.warn{color:var(--warn);border-color:var(--warn)}.chip.bad{color:var(--bad);border-color:var(--bad)}
+.track{position:relative;height:10px;background:color-mix(in srgb,var(--line) 55%,transparent);border-radius:5px;overflow:hidden}
+.bar{position:absolute;top:0;bottom:0;background:var(--accent);border-radius:5px;min-width:3px}
+.call.fail .bar{background:var(--bad)}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px 16px;font-size:13px}
+.meta span.k{color:var(--mut)}
+.remedy{border-left:3px solid var(--bad);padding:4px 10px;margin:4px 0;font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}th{color:var(--mut);font-size:12px}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{overflow-x:auto}
+@media(max-width:640px){body{padding:12px}.meta{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+<h1>One cycle, call by call</h1>
+<nav class="mut"><a href="index.html">Dashboard</a><a href="verify.html">Verify a record</a><a href="judge.html">Judge path</a><a href="ask.html">Ask the record</a></nav>
+<p class="mut">Each block is one model or tool call of a decision cycle, read from the receipt sealed in the dossier. Nothing is called from this page: it reads the public ledger file and shows what it says.</p>
+
+<div class="row">
+  <label>Dossier <select id="pick" aria-label="Dossier"></select></label>
+  <label class="mut">or open a ledger file <input id="file" type="file" accept=".jsonl,.json,.txt"></label>
+</div>
+<p class="mut" id="status" role="status" aria-live="polite">Loading the ledger...</p>
+
+<section id="main" hidden>
+  <div class="summary" id="summary"></div>
+  <h2>Timeline</h2>
+  <p class="mut" id="timenote"></p>
+  <div id="calls"></div>
+  <h2>Who saw this prompt</h2>
+  <div class="scroll" id="who"></div>
+  <h2>Open-model scoreboard</h2>
+  <p class="mut">Every call of every Otari-era dossier in this ledger, grouped by the model that answered.</p>
+  <div class="scroll" id="board"></div>
+</section>
+
+<script src="cycle.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const C = window.VerdictCycle;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // Relative paths only: the site may be served from web/ (ledger copied beside the pages), or from the repository root
+  // (GitHub Pages "deploy from branch", /web/cycle.html with the ledger one level up), or by `python3 -m http.server`.
+  const LEDGER_PATHS = ["ledger/ledger.jsonl", "../ledger/ledger.jsonl"];
+  const CONFIG_PATHS = ["config/otari.json", "../config/otari.json"];
+  let ledger = [], config = null;
+
+  async function firstOk(paths) {
+    for (const p of paths) {
+      try { const res = await fetch(p, { cache: "no-store" }); if (res.ok) return await res.text(); } catch (e) { /* try the next */ }
+    }
+    return null;
+  }
+  const parseLedger = (text) => text.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+  const usd = (t) => (t == null ? "n/a" : "$" + t);
+
+  function callHtml(c, bar, timed) {
+    const r = c.receipt, f = C.failureOf(r);
+    const served = r.served_by || "no answer";
+    const sentVsServed = r.sent_model && r.served_model && r.sent_model !== r.served_model;
+    const chips = [];
+    if (f) chips.push(`<span class="chip bad">${f.source === "client" ? "stopped here" : "refused"}: ${esc(f.code)}</span>`);
+    if (r.fallback) chips.push(`<span class="chip warn">fallback · ${esc(r.attempt_count)} attempts</span>`);
+    if (r.policy) chips.push(`<span class="chip">policy ${esc(r.policy)}</span>`);
+    if (r.truncated) chips.push(`<span class="chip warn">answer cut off</span>`);
+    if (r.client_attempts > 1) chips.push(`<span class="chip">${esc(r.client_attempts)} tries</span>`);
+    if (r.route_rule) chips.push(`<span class="chip ${r.route_rule.hard ? "warn" : ""}">${r.route_rule.hard ? "hard case, larger model" : "standard route"}</span>`);
+    const guard = r.guardrail_result ? Object.entries(r.guardrail_result).map(([k, v]) => `${esc(k)}: ${esc(v.replace("_", " "))}`).join(", ") : null;
+    const tools = (r.tool_calls || []).map((t) => `${esc(t.type)} ${esc(t.status)}${t.query ? ` "${esc(t.query)}"` : ""}${t.url ? ` ${esc(t.url)}` : ""}`).join("; ");
+    const start = timed ? `${(bar.startMs / 1000).toFixed(1)} s` : "order only";
+    return `<article class="call${f ? " fail" : ""}">
+      <div class="head"><span class="role">${esc(c.label)}</span><span class="mono">${esc(r.sent_model)}</span>${sentVsServed ? ` &rarr; <span class="mono">${esc(served)}</span>` : (r.served_by ? ` &rarr; <span class="mono">${esc(served)}</span>` : "")} ${chips.join(" ")}</div>
+      <div class="track" role="img" aria-label="${esc(c.label)}: started at ${esc(start)}, took ${esc(bar.durationMs)} ms"><div class="bar" style="left:${bar.leftPct}%;width:${bar.widthPct}%"></div></div>
+      <div class="meta">
+        <div><span class="k">Took </span>${esc(bar.durationMs)} ms · started ${esc(start)}</div>
+        <div><span class="k">Cost </span>${esc(usd(r.cost_usd))}${r.tokens && r.tokens.prompt != null ? ` · ${esc(r.tokens.prompt)} in, ${esc(r.tokens.completion)} out` : ""}</div>
+        <div><span class="k">Provider </span>${esc(r.provider || "none answered")}</div>
+        <div><span class="k">End user </span>${esc(r.end_user || "none")}${r.end_user_budget ? " · on its budget" : ""}</div>
+        <div><span class="k">Request id </span><code>${esc(r.request_id)}</code> <span class="mut">(${esc(r.request_id_source || "otari")})</span></div>
+        ${guard ? `<div><span class="k">Guardrail </span>${guard}</div>` : ""}
+        ${r.finish_reason ? `<div><span class="k">Stopped </span>${esc(r.finish_reason)}</div>` : ""}
+        ${tools ? `<div><span class="k">Tool </span>${tools}</div>` : ""}
+        ${r.route_rule ? `<div><span class="k">Route </span>${esc(r.route_rule.reason)}</div>` : ""}
+      </div>
+      ${f ? `<div class="remedy"><b>${esc(f.what)}</b><br>${esc(f.fix)}${f.retryAfter ? `<br><span class="mut">Retry after ${esc(f.retryAfter)} s.</span>` : ""}${f.scope ? `<br><span class="mut">Budget that refused: ${esc(f.scope)}.</span>` : ""}</div>` : ""}
+    </article>`;
+  }
+
+  function render(d) {
+    const calls = C.callsOf(d), lay = C.layout(calls);
+    const cycle = (d.llm.otari || {}).cycle || null;
+    let micros = 0n;
+    for (const c of calls) micros += C.microsOf(c.receipt.cost_usd) || 0n;
+    $("summary").innerHTML = `<div><span class="mut">Dossier</span><b>#${esc(d.seq)}</b>${esc((d.evidence || {}).symbol)} · ${esc((d.verdict || {}).action)}</div>
+      <div><span class="mut">Calls</span><b>${calls.length}</b>${calls.filter((c) => C.failureOf(c.receipt)).length} refused or failed</div>
+      <div><span class="mut">Cost of the receipts</span><b>$${C.microsText(micros)}</b>${cycle ? "sealed spend $" + esc(cycle.total_spent_usd) : ""}</div>
+      <div><span class="mut">Wall time</span><b>${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " s" : "n/a"}</b>${lay.timed ? "from the first call to the last answer" : "this dossier predates start offsets"}</div>`;
+    $("timenote").textContent = lay.timed ? "Bars sit where each call began, on one scale for the whole cycle." : "This dossier was recorded before receipts carried the start of each call, so the bars are laid end to end in the order the cycle makes the calls: their length is real, their position is only an order.";
+    $("calls").innerHTML = calls.map((c, i) => callHtml(c, lay.bars[i], lay.timed)).join("");
+    const who = C.whoSaw(d, config);
+    $("who").innerHTML = `<p class="mut">Gateway: <b>${esc(who.gateway.host || "unknown")}</b> sees every prompt and tool request. Region: ${esc(who.gateway.region)}. Upstream providers it routed to:</p>
+      <table><thead><tr><th>Provider</th><th>Models</th><th>Roles</th><th>Open weights</th><th class="n">Calls</th></tr></thead><tbody>${who.providers.map((p) =>
+        `<tr><td>${esc(p.provider)}</td><td class="mono">${p.models.map(esc).join("<br>")}</td><td>${p.roles.map(esc).join(", ")}</td><td>${config ? esc(p.open_weights) : "unknown (config not served here)"}</td><td class="n">${p.calls}</td></tr>`).join("")}</tbody></table>`;
+    const rows = C.board(ledger);
+    $("board").innerHTML = `<table><thead><tr><th>Model (provider:model)</th><th class="n">Calls</th><th class="n">OK</th><th>Refusals / failures</th><th class="n">p50 ms</th><th class="n">p95 ms</th><th class="n">Fallbacks</th><th class="n">Accepted claims</th><th class="n">USD per claim</th></tr></thead><tbody>${rows.map((r) =>
+      `<tr><td class="mono">${esc(r.model)}</td><td class="n">${r.calls}</td><td class="n">${r.ok}</td><td>${Object.entries(r.refusals).map(([k, v]) => esc(k) + " x" + v).join(", ") || "-"}</td><td class="n">${r.p50_ms == null ? "-" : r.p50_ms}</td><td class="n">${r.p95_ms == null ? "-" : r.p95_ms}</td><td class="n">${r.fallbacks}</td><td class="n">${r.claims || "-"}</td><td class="n">${esc(r.cost_per_claim_usd || "-")}</td></tr>`).join("")}</tbody></table>`;
+    $("main").hidden = false;
+  }
+
+  function setLedger(rows, from) {
+    ledger = rows;
+    const era = C.era(rows);
+    if (!era.length) { $("status").textContent = "This ledger has no dossier recorded through Otari yet."; $("main").hidden = true; return; }
+    $("pick").innerHTML = era.slice().reverse().map((d) => `<option value="${d.seq}">#${d.seq} ${esc((d.evidence || {}).symbol)} ${esc((d.verdict || {}).action)}</option>`).join("");
+    const want = new URLSearchParams(location.search).get("seq");
+    if (want && era.some((d) => String(d.seq) === want)) $("pick").value = want;
+    $("status").textContent = `${era.length} Otari-era dossiers, read from ${from}.`;
+    render(era.find((d) => String(d.seq) === $("pick").value));
+  }
+
+  $("pick").addEventListener("change", () => render(C.era(ledger).find((d) => String(d.seq) === $("pick").value)));
+  $("file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try { setLedger(parseLedger(await f.text()), f.name); } catch (err) { $("status").textContent = "Could not read that file: " + err.message; }
+  });
+  (async () => {
+    const text = await firstOk(LEDGER_PATHS);
+    const cfg = await firstOk(CONFIG_PATHS);
+    try { config = cfg ? JSON.parse(cfg) : null; } catch (e) { config = null; }
+    if (!text) { $("status").textContent = "The ledger file is not served next to this page. Open a ledger file (ledger/ledger.jsonl) with the button above."; return; }
+    try { setLedger(parseLedger(text), "the published ledger"); } catch (err) { $("status").textContent = "Could not read the ledger: " + err.message; }
+  })();
+})();
+</script>
+</body></html>
