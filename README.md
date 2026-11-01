@@ -365,6 +365,31 @@ python3 -m verdict_desk --ledger ledger-tampered.jsonl verify          # check a
 
 The key is read from the environment only and is never written to a dossier or a log.
 
+### Run it through Otari (the `otari` branch)
+
+With `OTARI_API_KEY` in the environment, every LLM call goes through the [Otari](https://otari.ai) gateway at `https://otari.ai/api/v1` and each role uses its own open-weight model from [`config/otari.json`](config/otari.json). Without the variable nothing changes: the client above runs as before.
+
+| Role | Catalog id | Vendor | What it does |
+|---|---|---|---|
+| `bull` | `openai/gpt-oss-120b` | OpenAI | the case for a long entry |
+| `bear` | `nvidia/nemotron-3-super-120b-a12b` | NVIDIA | the case against it |
+| `judge` | `deepseek/deepseek-v4-flash-0731` | DeepSeek | rules on the claims that passed the citation check |
+| `checker` | `google/gemma-3-27b-it` | Google | re-reads each validated claim against the evidence it cites (advisory: it never changes the verdict) |
+| `narrator` | `alibaba/qwen3-235b-a22b-instruct-2507` | Alibaba | extracts tokens and stance from the news headlines |
+
+`python3 tools/otari_catalog_check.py` confirms against the public catalog (no key, no cost) that each id exists and is flagged `open_weights`.
+
+- **Auth.** The key travels in the `Otari-Key` header. `Authorization: Bearer` and `x-api-key` also answered HTTP 200 on 2026-11-01; change `auth_header` in the config to switch. `OTARI_BASE_URL` overrides the base URL.
+- **Receipt per call.** Each answer leaves an `otari-receipt/1` next to the block it produced (`llm.bull.receipt`, `llm.bear`, `llm.checker`, `llm.judge`, and `evidence.narrative.receipts` for the extraction batches): `request_id`, `provider`, `sent_model`, `served_model`, `served_by`, `attempt_count`, `fallback`, `duration_ms`, token counts, `cost_usd` (as Otari sent it) and `pricing_source`. A refused call leaves a receipt with the error code, the budget scope and `Retry-After`. The receipts are part of the sealed dossier, so the hash chain covers them. `replay` never calls a model: it re-derives the verdict from the frozen evidence and the frozen judge ruling, and it passes with the network cut.
+- **Per-user budgets.** The role name is the `user` field once a service key exists (`send_user` in the config, or `OTARI_SEND_USER=1`). With an ordinary key Otari refuses that field, so it is off by default ([`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md), entry 2).
+- **Retries.** A gateway timeout (HTTP 504) is retried with the same `Idempotency-Key`, so a lost reply is not billed twice. Budget and credit refusals (402, 403) are never retried.
+
+```bash
+export OTARI_API_KEY=...      # from the Otari dashboard; never commit it
+VERDICT_DESK_APPEND_PUBLIC=1 python3 -m verdict_desk decide-v6 BTCUSDT --config config/voices.json
+python3 -m verdict_desk verify && python3 -m verdict_desk replay
+```
+
 ## Layout
 
 | Path | What it is |

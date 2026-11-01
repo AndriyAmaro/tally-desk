@@ -236,6 +236,10 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             detail = _read_detail(err)
             _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user)
             delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
+            if delay is None and err.code == 409 and "in progress" in detail and attempt < MAX_RETRIES:
+                # Our first try timed out at the edge (504) while Otari kept working: the same Idempotency-Key answers 409
+                # "still in progress" until it finishes, and then replays the stored reply. Wait and ask again.
+                delay = 5.0 * (attempt + 1)
             if delay is None:
                 raise _otari_error(err, key, detail, base, model) from err
             _pause(delay)

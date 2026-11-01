@@ -261,6 +261,30 @@ class OtariCallTest(unittest.TestCase):
         self.assertEqual(len(set(seen)), 1)
         self.assertEqual(llm.served_receipt()["client_attempts"], 2)
 
+    def test_a_409_still_in_progress_waits_and_asks_again_with_the_same_key(self):
+        seen = []
+
+        def urlopen(request, timeout=None):
+            seen.append(request.get_header("Idempotency-key"))
+            if len(seen) == 1:
+                raise urllib.error.HTTPError(request.full_url, 504, "Gateway Timeout", message({}), io.BytesIO(b"<html>504</html>"))
+            if len(seen) == 2:
+                body = b'{"detail":"A request with this Idempotency-Key is still in progress. Retry with the same key to get its result."}'
+                raise urllib.error.HTTPError(request.full_url, 409, "Conflict", message({}), io.BytesIO(body))
+            return FakeResponse(BODY, {**HEADERS, "Otari-Idempotent-Replayed": "true"})
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            self.assertEqual(llm.chat("s", "u", role="narrator"), "ok")
+        self.assertEqual((len(seen), len(set(seen))), (3, 1))
+        receipt = llm.served_receipt()
+        self.assertEqual((receipt["client_attempts"], receipt["replayed"]), (3, "true"))
+
+    def test_any_other_409_is_an_error_at_once(self):
+        def urlopen(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 409, "Conflict", message({}), io.BytesIO(b'{"detail":"conflict"}'))
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            with self.assertRaises(llm.OtariError):
+                llm.chat("s", "u", role="narrator")
+
     def test_the_default_role_serves_a_call_without_a_role(self):
         with self.fake():
             llm.chat("s", "u")
