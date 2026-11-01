@@ -102,6 +102,7 @@ class DecodingTest(unittest.TestCase):
         with mock.patch.object(anchor, "_rpc", return_value=hex(80)):
             self.assertEqual(anchor.read_latest_seq("http://x", "0xabc"), 80)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

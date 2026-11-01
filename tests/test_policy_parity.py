@@ -48,11 +48,13 @@ process.stdout.write(JSON.stringify(rows.map((c) => P.evaluate(c).state)));
         Path(path).unlink(missing_ok=True)
 
 
-def py_state(bull, bear, atr, age):
+def py_state(bull, bear, atr, age, refused=False):
+    """`refused`: the sealed freshness block says not ok although the candle is fresh (for example two price sources diverge)."""
+    ok = age <= 75 and not refused
     f = {
         "last_close": 100.0,
         "atr_14": atr,
-        "freshness": {"ok": age <= 75, "reason": "" if age <= 75 else "stale", "window_minutes": 75},
+        "freshness": {"ok": ok, "reason": "" if ok else ("stale" if age > 75 else "price sources diverge"), "window_minutes": 75},
     }
     a = [{"claim": "bull", "evidence_ref": "x", "value": 1.0, "weight": bull}]
     b = [{"claim": "bear", "evidence_ref": "x", "value": 1.0, "weight": bear}]
@@ -74,6 +76,20 @@ class PolicyParityTest(unittest.TestCase):
         self.assertEqual(mismatches[:5], [], f"{len(mismatches)} of {len(cases)} states differ")
         self.assertGreater(len(cases), 400, "the grid must actually be wide")
 
+    def test_a_refusal_sealed_for_a_reason_other_than_age_is_a_refusal_in_the_browser_too(self):
+        cases, expected = [], []
+        for bull in GRID["bull"]:
+            for bear in GRID["bear"]:
+                for age in GRID["age"]:
+                    cases.append({"bull": bull, "bear": bear, "atrPct": 1.0, "ageMinutes": age, "freshOk": False, "blockReason": "price sources diverge", "divergent": age <= 75})
+                    expected.append(py_state(bull, bear, 1.0, age, refused=True))
+        self.assertEqual(set(expected), {"BLOCKED_STALE"})
+        self.assertEqual(js_states(cases), expected)
+
+    def test_a_fresh_ok_block_changes_nothing(self):
+        cases = [{"bull": b, "bear": r, "atrPct": a, "ageMinutes": 10, "freshOk": True} for b in GRID["bull"] for r in GRID["bear"] for a in GRID["atr"]]
+        self.assertEqual(js_states(cases), [py_state(c["bull"], c["bear"], c["atrPct"], 10) for c in cases])
+
     def test_the_grid_covers_every_state(self):
         seen = {py_state(b, r, a, g) for b in (0, 1.5, 3) for r in (0, 1.5, 2) for a in (1, 3) for g in (10, 90)}
         self.assertEqual(seen, {"LONG", "SHORT", "REDUCE_EXPOSURE", "WATCH_REVERSAL", "FLAT", "BLOCKED_STALE"})
@@ -89,6 +105,7 @@ class PolicyParityTest(unittest.TestCase):
         finally:
             Path(path).unlink(missing_ok=True)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

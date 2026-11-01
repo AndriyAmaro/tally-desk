@@ -48,6 +48,7 @@ class NumbersFreshTest(unittest.TestCase):
         self.fail("the README cites the current head but a document disagrees with the ledger; "
                   "run scripts/refresh_numbers.py:\n" + run.stdout + run.stderr)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

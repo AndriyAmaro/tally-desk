@@ -63,6 +63,7 @@ class VerdictTest(unittest.TestCase):
     def test_no_usable_study_never_adopts(self):
         self.assertFalse(research.verdict([{"symbol": "X", "v2": None}])["adopt_v2_live"])
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

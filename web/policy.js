@@ -19,7 +19,7 @@
   const SYSTEM_MAX_RISK_PCT = 25; // the user may lower the risk, never raise it past this
 
   const STATES = [
-    ["BLOCKED_STALE", "the newest price is older than the market window", "no position (fail-closed), and the refusal is recorded"],
+    ["BLOCKED_STALE", "the newest price is older than the market window, or the sealed freshness check refused the evidence (for example two price sources diverge by more than their tolerance)", "no position (fail-closed), and the refusal is recorded with its reason"],
     ["LONG", "edge at or above the entry band", "sized position with an ATR stop and target"],
     ["SHORT", "edge at or below minus the entry band", "sized position with an ATR stop and target"],
     ["REDUCE_EXPOSURE", "both sides at or above the band and volatility high", "no new position, existing exposure should shrink"],
@@ -43,6 +43,12 @@
       return { state: "BLOCKED_STALE", edge, stale: true,
                rule: `price age ${ageMinutes} min > window ${windowMinutes} min` };
     }
+    // The freshness block sealed in the dossier can refuse the evidence for a reason other than age (the Python judge and the CRE
+    // workflow read `ok` the same way): for example two price sources that diverge beyond their tolerance. The reason is the sealed one.
+    if (input.freshOk === false) {
+      return { state: "BLOCKED_STALE", edge, stale: false, divergent: !!input.divergent,
+               rule: `evidence refused by the sealed freshness check: ${input.blockReason || "no reason recorded"}` };
+    }
     if (edge >= THRESHOLD) return { state: "LONG", edge, stale: false, rule: `bull ${bull} - bear ${bear} = ${edge} >= ${THRESHOLD}` };
     if (edge <= -THRESHOLD) return { state: "SHORT", edge, stale: false, rule: `bull ${bull} - bear ${bear} = ${edge} <= -${THRESHOLD}` };
 
@@ -60,6 +66,45 @@
                rule: `edge ${edge} inside the band, but losing the bear argument (${bear}) flips it to LONG` };
     }
     return { state: "FLAT", edge, stale: false, rule: `edge ${edge} inside the band, nothing worth flipping it` };
+  }
+
+  /* The inputs of `evaluate` as a dossier freezes them. One reader for the browser verifier and the tests, so the page and the
+   * parity test cannot read a dossier differently. */
+  function fromDossier(d) {
+    const f = (d && d.features) || {};
+    const fresh = ((d && d.evidence) || {}).freshness || {};
+    const sum = (args) => (args || []).reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    const divergence = (fresh.classes || {}).divergence;
+    const divergent = !!(divergence && divergence.ok === false);
+    return {
+      bull: sum(d && d.bull), bear: sum(d && d.bear),
+      atrPct: (Number(f.atr_14) || 0) / (Number(f.last_close) || 1) * 100,
+      ageMinutes: Number(fresh.newest_candle_age_minutes),
+      windowMinutes: Number(fresh.window_minutes) || MARKET_WINDOW_MINUTES,
+      freshOk: typeof fresh.ok === "boolean" ? fresh.ok : undefined,
+      divergent,
+      blockReason: divergent && divergence.reason ? divergence.reason : fresh.reason,
+    };
+  }
+
+  function family(action) {
+    if (!action) return "UNKNOWN";
+    if (action === "LONG" || action === "SHORT") return action;
+    if (String(action).startsWith("BLOCKED")) return "BLOCKED";
+    return "NO_POSITION";
+  }
+
+  /* Re-derives the recorded action of a dossier from its own numbers and says whether the rules agree with it. */
+  function checkDossier(d) {
+    const input = fromDossier(d);
+    const v = (d && d.verdict) || {};
+    const rulesVersion = v.rules_version || "v1";
+    let rederived = null, agrees = null;
+    if (Number.isFinite(input.ageMinutes) || input.freshOk === false) {
+      rederived = evaluate(input);
+      agrees = rulesVersion === "v3" ? rederived.state === v.action : family(rederived.state) === family(v.action);
+    }
+    return { input, rederived, agrees, rulesVersion };
   }
 
   function riskPct(requested) {
@@ -95,5 +140,5 @@
     };
   }
 
-  return { THRESHOLD, VOL_PCT, MARKET_WINDOW_MINUTES, SYSTEM_MAX_RISK_PCT, STATES, evaluate, riskPct, position };
+  return { THRESHOLD, VOL_PCT, MARKET_WINDOW_MINUTES, SYSTEM_MAX_RISK_PCT, STATES, evaluate, riskPct, position, fromDossier, family, checkDossier };
 });

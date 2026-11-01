@@ -87,6 +87,7 @@ class ConvergenceWeightParityTest(unittest.TestCase):
         for case, want, got in zip(cases, wants, run_js(cases)):
             self.assertAlmostEqual(want, got["weight"], places=2, msg=str(case))
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

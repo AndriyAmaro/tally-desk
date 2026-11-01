@@ -5,8 +5,10 @@ a trade opens when the edge reaches the entry threshold in either direction (unl
 take-profit and size follow from the last close and the ATR. `SCRIPT` is that arithmetic alone, with no import from this project.
 
 The frozen inputs and a fresh random nonce go in the first line of the code (`DATA = {...}`). The script prints the result and
-`proof`, the sha256 of the whole DATA line, so nothing that did not run the code can produce the output: the nonce is new for every
-call and a model cannot compute a sha256 in its head. The same code is run locally.
+`proof`, the sha256 of the whole DATA line. The nonce is new for every call, so a model that wants to hand us an answer at sealing time
+cannot invent one: it cannot compute that hash without running the code. What the nonce does NOT do is prove to a third party that
+Otari ran it; that evidence is the native result blocks and Otari's request id (a judge with access to Otari's side can look the id up).
+The same code is run locally.
 
 The code goes to Otari's Messages API declared as `code_execution_20250825` with `Otari-Code-Execution: otari`. That path returns the
 sandbox's own result blocks (`server_tool_use` with the code it ran and `code_execution_tool_result` with stdout and return code),
@@ -183,13 +185,13 @@ def seal(body: dict, ask=None, nonce: str | None = None) -> dict:
     if native["runs"]:
         # every run is recorded; the one that counts is the first whose code is exactly the code we sent (a model that cut or
         # changed the code ran something else, which is not a re-derivation of this verdict)
-        block["runs"] = [{"code_ran_sha256": sha(r["code_ran"]) if isinstance(r["code_ran"], str) else None,
+        block["runs"] = [{"code_ran_sha256": sha(r["code_ran"].strip()) if isinstance(r["code_ran"], str) else None,
                           "is_code_sent": isinstance(r["code_ran"], str) and r["code_ran"].strip() == code.strip(),
                           "return_code": r["return_code"], "stdout": str(r["stdout"] or "").strip()[:2000], "stderr": str(r["stderr"] or "")[:300]} for r in native["runs"]]
         chosen = next((r for r in native["runs"] if isinstance(r["code_ran"], str) and r["code_ran"].strip() == code.strip()), None)
         stdout = str((chosen or {}).get("stdout") or "").strip()
         block.update({"evidence": "native", "sandbox_stdout": stdout, "sandbox_return_code": (chosen or native["runs"][-1]).get("return_code"),
-                      "code_ran_sha256": sha(chosen["code_ran"]) if chosen else None, "code_ran_is_code_sent": chosen is not None,
+                      "code_ran_sha256": sha(chosen["code_ran"].strip()) if chosen else None, "code_ran_is_code_sent": chosen is not None,
                       "model_text_matches": _unfence(native["text"]) == stdout})
     else:  # no native block: all there is is the model's relay of stdout, which the proof line still binds to the nonce
         stdout = _unfence(native["text"])
@@ -220,4 +222,19 @@ def recheck(dossier: dict) -> dict:
     except (KeyError, OSError, subprocess.SubprocessError):
         return {"sandbox_local_matches": False}
     ok = local == sealed.get("local_stdout") and sha(code) == sealed.get("code_sha256") and inputs == sealed.get("inputs") and agrees(local, dossier["verdict"])
+    # the flags sealed with the block are recomputed from what it holds, never believed: the sandbox's stdout must equal the local one, and
+    # from version 2 the proof lines must match and (native evidence) the code that ran must be exactly the code of this dossier
+    sandbox_stdout = sealed.get("sandbox_stdout")
+    again = isinstance(sandbox_stdout, str) and sandbox_stdout == local
+    flags = True
+    if version != "otari-sandbox/1":
+        proof = lambda text: json.loads(text).get("proof") if isinstance(text, str) and text.startswith("{") else None
+        try:
+            proof_ok = proof(sandbox_stdout) is not None and proof(sandbox_stdout) == proof(local)
+        except ValueError:
+            proof_ok = False
+        code_ok = sealed.get("evidence") != "native" or (sealed.get("code_ran_sha256") == sha(code.strip()) and sealed.get("code_ran_is_code_sent") is True)
+        again = again and proof_ok and code_ok
+        flags = bool(sealed.get("proof_ok")) == proof_ok
+    ok = ok and flags and bool(sealed.get("equal")) == again
     return {"sandbox_sealed": True, "sandbox_local_matches": ok, "sandbox_equal": bool(sealed.get("equal"))}

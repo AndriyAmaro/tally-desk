@@ -83,13 +83,6 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
     return trimmed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
   }
 
-  function family(action) {
-    if (!action) return "UNKNOWN";
-    if (action === "LONG" || action === "SHORT") return action;
-    if (String(action).startsWith("BLOCKED")) return "BLOCKED";
-    return "NO_POSITION";
-  }
-
   async function ledgerIndex() {
     try {
       const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
@@ -122,21 +115,11 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
       else { linked = prev.hash === d.prev_hash; linkNote = linked ? "previous record " + (d.seq - 1) + " carries that hash" : "previous record " + (d.seq - 1) + " carries a different hash"; }
     }
 
-    const v = d.verdict || {}, f = d.features || {};
-    const bull = (d.bull || []).reduce((s, a) => s + (Number(a.weight) || 0), 0);
-    const bear = (d.bear || []).reduce((s, a) => s + (Number(a.weight) || 0), 0);
-    const atrPct = (Number(f.atr_14) || 0) / (Number(f.last_close) || 1) * 100;
-    const fresh = (d.evidence || {}).freshness || {};
-    const age = Number(fresh.newest_candle_age_minutes);
-    const windowMinutes = Number(fresh.window_minutes) || P.MARKET_WINDOW_MINUTES;
-    let rederived = null;
-    if (Number.isFinite(age)) rederived = P.evaluate({ bull, bear, atrPct, ageMinutes: age, windowMinutes });
-    const rulesVersion = v.rules_version || "v1";
-    let agrees = null;
-    if (rederived) {
-      agrees = rulesVersion === "v3" ? rederived.state === v.action : family(rederived.state) === family(v.action);
-    }
-    return { d, intact, recomputed, linked, linkNote, rederived, agrees, rulesVersion, bull, bear, atrPct, age, windowMinutes };
+    // One reader of the dossier, shared with the parity tests (policy.js): the evidence is refused for its age OR for any reason the
+    // sealed freshness block gives (fresh.ok === false), the way the Python judge and the CRE workflow read it.
+    const { input, rederived, agrees, rulesVersion } = P.checkDossier(d);
+    return { d, intact, recomputed, linked, linkNote, rederived, agrees, rulesVersion, bull: input.bull, bear: input.bear, atrPct: input.atrPct,
+             age: input.ageMinutes, windowMinutes: input.windowMinutes, blockReason: input.freshOk === false ? input.blockReason : null };
   }
 
   async function run() {
@@ -167,7 +150,8 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
         <tr><th>Linkage</th><td>${mark(r.linked, "linked", "broken link")} <span class="mut">${esc(r.linkNote)}</span></td></tr>
         <tr><th>Re-derivation</th><td>${r.rederived
             ? `${mark(r.agrees, "the rules reproduce the recorded action", "the rules now produce a different action")}
-               <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under</div>`
+               <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under${
+              r.blockReason ? `; the evidence was refused by its sealed freshness check: ${esc(r.blockReason)}` : ""}</div>`
             : `<span class="mut">not possible: this record has no freshness block, so the policy cannot be replayed on it</span>`}</td></tr>
       </tbody></table>`;
     }).join("");

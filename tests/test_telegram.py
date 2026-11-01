@@ -81,6 +81,7 @@ class TelegramTest(unittest.TestCase):
         self.assertEqual(items[0]["name"], "Example Desk")
         self.assertEqual(items[0]["link"], "https://t.me/example/103")
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

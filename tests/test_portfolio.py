@@ -84,3 +84,5 @@ class MarketSeriesTest(unittest.TestCase):
             self.assertEqual(portfolio.resolve(d, later), portfolio.resolve(d, portfolio._later_candles(ledger, i)), d["seq"])
             checked += 1
         self.assertGreater(checked, 150)
+
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

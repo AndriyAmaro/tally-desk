@@ -87,6 +87,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn("no position has reached this horizon yet", page)
         self.assertNotIn("+0.000%", page)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

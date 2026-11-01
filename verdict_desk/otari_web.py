@@ -2,15 +2,18 @@
 
 Per decision cycle: ONE search (about USD 0.01) and ONE page fetch, both through Otari's tools.
 
-- The query is built from what the cycle already knows: the narrative convergence the voices produced (which coin, which way) and
-  today's date, so the search looks for that day's news about that coin.
+- The query is built from what the cycle already knows: the coin the most voices converged on (whichever way they lean, and the query
+  asks for both rallies and selloffs, so it does not search for the story the voices already told) and today's date.
 - What is kept from the search is not the model's answer but what Otari reports it found, `otari_tool_calls[].sources`. Only results
-  with a page path are kept (a bare domain or a tag or category index is not an article), dated ones first, at most three, one per
-  domain, https only.
+  with a page path are kept (a bare domain or a tag or category index is not an article), at most three, one per domain, https only,
+  dated ones first. A source whose date is known (published date, or a /YYYY/MM/DD/ in its URL) and older than three days is dropped;
+  one with no date at all is kept and marked `undated`, never presented as fresh.
 - The first item is then read with Otari's `otari_web_fetch` tool. The page text is not in the reply's tool-call entry (only the URL
-  and status are), so the excerpt is the model's verbatim relay of the page's opening text; it is sealed with its sha256, labelled as
-  a relay, and checked best-effort against our own GET of the same page (`excerpt_verified`: true, false, or null when the page could not
-  be read without a browser).
+  and status are), so the excerpt is the model's verbatim relay of the page's opening text; it is sealed with its sha256 and labelled as
+  a relay. It is then checked against our own GET of the same page: runs of six consecutive words of the excerpt (those that are not just
+  the title) must be found in the page text, in at least 80 percent of the runs. The check seals what it found (`excerpt_check`: runs counted,
+  runs found, the fraction, the sha256 and size of the page we got) and `excerpt_verified` is true, false, or null when the page could not be read
+  without a browser or the excerpt is too short to judge. It proves the text is on that page, not that Otari's fetch tool is what read it.
 - They go into the packet as `web`, with ids in the evidence index, so the analysts can cite them and the dossier counts how many they
   did. The replay reads the frozen packet and never searches again. The titles and the excerpt are untrusted text.
 """
@@ -29,7 +32,10 @@ from . import llm
 MAX_ITEMS = 3
 EXCERPT_CHARS = 400
 COINS = {"BTC": "Bitcoin", "ETH": "Ethereum", "SOL": "Solana"}
-BIAS_WORDS = {"bullish": "rally gains", "bearish": "selloff drop"}
+MAX_AGE_DAYS = 3
+MATCH_FRACTION = 0.8
+MIN_RUNS = 5
+_URL_DATE = re.compile(r"/(20\d\d)/(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])(?:/|$)")
 SEARCH_SYSTEM = "You are a news scout. Run the web search tool once, then reply with the single word: done."
 FETCH_SYSTEM = ("You read one web page with the web fetch tool and reply with JSON only: {\"excerpt\": the first 400 characters of the page's "
                 "main text, copied verbatim, no summary}.")
@@ -37,13 +43,14 @@ _INDEX_PATH = re.compile(r"/(tag|tags|category|categories|topic|topics|author|au
 
 
 def query_for(symbols: list[str], narrative: dict | None = None, today: str | None = None) -> str:
-    """Today's news about the coin the cycle's narrative convergence points at, else about the first symbol asked for."""
+    """Today's news about the coin the most voices converged on (among the symbols asked for when one of them did), else about the
+    first symbol. The words ask for both directions, so the narrative does not choose which story the search comes back with."""
     today = today or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
     bases = [s.upper().removesuffix("USDT") for s in symbols]
     convergence = [c for c in (narrative or {}).get("convergence") or [] if isinstance(c, dict) and c.get("token")]
-    pick = next((c for c in convergence if c["token"] in bases), convergence[0] if convergence else None)
-    token, words = (pick["token"], BIAS_WORDS.get(pick.get("bias"), "price news")) if pick else (bases[0], "price news")
-    return f"{COINS.get(token, token)} {words} news {today}"
+    ranked = sorted(convergence, key=lambda c: (c["token"] not in bases, -len(c.get("voices") or [])))  # stable: ties keep their order
+    token = ranked[0]["token"] if ranked else bases[0]
+    return f"{COINS.get(token, token)} price news rally selloff {today}"
 
 
 def is_article(url: str) -> bool:
@@ -52,18 +59,35 @@ def is_article(url: str) -> bool:
     return parts.scheme == "https" and bool(parts.hostname) and parts.path.strip("/") != "" and not _INDEX_PATH.search(parts.path)
 
 
-def pick_items(tool_calls: list[dict], limit: int = MAX_ITEMS) -> list[dict]:
-    """Sources of completed searches that are article pages with a title, one per domain, dated ones first."""
+def source_date(src: dict, url: str) -> tuple[str | None, str]:
+    """(date, how we know it): the published date Otari reports, else a /YYYY/MM/DD/ in the URL, else none and `undated`."""
+    published = str(src.get("published_date") or "")[:10]
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
+        return published, "published"
+    found = _URL_DATE.search(urllib.parse.urlsplit(url).path)
+    if found:
+        return "-".join(found.groups()), "from_url"
+    return None, "undated"
+
+
+def pick_items(tool_calls: list[dict], limit: int = MAX_ITEMS, today: str | None = None, max_age_days: int = MAX_AGE_DAYS) -> list[dict]:
+    """Sources of completed searches that are article pages with a title, not older than `max_age_days` when their date is known,
+    one per domain, dated ones first. Each item carries its `date` and `date_status` (published, from_url, undated)."""
+    now = datetime.date.fromisoformat(today) if today else datetime.datetime.now(datetime.timezone.utc).date()
     found = []
     for call in tool_calls or []:
         if call.get("type") != "web_search" or call.get("status") != "completed":
             continue
         for src in call.get("sources") or []:
             url, title = str(src.get("url") or ""), str(src.get("title") or "").strip()
-            if title and is_article(url):
-                found.append({"url": url, "domain": (urllib.parse.urlsplit(url).hostname or "").removeprefix("www."), "title": title[:200],
-                              "published_date": src.get("published_date"), "query": call.get("query")})
-    found.sort(key=lambda item: item["published_date"] is None)  # stable: dated first, Otari's order within each group
+            if not title or not is_article(url):
+                continue
+            date, status = source_date(src, url)
+            if date and (now - datetime.date.fromisoformat(date)).days > max_age_days:
+                continue  # old news is not news
+            found.append({"url": url, "domain": (urllib.parse.urlsplit(url).hostname or "").removeprefix("www."), "title": title[:200],
+                          "published_date": src.get("published_date"), "date": date, "date_status": status, "query": call.get("query")})
+    found.sort(key=lambda item: item["date"] is None)  # stable: dated first, Otari's order within each group
     items, seen = [], set()
     for item in found:
         if item["domain"] not in seen:
@@ -79,26 +103,34 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", text))).strip().lower()
 
 
-def _windows(text: str, size: int = 6) -> list[str]:
-    words = re.findall(r"[a-z0-9]+", _plain(text))
-    return [" ".join(words[i:i + size]) for i in range(0, max(0, len(words) - size + 1))]
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", _plain(text))
 
 
-def verify_excerpt(url: str, excerpt: str, opener=None) -> bool | None:
-    """Best effort: do runs of six consecutive words of the excerpt appear in the page as we fetch it ourselves (markup, punctuation
-    and case ignored)? True with at least two such runs, False when the page was read and they are not there, None when the page
-    cannot be read this way (blocked, or built in the browser)."""
-    wanted = _windows(excerpt)[:40]
-    if len(wanted) < 2:
-        return None
+def excerpt_check(url: str, excerpt: str, title: str = "", opener=None) -> dict:
+    """Does the excerpt come from the page? Runs of six consecutive words of the excerpt are looked up in our own GET of the page
+    (markup, punctuation and case ignored). Runs made mostly of words of the title do not count: the title is in the page anyway.
+    Verified needs at least five runs and 80 percent of them found; None when the page cannot be read this way or the excerpt is too short."""
+    title_words = set(_words(title))
+    words = _words(excerpt)
+    runs = [" ".join(words[i:i + 6]) for i in range(0, max(0, len(words) - 5)) if sum(1 for w in words[i:i + 6] if w not in title_words) >= 3]
+    out = {"method": "runs of six words against our own GET of the page, title words not counted", "runs": len(runs), "threshold": MATCH_FRACTION}
+    if len(runs) < MIN_RUNS:
+        return {**out, "verified": None, "reason": "the excerpt is too short to judge"}
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; verdict-desk/1.0)"})
         with (opener or urllib.request.urlopen)(request, timeout=12) as response:
-            page = response.read(2_000_000).decode("utf-8", "replace")
-    except (OSError, ValueError):
-        return None
-    have = " ".join(re.findall(r"[a-z0-9]+", _plain(page)))
-    return sum(1 for w in wanted if w in have) >= 2
+            raw = response.read(2_000_000)
+    except (OSError, ValueError) as err:
+        return {**out, "verified": None, "reason": f"the page could not be read here ({type(err).__name__})"}
+    have = " ".join(_words(raw.decode("utf-8", "replace")))
+    found = sum(1 for run in runs if run in have)
+    return {**out, "found": found, "fraction": round(found / len(runs), 4), "page_sha256": hashlib.sha256(raw).hexdigest(), "page_bytes": len(raw),
+            "verified": found / len(runs) >= MATCH_FRACTION}
+
+
+def verify_excerpt(url: str, excerpt: str, opener=None, title: str = "") -> bool | None:
+    return excerpt_check(url, excerpt, title, opener)["verified"]
 
 
 def _fetched(receipt: dict, url: str) -> bool:
@@ -128,7 +160,9 @@ def fetch_page(item: dict, ask=None, opener=None) -> dict:
     excerpt = re.sub(r"\s+", " ", excerpt)[:EXCERPT_CHARS]
     page.update({"excerpt": excerpt, "excerpt_sha256": hashlib.sha256(excerpt.encode("utf-8")).hexdigest(),
                  "excerpt_source": "verbatim relay by the model of the page text Otari's fetch tool returned",
-                 "excerpt_verified": verify_excerpt(item["url"], excerpt, opener)})
+                 })
+    check = excerpt_check(item["url"], excerpt, item.get("title", ""), opener)
+    page.update({"excerpt_check": check, "excerpt_verified": check["verified"]})
     return page
 
 
@@ -146,7 +180,7 @@ def collect(symbols: list[str], narrative: dict | None = None, today: str | None
     block["receipt"] = receipt
     block["fetched_at"] = receipt.get("captured_at")
     block["items"] = [{**item, "fetched_at": receipt.get("captured_at"), "request_id": receipt.get("request_id"), "source_tool": "otari_web_search"}
-                      for item in pick_items(receipt.get("tool_calls") or [])]
+                      for item in pick_items(receipt.get("tool_calls") or [], today=today)]
     if not block["items"]:
         block["note"] = "the search returned no article page"
         return block
@@ -156,7 +190,9 @@ def collect(symbols: list[str], narrative: dict | None = None, today: str | None
 
 def index_texts(web: dict | None) -> list[str]:
     """The evidence lines the analysts see for a `web` block: one per item, and the page excerpt when there is one."""
-    lines = [f"Web ({i.get('domain', '')}): {i.get('title', '')}" for i in (web or {}).get("items") or []]
+    # items sealed before the recency filter have no `date_status` and keep their original line, so their replay does not change
+    lines = [(f"Web ({i.get('domain', '')}, {i.get('date') or 'undated'}): {i.get('title', '')}" if "date_status" in i else f"Web ({i.get('domain', '')}): {i.get('title', '')}")
+             for i in (web or {}).get("items") or []]
     page = (web or {}).get("page") or {}
     if page.get("excerpt"):
         lines.append(f"Web page excerpt ({page.get('domain', '')}, relayed from Otari's fetch): {page['excerpt']}")

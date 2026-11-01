@@ -76,6 +76,7 @@ class CreEvidenceTest(unittest.TestCase):
         self.assertIsNotNone(tx, "the broadcast run must record the transaction it sent")
         self.assertNotIn("<test-key>", broadcast.replace("<test-key>", ""), "the key must be masked before saving")
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

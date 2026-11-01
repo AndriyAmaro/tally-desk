@@ -57,6 +57,7 @@ class RekorHeadsTest(unittest.TestCase):
         self.assertEqual([h["seq"] for h in index["rekor"]], [7])
         self.assertEqual(battery.witness_index(root / "timestamps", root / "nope.json")["rekor"], [])
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

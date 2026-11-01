@@ -46,3 +46,30 @@ test("a risk limit that was not asked for defaults to one percent", () => {
 });
 
 function round8(x) { return Math.round(x * 1e8) / 1e8; }
+
+test("a freshness block sealed as not ok refuses the decision even when the candle is fresh, and says why", () => {
+  const r = policy.evaluate({ bull: 9, bear: 0, atrPct: 0.5, ageMinutes: 10, freshOk: false, blockReason: "price sources diverge", divergent: true });
+  assert.equal(r.state, "BLOCKED_STALE");
+  assert.equal(r.stale, false);
+  assert.equal(r.divergent, true);
+  assert.match(r.rule, /price sources diverge/);
+  assert.equal(policy.evaluate({ bull: 9, bear: 0, atrPct: 0.5, ageMinutes: 10, freshOk: true }).state, "LONG");
+  assert.equal(policy.evaluate({ bull: 9, bear: 0, atrPct: 0.5, ageMinutes: 200, freshOk: true }).state, "BLOCKED_STALE");
+});
+
+test("checkDossier reads a dossier the way the verify page does and agrees with a divergence refusal", () => {
+  const args = (w) => [{ weight: w }];
+  const d = {
+    bull: args(3), bear: args(0), features: { atr_14: 0.5, last_close: 100 }, verdict: { action: "BLOCKED_STALE", rules_version: "v6" },
+    evidence: { freshness: { ok: false, reason: "x", window_minutes: 75, newest_candle_age_minutes: 20,
+      classes: { market: { ok: true }, divergence: { ok: false, reason: "the sources diverge by 8%" } } } },
+  };
+  const r = policy.checkDossier(d);
+  assert.equal(r.rederived.state, "BLOCKED_STALE");
+  assert.equal(r.agrees, true);
+  assert.match(r.rederived.rule, /diverge by 8%/);
+  const lenient = JSON.parse(JSON.stringify(d));
+  lenient.evidence.freshness.ok = true;
+  assert.equal(policy.checkDossier(lenient).agrees, false);
+  assert.equal(policy.family("BLOCKED_STALE"), "BLOCKED");
+});

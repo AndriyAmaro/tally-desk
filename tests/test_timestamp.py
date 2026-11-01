@@ -121,8 +121,7 @@ class TimestampTest(unittest.TestCase):
                                  f"{name} is {hours:.1f} h older than the head and still pending; "
                                  "the OpenTimestamps upgrade step has stopped")
 
-
-
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

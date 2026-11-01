@@ -179,6 +179,7 @@ class JudgePageStatesTheMoatTest(unittest.TestCase):
         band = agents_v6.V6.entry_threshold
         self.assertIn(f"capped at {cap:.1f} against an entry band of {band:.1f}", html)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

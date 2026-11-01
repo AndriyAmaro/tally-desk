@@ -68,6 +68,7 @@ class BrowserVerifierTest(unittest.TestCase):
         self.assertTrue(any("seq 2: content was altered" in p for p in problems), problems)
         self.assertTrue(any("seq 2" in p for p in dossier.verify(dossier.read_ledger(self.path))))
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

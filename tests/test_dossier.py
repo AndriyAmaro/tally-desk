@@ -76,6 +76,7 @@ class LedgerTest(unittest.TestCase):
         ledger[0] = {**body, "hash": dossier.digest(body)}
         self.assertTrue(any("seq 2" in p and "prev_hash" in p for p in dossier.verify(ledger)))
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

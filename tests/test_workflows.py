@@ -67,6 +67,7 @@ class WorkflowCallsTest(unittest.TestCase):
         for old in ("decide-v4", "decide-v5"):
             self.assertNotIn(old, hourly, "the hourly run moved to rules v6")
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

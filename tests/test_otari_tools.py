@@ -22,18 +22,22 @@ ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTR
        "OTARI_POLICY_JUDGE": "", "OTARI_WEB_SEARCH": "", "OTARI_CODE_EXECUTION": "", "OTARI_MCP": "", "OTARI_MIN_INTERVAL": "", "OTARI_TOOL_CAP_USD": ""}
 
 
+import datetime as _dt
+TODAY_DATE = _dt.datetime.now(_dt.timezone.utc).date().isoformat()  # the sources are "dated today" whatever day the tests run
 SOURCES = [
     {"url": "https://www.youtube.com/watch?v=x", "title": "Bitcoin loses a key source of demand", "published_date": None},
-    {"url": "https://news.example.com", "title": "A bare domain is not an article", "published_date": "2026-11-01"},
+    {"url": "https://news.example.com", "title": "A bare domain is not an article", "published_date": TODAY_DATE},
     {"url": "https://finance.yahoo.com/news/bitcoin-etfs-post-strongest-weekly-inflows-1.html", "title": "Bitcoin ETFs Post Strongest Weekly Inflows", "published_date": None},
-    {"url": "https://thecryptohodl.com/tag/current-crypto-market", "title": "current crypto market Archives", "published_date": "2026-11-01"},
+    {"url": "https://thecryptohodl.com/tag/current-crypto-market", "title": "current crypto market Archives", "published_date": TODAY_DATE},
     {"url": "https://finance.yahoo.com/news/second-yahoo-article-2.html", "title": "Second Yahoo article", "published_date": None},
     {"url": "http://insecure.example/c/story", "title": "Plain http is skipped", "published_date": None},
     {"url": "https://sosovalue.com/etf/story", "title": "", "published_date": None},
-    {"url": "https://bitbo.io/news/etf-flows-today", "title": "Bitcoin ETF Flows Today", "published_date": "2026-11-01"},
+    {"url": "https://bitbo.io/news/etf-flows-today", "title": "Bitcoin ETF Flows Today", "published_date": TODAY_DATE},
     {"url": "https://www.coinglass.com/news/live-spot-etf-flows", "title": "Live Spot ETF Flows", "published_date": None},
+    {"url": "https://www.cnbc.com/2026/06/03/bitcoin-to-slump-after-sell-off.html", "title": "Bitcoin to slump to new lows", "published_date": None},
+    {"url": "https://old.example.org/news/last-month", "title": "Last month's story", "published_date": "2026-10-01T09:00:00Z"},
 ]
-SEARCH_CALL = {"id": "otari_ws_1", "type": "web_search", "status": "completed", "query": "Bitcoin rally gains news 2026-11-01", "sources": SOURCES}
+SEARCH_CALL = {"id": "otari_ws_1", "type": "web_search", "status": "completed", "query": "Bitcoin price news rally selloff", "sources": SOURCES}
 PAGE_TEXT = "Bitcoin ETFs recorded their strongest weekly inflows in ten months as the price surged past its October high."
 FETCH_CALL = {"id": "otari_wf_1", "type": "web_fetch", "status": "completed", "url": "https://bitbo.io/news/etf-flows-today"}
 
@@ -116,12 +120,17 @@ class CycleCapsTest(Env):
 
 
 class WebQueryTest(Env):
-    def test_the_query_follows_the_narrative_convergence_and_the_date(self):
-        conv = {"convergence": [{"token": "ETH", "bias": "bearish"}, {"token": "BTC", "bias": "bullish"}]}
-        self.assertEqual(otari_web.query_for(["BTCUSDT"], conv, "2026-11-01"), "Bitcoin rally gains news 2026-11-01")
-        self.assertEqual(otari_web.query_for(["ETHUSDT", "BTCUSDT"], conv, "2026-11-01"), "Ethereum selloff drop news 2026-11-01")
-        self.assertEqual(otari_web.query_for(["SOLUSDT"], None, "2026-11-01"), "Solana price news news 2026-11-01")
-        self.assertEqual(otari_web.query_for(["BTCUSDT"], {"convergence": []}, "2026-11-01"), "Bitcoin price news news 2026-11-01")
+    TODAY = "2026-11-01"
+
+    def test_the_query_names_the_coin_most_voices_converged_on_and_asks_for_both_directions(self):
+        conv = {"convergence": [{"token": "ETH", "bias": "bearish", "voices": ["a", "b"]}, {"token": "BTC", "bias": "bullish", "voices": ["a", "b", "c"]},
+                                {"token": "BTC", "bias": "bearish", "voices": ["d", "e"]}]}
+        self.assertEqual(otari_web.query_for(["BTCUSDT", "ETHUSDT"], conv, self.TODAY), "Bitcoin price news rally selloff 2026-11-01")
+        self.assertEqual(otari_web.query_for(["ETHUSDT"], conv, self.TODAY), "Ethereum price news rally selloff 2026-11-01")  # a converged symbol asked for comes first
+        self.assertEqual(otari_web.query_for(["SOLUSDT"], None, self.TODAY), "Solana price news rally selloff 2026-11-01")
+        for bias in ("bullish", "bearish"):  # the query does not depend on which way the voices lean
+            self.assertEqual(otari_web.query_for(["BTCUSDT"], {"convergence": [{"token": "BTC", "bias": bias, "voices": ["a", "b"]}]}, self.TODAY),
+                             "Bitcoin price news rally selloff 2026-11-01")
 
     def test_only_pages_with_a_path_of_their_own_count_as_articles(self):
         for url in ("https://news.example.com", "https://news.example.com/", "https://x.com/tag/bitcoin", "https://x.com/category/news/", "http://x.com/a/b"):
@@ -129,13 +138,20 @@ class WebQueryTest(Env):
         self.assertTrue(otari_web.is_article("https://x.com/news/bitcoin-rally-2026"))
 
     def test_items_are_articles_one_per_domain_dated_first_at_most_three(self):
-        items = otari_web.pick_items([SEARCH_CALL])
+        items = otari_web.pick_items([SEARCH_CALL], today=TODAY_DATE)
         self.assertEqual([i["domain"] for i in items], ["bitbo.io", "youtube.com", "finance.yahoo.com"])  # the one dated article leads
-        self.assertEqual(items[0]["published_date"], "2026-11-01")
+        self.assertEqual((items[0]["date"], items[0]["date_status"]), (TODAY_DATE, "published"))
         self.assertTrue(all(otari_web.is_article(i["url"]) for i in items))
 
+    def test_a_source_with_a_known_date_older_than_three_days_is_dropped_and_an_undated_one_is_marked(self):
+        items = otari_web.pick_items([{**SEARCH_CALL, "sources": [SOURCES[-2], SOURCES[-1], SOURCES[0]]}], today=TODAY_DATE)
+        self.assertEqual([i["domain"] for i in items], ["youtube.com"])  # the CNBC page dated 2026-06-03 in its URL and the 2026-10-01 one are gone
+        self.assertEqual((items[0]["date"], items[0]["date_status"]), (None, "undated"))
+        near = otari_web.pick_items([{**SEARCH_CALL, "sources": [{"url": "https://x.com/2026/10/30/story.html", "title": "Two days ago", "published_date": None}]}], today="2026-11-01")
+        self.assertEqual((near[0]["date"], near[0]["date_status"]), ("2026-10-30", "from_url"))
+
     def test_failed_or_foreign_calls_give_no_items(self):
-        self.assertEqual(otari_web.pick_items([{**SEARCH_CALL, "status": "failed"}, {"type": "web_fetch", "status": "completed", "sources": SOURCES}]), [])
+        self.assertEqual(otari_web.pick_items([{**SEARCH_CALL, "status": "failed"}, {"type": "web_fetch", "status": "completed", "sources": SOURCES}], today=TODAY_DATE), [])
 
 
 class WebCollectTest(Env):
@@ -159,12 +175,13 @@ class WebCollectTest(Env):
 
     def test_one_search_then_one_fetch_of_the_first_item_with_the_excerpt_sealed_by_its_hash(self):
         ask = self.asks()
-        block = otari_web.collect(["BTCUSDT"], {"convergence": [{"token": "BTC", "bias": "bullish"}]}, today="2026-11-01", ask=ask,
-                                  opener=lambda request, timeout=None: _Page("<html><body><p>" + PAGE_TEXT + " More text.</p></body></html>"))
+        raw = "<html><body><p>" + PAGE_TEXT + " More text.</p></body></html>"
+        block = otari_web.collect(["BTCUSDT"], {"convergence": [{"token": "BTC", "bias": "bullish", "voices": ["a", "b"]}]}, today=TODAY_DATE, ask=ask,
+                                  opener=lambda request, timeout=None: _Page(raw))
         self.assertEqual([c[0] for c in ask.calls], ["searcher", "fetcher"])
         self.assertEqual(ask.calls[0][2], [{"type": "otari_web_search", "max_uses": 1}])
         self.assertEqual(ask.calls[1][2], [{"type": "otari_web_fetch"}])
-        self.assertIn("Bitcoin rally gains news 2026-11-01", block["query"])
+        self.assertEqual(block["query"], f"Bitcoin price news rally selloff {TODAY_DATE}")
         self.assertEqual(block["items"][0]["url"], FETCH_CALL["url"])
         first = block["items"][0]
         self.assertEqual((first["fetched_at"], first["request_id"], first["source_tool"]), ("2026-11-01T18:30:00Z", "req-search", "otari_web_search"))
@@ -174,14 +191,32 @@ class WebCollectTest(Env):
         self.assertEqual(page["excerpt_sha256"], hashlib.sha256(PAGE_TEXT.encode()).hexdigest())
         self.assertEqual((page["request_id"], page["otari_reported_fetch"], page["excerpt_verified"]), ("req-fetch", True, True))
         self.assertIn("relay", page["excerpt_source"])
+        check = page["excerpt_check"]  # what the check found is sealed, with the hash and size of the page we got
+        self.assertEqual((check["found"], check["fraction"], check["verified"]), (check["runs"], 1.0, True))
+        self.assertGreaterEqual(check["runs"], 5)
+        self.assertEqual((check["page_sha256"], check["page_bytes"]), (hashlib.sha256(raw.encode()).hexdigest(), len(raw.encode())))
+        self.assertEqual(first["date_status"], "published")
 
-    def test_the_check_ignores_markup_case_and_punctuation_and_needs_runs_of_words_not_a_prefix(self):
+    def test_the_check_ignores_markup_case_and_punctuation_and_needs_most_runs_of_words_not_a_prefix(self):
         page = lambda text: (lambda request, timeout=None: _Page(text))
         noisy = "<html><nav>Menu</nav><h1>Bitcoin ETFs: recorded their STRONGEST weekly inflows</h1><script>x()</script><p>in ten months, as the price surged past its October high.</p></html>"
-        self.assertTrue(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page(noisy)))
-        self.assertFalse(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page("<p>An unrelated page about gardening and soil acidity for tomato growers.</p>")))
-        self.assertFalse(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page("")))
-        self.assertIsNone(otari_web.verify_excerpt("https://x.com/a/b", "too short", page(noisy)))
+        self.assertTrue(otari_web.excerpt_check("https://x.com/a/b", PAGE_TEXT, "Other title", page(noisy))["verified"])
+        half = "<p>Bitcoin ETFs recorded their strongest weekly inflows in ten months. The rest of the page is about something else entirely, gardening and soil.</p>"
+        check = otari_web.excerpt_check("https://x.com/a/b", PAGE_TEXT, "Other title", page(half))
+        self.assertTrue(0 < check["found"] < check["runs"] and check["fraction"] < otari_web.MATCH_FRACTION)  # a start that matches is not enough
+        self.assertIs(check["verified"], False)
+        self.assertIs(otari_web.excerpt_check("https://x.com/a/b", PAGE_TEXT, "t", page("<p>An unrelated page about gardening and soil acidity.</p>"))["verified"], False)
+        self.assertIs(otari_web.excerpt_check("https://x.com/a/b", PAGE_TEXT, "t", page(""))["verified"], False)
+
+    def test_words_of_the_title_do_not_count_and_a_short_excerpt_is_too_short_to_judge(self):
+        page = lambda text: (lambda request, timeout=None: _Page(text))
+        title = "Bitcoin ETF Flows Today"
+        echo = "Bitcoin ETF Flows Today ETF Flows Today Bitcoin ETF Flows Today Flows Today Bitcoin ETF"  # only title words: the page has them anyway
+        check = otari_web.excerpt_check("https://x.com/a/b", echo, title, page("<h1>" + title + "</h1>"))
+        self.assertEqual((check["verified"], check["runs"]), (None, 0))
+        self.assertIn("too short", check["reason"])
+        self.assertIsNone(otari_web.excerpt_check("https://x.com/a/b", "too short", title, page("x"))["verified"])
+        self.assertIsNone(otari_web.verify_excerpt("https://x.com/a/b", "too short", page("x")))
 
     def test_an_excerpt_the_page_does_not_contain_is_marked_unverified_and_an_unreadable_page_is_unknown(self):
         ask = self.asks(fetch_text='{"excerpt": "An invented opening sentence that is nowhere on the page at all."}')
@@ -222,7 +257,7 @@ class WebCollectTest(Env):
         pkt["web"] = otari_web.collect(["BTCUSDT"], ask=self.asks(), opener=lambda r, timeout=None: _Page("<p>" + PAGE_TEXT + "</p>"))
         index = citations.index(pkt, None)
         excerpt_id = next(k for k, v in index.items() if v.startswith("Web page excerpt"))
-        title_id = next(k for k, v in index.items() if v.startswith("Web (bitbo.io)"))
+        title_id = next(k for k, v in index.items() if v.startswith("Web (bitbo.io, " + TODAY_DATE + ")"))
         self.assertIn(PAGE_TEXT, index[excerpt_id])
 
         def stub(system, user):
@@ -233,7 +268,8 @@ class WebCollectTest(Env):
         d = dossier.append(pkt, path, ask=stub, rules_version="v6")
         self.assertEqual(len(d["llm"]["bull"]["accepted"]), 1)
         use = d["llm"]["otari"]["evidence_use"]
-        self.assertEqual((use["web_items"], use["web_items_cited"]), (len([k for k, v in index.items() if v.startswith("Web ")]), 1))
+        self.assertEqual((use["web_items"], use["web_items_cited"], use["web_excerpts"], use["web_excerpts_cited"]),
+                         (len([k for k, v in index.items() if v.startswith("Web (")]), 0, 1, 1))  # titles and the excerpt are counted apart
         self.assertNotEqual(title_id, excerpt_id)
         self.assertEqual(dossier.verify(dossier.read_ledger(path)), [])
         with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=AssertionError("the replay used the network"))):
@@ -370,64 +406,110 @@ class McpTest(Env):
         self.assertEqual((block["prices"], block["note"]), ({}, "Otari reported no MCP tool call"))
 
 
+def fresh_block(age=49.18, ok=True, reason=""):
+    return {"window_minutes": 75, "newest_candle_age_minutes": age, "ok": ok, "reason": reason,
+            "classes": {"market": {"age_minutes": age, "window_minutes": 75, "ok": ok, "blocking": True}}, "warnings": []}
+
+
+def mcp_block(price, trusted=True):
+    """A block as `collect` leaves it: the tool use and result blocks are there, so the replay can recompute the trust itself."""
+    code = GOOD_CODE if trusted else "async function run(client) { return {bitcoin: {usd: 1}}; }"
+    block = {"method": "otari_mcp", "server": "coingecko", "mcp_calls": [{"id": "u1", "server": "coingecko", "tool": "execute", "input": {"code": code}}],
+             "mcp_results": [{"tool_use_id": "u1", "is_error": False, "content": json.dumps({"result": {"bitcoin": {"usd": price}}})}], "receipt": {"request_id": "req-m"}}
+    return {**block, "trusted": True, "prices": {"BTC": price}} if trusted else {**block, "trusted": False, "prices": {}, "prices_unverified": {"BTC": price}, "untrusted_reason": "typed price"}
+
+
 class McpCheckTest(Env):
-    """The MCP price takes part in the decision: more than 1 percent from the exchange close and the verdict refuses to decide."""
+    """The MCP price is a second price source that takes part in the decision: beyond its tolerance the sources DIVERGE, which is a
+    refusal of its own kind (a blocking freshness class), never confused with a candle that is too old."""
 
-    def pkt(self):
-        return packet(0.004, titles=("Bitcoin rally hits record",))
+    def pkt(self, **fresh):
+        pkt = packet(0.004, titles=("Bitcoin rally hits record",))
+        pkt["freshness"] = fresh_block(**fresh)
+        return pkt
 
-    def block(self, price, trusted=True):
-        return {"method": "otari_mcp", "server": "coingecko", "trusted": trusted, "prices": {"BTC": price} if trusted else {}, "untrusted_reason": None if trusted else "typed price",
-                "receipt": {"request_id": "req-m"}}
+    def close(self, pkt):
+        return pkt["market"]["candles"][-1]["c"]
 
-    def test_a_price_within_the_limit_passes_and_the_difference_is_recorded(self):
+    def test_a_price_within_the_tolerance_passes_and_the_class_is_recorded_ok(self):
         pkt = self.pkt()
-        close = pkt["market"]["candles"][-1]["c"]
-        check = otari_mcp.apply(pkt, self.block(round(close * 1.005, 4)))
+        check = otari_mcp.apply(pkt, mcp_block(round(self.close(pkt) * 1.005, 4)))
         self.assertEqual((check["status"], check["ok"], check["limit_pct"]), ("ok", True, 1.0))
         self.assertAlmostEqual(check["diff_pct"], 0.5, places=1)
         self.assertEqual(pkt["market_mcp"]["check"], check)
-        self.assertNotIn("freshness", pkt)
+        self.assertTrue(pkt["freshness"]["ok"])
+        self.assertEqual(pkt["freshness"]["classes"]["divergence"]["ok"], True)
 
-    def test_a_price_beyond_the_limit_marks_the_freshness_not_ok_with_the_numbers_as_the_reason(self):
+    def test_a_divergence_is_its_own_class_the_market_class_and_a_staleness_reason_stay_as_they_were(self):
         pkt = self.pkt()
-        close = pkt["market"]["candles"][-1]["c"]
-        check = otari_mcp.apply(pkt, self.block(round(close * 1.05, 4)))
-        self.assertEqual((check["status"], check["ok"]), ("mismatch", False))
-        self.assertFalse(pkt["freshness"]["ok"])
-        self.assertIn("differs 5.0", pkt["freshness"]["reason"])
+        check = otari_mcp.apply(pkt, mcp_block(round(self.close(pkt) * 1.05, 4)))
+        self.assertEqual((check["status"], check["ok"]), ("divergence", False))
+        fresh = pkt["freshness"]
+        self.assertFalse(fresh["ok"])
+        self.assertIn("diverge by 5.0", fresh["reason"])
+        self.assertEqual(fresh["classes"]["market"], fresh_block()["classes"]["market"])  # the candle is as fresh as it was: untouched, still ok
+        self.assertTrue(fresh["classes"]["market"]["ok"])
+        self.assertFalse(fresh["classes"]["divergence"]["ok"])
+        stale = self.pkt(age=200.0, ok=False, reason="the newest candle is 200 minutes old, window is 75")
+        otari_mcp.apply(stale, mcp_block(round(self.close(stale) * 1.05, 4)))
+        self.assertEqual(stale["freshness"]["reason"], "the newest candle is 200 minutes old, window is 75")  # the original reason is never overwritten
+        self.assertIn("diverge", stale["freshness"]["classes"]["divergence"]["reason"])
+
+    def test_the_tolerance_grows_with_the_age_of_the_candle_by_one_hourly_atr_per_hour(self):
+        fresh_pkt, old_pkt = self.pkt(age=0.0), self.pkt(age=49.18)
+        price = round(self.close(fresh_pkt) * 1.015, 4)  # 1.5 percent apart: more than the base 1 percent
+        self.assertEqual(otari_mcp.check_for(mcp_block(price), fresh_pkt)["status"], "divergence")
+        check = otari_mcp.check_for(mcp_block(price), old_pkt)
+        self.assertEqual(check["status"], "ok")
+        self.assertGreater(check["tolerance_pct"], 1.5)
+        self.assertAlmostEqual(check["tolerance_pct"], 1.0 + check["atr_pct"] * 49.18 / 60, places=3)
 
     def test_an_untrusted_or_missing_price_is_unavailable_and_blocks_nothing(self):
-        for block in (self.block(1.0, trusted=False), {"error": "HTTP 403", "trusted": False, "prices": {}}, {**self.block(1.0), "prices": {"ETH": 2000.0}}):
+        for block in (mcp_block(1.0, trusted=False), {"error": "HTTP 403", "trusted": False, "prices": {}}, {**mcp_block(1.0), "prices": {"ETH": 2000.0}}):
             pkt = self.pkt()
             check = otari_mcp.apply(pkt, block)
             self.assertEqual((check["status"], check["ok"]), ("unavailable", True))
-            self.assertNotIn("freshness", pkt)
+            self.assertEqual(pkt["freshness"], fresh_block())
 
-    def test_a_mismatch_is_a_recorded_refusal_with_no_position_and_the_replay_rechecks_it_offline(self):
+    def test_a_divergence_is_a_recorded_refusal_with_no_position_and_the_replay_rechecks_it_offline(self):
         pkt = self.pkt()
-        otari_mcp.apply(pkt, self.block(round(pkt["market"]["candles"][-1]["c"] * 1.05, 4)))
+        otari_mcp.apply(pkt, mcp_block(round(self.close(pkt) * 1.05, 4)))
         path = Path(tempfile.mkdtemp()) / "l.jsonl"
         d = dossier.append(pkt, path, ask=lambda s, u: "[]", rules_version="v6")
         self.assertEqual(d["verdict"]["action"], "BLOCKED_STALE")
         self.assertNotIn("entry", d["verdict"])
-        self.assertIn("MCP spot price", d["verdict"]["rationale"])
+        self.assertIn("diverge", d["verdict"]["rationale"])
         with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=AssertionError("network"))):
             r = dossier.replay(dossier.read_ledger(path)[0], "auto")
         self.assertTrue(r["matches"])
-        self.assertEqual((r["market_check_ok"], r["market_check_status"]), (True, "mismatch"))
+        self.assertEqual((r["market_check_ok"], r["market_check_status"]), (True, "divergence"))
 
-    def test_the_recheck_catches_an_edited_check_or_a_mismatch_that_was_not_refused(self):
+    def test_the_recheck_recomputes_trust_prices_and_the_check_and_believes_no_sealed_flag(self):
         pkt = self.pkt()
-        otari_mcp.apply(pkt, self.block(round(pkt["market"]["candles"][-1]["c"] * 1.05, 4)))
+        otari_mcp.apply(pkt, mcp_block(round(self.close(pkt) * 1.05, 4)))
         d = dossier.build(pkt, dossier.GENESIS, 1, ask=lambda s, u: "[]", rules_version="v6")
-        forged = json.loads(json.dumps(d))
-        forged["evidence"]["market_mcp"]["check"]["diff_pct"] = 0.1
-        self.assertFalse(otari_mcp.recheck(forged)["market_check_ok"])
-        lenient = json.loads(json.dumps(d))
-        lenient["features"]["freshness"] = {"ok": True}
-        self.assertFalse(otari_mcp.recheck(lenient)["market_check_ok"])
+        self.assertTrue(otari_mcp.recheck(d)["market_check_ok"])
+
+        def mutate(fn):
+            c = json.loads(json.dumps(d))
+            fn(c)
+            return otari_mcp.recheck(c)["market_check_ok"]
+        self.assertFalse(mutate(lambda c: c["evidence"]["market_mcp"]["check"].update(diff_pct=0.1)), "an edited check")
+        self.assertFalse(mutate(lambda c: c["features"].update(freshness={**c["features"]["freshness"], "ok": True})), "a divergence the verdict did not refuse")
+        self.assertFalse(mutate(lambda c: c["evidence"]["market_mcp"]["mcp_calls"][0]["input"].update(code="async function run(client) { return {bitcoin: {usd: 133}}; }")),
+                         "trusted flag kept after the code was changed")
+        self.assertFalse(mutate(lambda c: c["evidence"]["market_mcp"]["prices"].update(BTC=1.0)), "prices that are not the server's result")
+        self.assertFalse(mutate(lambda c: c["evidence"]["market_mcp"].update(mcp_calls=[])), "trusted with no recorded tool call")
         self.assertEqual(otari_mcp.recheck({"evidence": {}}), {})
+
+    def test_an_untrusted_block_replays_as_unavailable_and_a_forged_trust_flag_does_not(self):
+        pkt = self.pkt()
+        otari_mcp.apply(pkt, mcp_block(round(self.close(pkt) * 1.05, 4), trusted=False))
+        d = dossier.build(pkt, dossier.GENESIS, 1, ask=lambda s, u: "[]", rules_version="v6")
+        self.assertNotEqual(d["verdict"]["action"], "BLOCKED_STALE")
+        self.assertEqual(otari_mcp.recheck(d), {"market_check_ok": True, "market_check_status": "unavailable"})
+        d["evidence"]["market_mcp"]["trusted"] = True
+        self.assertFalse(otari_mcp.recheck(d)["market_check_ok"])
 
     def test_the_trusted_price_is_citable_evidence_for_its_own_symbol_only(self):
         pkt = self.pkt()
@@ -515,7 +597,7 @@ class SandboxSealTest(Env):
         self.assertEqual((block["schema"], block["evidence"]), ("otari-sandbox/2", "native"))
         self.assertTrue(block["equal"] and block["proof_ok"] and block["code_ran_is_code_sent"] and block["local_agrees_with_verdict"])
         self.assertEqual(block["sandbox_stdout"], block["local_stdout"])
-        self.assertEqual((block["sandbox_return_code"], block["receipt"]["request_id"], block["code_ran_sha256"]), (0, "req-sbx", block["code_sha256"]))
+        self.assertEqual((block["sandbox_return_code"], block["receipt"]["request_id"], block["code_ran_sha256"]), (0, "req-sbx", sandbox_rederive.sha(sandbox_rederive.code_for(block["inputs"]).strip())))
         self.assertTrue(block["model_text_matches"])
 
     def test_every_call_has_a_new_nonce_and_so_a_new_code_hash(self):
@@ -647,7 +729,7 @@ class FlowEnv(Env):
         path = Path(tempfile.mkdtemp()) / "otari.json"
         path.write_text(json.dumps(cfg), encoding="utf-8")
         for patch in (mock.patch.object(llm, "OTARI_CONFIG", path), mock.patch.object(llm, "usage_for", lambda rid: {"cost_usd": "0.000064", "prompt_tokens": 900, "completion_tokens": 100}),
-                      mock.patch.object(otari_web, "verify_excerpt", lambda url, excerpt, opener=None: None)):
+                      mock.patch.object(otari_web, "excerpt_check", lambda url, excerpt, title="", opener=None: {"verified": None, "runs": 0, "reason": "no network in tests"})):
             patch.start()
             self.addCleanup(patch.stop)
         self.pkt = packet(0.004, titles=("Bitcoin rally hits record",))
@@ -692,7 +774,7 @@ class FlowEnv(Env):
         with mock.patch.dict(os.environ, extra_env or {}), mock.patch.object(urllib.request, "urlopen", self.reply), \
                 mock.patch.object(evidence, "collect", lambda *a, **k: json.loads(json.dumps(self.pkt))), \
                 mock.patch.object(narrative, "collect_with_gaps", lambda feeds, log=None: (voices, {})), \
-                mock.patch.object(cli.practice if hasattr(cli, "practice") else llm, "chain_executor", lambda: None, create=True):
+                mock.patch("verdict_desk.practice.chain_executor", lambda: None):
             out = io.StringIO()
             with mock.patch("sys.stdout", out):
                 code = cli._decide_flow(opts, "v6")
@@ -712,8 +794,8 @@ class DecideFlowTest(FlowEnv):
         self.assertEqual(mcp["receipt"]["role"], "mcp")
         sb = d["sandbox"]
         self.assertTrue(sb["equal"] and sb["proof_ok"] and sb["evidence"] == "native")
-        self.assertEqual(d["llm"]["otari"]["evidence_use"]["web_items_cited"], 1)
-        self.assertIn("cited by the analysts: 1", out)
+        self.assertEqual(d["llm"]["otari"]["evidence_use"]["web_excerpts_cited"], 1)
+        self.assertIn("1 of 1 excerpts", out)
         self.assertIn("MCP price check ok", out)
         self.assertIn("sandbox (native) output IDENTICAL", out)
 
@@ -740,9 +822,9 @@ class DecideFlowTest(FlowEnv):
         d = ledger[0]
         self.assertEqual((code, d["verdict"]["action"]), (0, "BLOCKED_STALE"))
         self.assertNotIn("entry", d["verdict"])
-        self.assertEqual(d["evidence"]["market_mcp"]["check"]["status"], "mismatch")
+        self.assertEqual(d["evidence"]["market_mcp"]["check"]["status"], "divergence")
         self.assertTrue(d["sandbox"]["equal"] and d["sandbox"]["local_agrees_with_verdict"])  # the sandbox agrees: no trade, refused
-        self.assertIn("MCP price check mismatch", out)
+        self.assertIn("MCP price check divergence", out)
         with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=AssertionError("network"))):
             self.assertTrue(dossier.replay(d, "auto")["matches"])
 
@@ -765,6 +847,7 @@ class DecideFlowTest(FlowEnv):
         self.assertTrue("web" not in d["evidence"] and "market_mcp" not in d["evidence"] and "sandbox" not in d)
         self.assertNotIn("[otari web]", out)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

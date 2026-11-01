@@ -50,6 +50,7 @@ class RekorWorkflowTest(unittest.TestCase):
         self.assertIn('workflow: "rekor.yml"', PAGE)
         self.assertTrue((ROOT / ".github" / "workflows" / "rekor.yml").exists())
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

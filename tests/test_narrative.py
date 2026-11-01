@@ -298,3 +298,5 @@ class RelevantVoicesTest(unittest.TestCase):
         ledger = dossier.read_ledger(path)
         self.assertEqual([dossier.replay(d)["matches"] for d in ledger], [True, True])
         self.assertLess(len(ledger[0]["llm"]["evidence_index"]), len(ledger[1]["llm"]["evidence_index"]))
+
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

@@ -209,6 +209,7 @@ class DecideWithConfigTest(unittest.TestCase):
         self.assertFalse(path.exists())
         self.assertIn("refused:", err)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

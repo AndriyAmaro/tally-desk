@@ -375,7 +375,7 @@ def print_record(record: dict) -> None:
             page = web.get("page") or {}
             print(f"  [otari web] {len(web['items'])} items frozen: " + "; ".join(i["domain"] for i in web["items"]) + f" (request {(web.get('receipt') or {}).get('request_id')})"
                   + (f"; page excerpt sha256 {page['excerpt_sha256'][:12]}, verified {page.get('excerpt_verified')} (request {page.get('request_id')})" if page.get("excerpt") else "")
-                  + f"; cited by the analysts: {use.get('web_items_cited', 0)} of {use.get('web_items', 0)}")
+                  + f"; cited by the analysts: {use.get('web_items_cited', 0)} of {use.get('web_items', 0)} source titles, {use.get('web_excerpts_cited', 0)} of {use.get('web_excerpts', 0)} excerpts")
         mcp = (record.get("evidence") or {}).get("market_mcp") or {}
         if mcp.get("prices"):
             chk = mcp.get("check") or {}
@@ -383,8 +383,11 @@ def print_record(record: dict) -> None:
                   f"check vs the exchange close: {chk.get('status')}" + (f" {chk['diff_pct']}% of a {chk['limit_pct']}% limit" if "diff_pct" in chk else ""))
         sandbox = record.get("sandbox")
         if sandbox:
-            print(f"  [otari sandbox] sandbox ({sandbox.get('evidence')}) output {'IDENTICAL to' if sandbox.get('equal') else 'DIFFERENT from'} the local re-derivation, proof hash {'ok' if sandbox.get('proof_ok') else 'NOT ok'}"
-                  f"; local agrees with the verdict: {sandbox.get('local_agrees_with_verdict')} (request {(sandbox.get('receipt') or {}).get('request_id')})")
+            print(f"  [otari sandbox] sandbox ({sandbox.get('evidence')}) "
+                  + ("did NOT run the code that was sent (no run used exactly that code), so nothing was re-derived"
+                     if sandbox.get("evidence") == "native" and not sandbox.get("code_ran_is_code_sent")
+                     else f"output {'IDENTICAL to' if sandbox.get('equal') else 'DIFFERENT from'} the local re-derivation, proof hash {'ok' if sandbox.get('proof_ok') else 'NOT ok'}")
+                  + f"; local agrees with the verdict: {sandbox.get('local_agrees_with_verdict')} (request {(sandbox.get('receipt') or {}).get('request_id')})")
         if cycle:
             print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"
                   + (f", cap ${cycle['cap_usd']}" if cycle.get("cap_usd") else "") + (f", {cycle['refused']} refused by the cap" if cycle.get("refused") else ""))

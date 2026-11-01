@@ -96,6 +96,7 @@ class ExhibitPackLinkTest(unittest.TestCase):
         page = exhibit.render(LEDGER[-1], pack_href="../pack/77.json")
         self.assertNotIn("<script src=", page)
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

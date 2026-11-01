@@ -220,6 +220,7 @@ class PublishedLedgerTest(unittest.TestCase):
         ledger = dossier.read_ledger(Path(__file__).resolve().parents[1] / "ledger" / "ledger.jsonl")
         self.assertEqual(trust.check(ledger), [])
 
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

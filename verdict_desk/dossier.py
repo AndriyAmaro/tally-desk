@@ -73,10 +73,12 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
         layer["checker"] = _checker_layer(m, layer, items)
     if summary:
         # how much of the web and MCP evidence the analysts really used: ids of those items among the cited ones of accepted claims
-        web_ids = {k for k, v in items.items() if v.startswith("Web ")}
+        excerpt_ids = {k for k, v in items.items() if v.startswith("Web page excerpt")}
+        web_ids = {k for k, v in items.items() if v.startswith("Web (")}  # titles of sources; the page excerpt is counted apart
         mcp_ids = {k for k, v in items.items() if v.startswith("CoinGecko MCP")}
         cited = {c for side in ("bull", "bear") for a in (layer.get(side) or {}).get("accepted") or [] for c in a.get("cites") or []}
-        layer["otari"]["evidence_use"] = {"web_items": len(web_ids), "web_items_cited": len(web_ids & cited), "mcp_items": len(mcp_ids), "mcp_items_cited": len(mcp_ids & cited)}
+        layer["otari"]["evidence_use"] = {"web_items": len(web_ids), "web_items_cited": len(web_ids & cited), "web_excerpts": len(excerpt_ids),
+                                          "web_excerpts_cited": len(excerpt_ids & cited), "mcp_items": len(mcp_ids), "mcp_items_cited": len(mcp_ids & cited)}
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
         layer["judge"] = _judge_layer(m, layer, items, ask)
     if summary and hasattr(m["llm"], "cycle_status"):  # what the app's own cycle cap has counted so far in this cycle

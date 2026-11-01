@@ -114,7 +114,7 @@
     WATCH_REVERSAL: "did not open a position (WATCH_REVERSAL: the sides were close and one argument could flip it)",
     REDUCE_EXPOSURE: "did not open a position (REDUCE_EXPOSURE: both sides strong while volatility was high)",
     FLAT: "did not open a position (FLAT: neither side was strong enough)",
-    BLOCKED_STALE: "refused to decide (BLOCKED_STALE: the newest price was too old to trust)",
+    BLOCKED_STALE: "refused to decide (BLOCKED_STALE: the newest price was too old to trust, or two price sources diverged beyond their tolerance)",
   };
 
   function decision(d, b) {
@@ -438,7 +438,7 @@
       [b.cite("evidence.market.source", "price source", `${m.source} ${(m.candles || []).length} ${m.interval}`)]);
     const fr = ev.freshness;
     if (fr && has(fr.newest_candle_age_minutes)) {
-      b.say(`The newest candle was ${fr.newest_candle_age_minutes} minutes old, against a limit of ${fr.window_minutes}: ${fr.ok ? "fresh enough to decide" : `too old (${fr.reason})`}.`,
+      b.say(`The newest candle was ${fr.newest_candle_age_minutes} minutes old, against a limit of ${fr.window_minutes}: ${fr.ok ? "fresh enough to decide" : (Number(fr.newest_candle_age_minutes) > Number(fr.window_minutes) ? `too old (${fr.reason})` : `refused for another reason (${fr.reason})`)}.`,
         [b.cite("evidence.freshness", "freshness check", fr)]);
     }
     if (ev.funding) {
