@@ -73,5 +73,11 @@
   "_features_doc": "Otari tools the app uses in a decision cycle: one web search (about USD 0.01 a call), one MCP price read (the public CoinGecko server, free) and one sandbox re-derivation per dossier (about USD 0.01 a call). The roles searcher, sandbox and mcp run the model that drives the tool; they share the judge's model on purpose (the one tool loop we measured end to end) and bill to their own end users. OTARI_WEB_SEARCH, OTARI_CODE_EXECUTION and OTARI_MCP set to 0 or 1 override.",
   "tool_cap_usd": "0.06",
   "market_check_limit_pct": 1.0,
-  "_market_doc": "`market_check_limit_pct`: the most the MCP spot price may differ from the exchange close before the packet's freshness is marked not ok and the verdict refuses to decide (fail closed). A missing or untrusted MCP price blocks nothing."
+  "_market_doc": "`market_check_limit_pct`: the most the MCP spot price may differ from the exchange close before the packet's freshness is marked not ok and the verdict refuses to decide (fail closed). A missing or untrusted MCP price blocks nothing.",
+  "judge_route": {
+    "hard_model": "deepseek/deepseek-v4-pro",
+    "margin_below": 1.0,
+    "claims_at_least": 8
+  },
+  "_judge_route_doc": "The judge is routed by a deterministic rule sealed with its ruling (llm.judge.route_rule). A hard case (the deterministic bull and bear scores less than `margin_below` apart, the most a judge's vote can add, or `claims_at_least` validated claims, the most the analysts can bring) goes to `hard_model`, the larger DeepSeek, sent by its catalog id (Otari falls back across its providers); every other case goes to the standard judge, the vd-judge policy. No dashboard policy is created for it, and the hard route does not pass through vd-judge's guardrail. OTARI_JUDGE_ROUTE=0 turns the rule off."
 }

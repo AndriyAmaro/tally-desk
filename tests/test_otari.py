@@ -39,6 +39,7 @@ def plain_config():
     a 0.05 cycle cap), so the F1-era tests keep testing what they were written for; the real switches are tested apart."""
     cfg = json.loads(llm.OTARI_CONFIG.read_text(encoding="utf-8"))
     cfg.update(send_user=False, use_policies=False, cycle_cap_usd="0.05", end_user_prefix="", end_user_budget="", features={})
+    cfg.pop("judge_route", None)  # the F1-era tests judge with the standard route; the routing rule has its own tests
     path = Path(tempfile.mkdtemp()) / "otari.json"
     path.write_text(json.dumps(cfg), encoding="utf-8")
     return mock.patch.object(llm, "OTARI_CONFIG", path)

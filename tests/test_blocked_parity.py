@@ -6,8 +6,8 @@ real code path (Otari MCP block, divergence class, `dossier.build`) and runs it 
 
   1. Python: `dossier.verify` and `dossier.replay` (and the offline recheck of the MCP block);
   2. the browser: `web/policy.js` (`checkDossier`, the reader `web/verify.html` uses) and the canonical hash of `web/canonical.js`, run in node;
-  3. the CRE workflow: `replayDossier` of `cre/anchor/verdict.ts`, run with bun (skipped where bun or the workflow's node_modules is missing,
-     which a plain checkout does not have until `bun install` has run in cre/anchor).
+  3. the CRE workflow: `replayDossier` of `cre/anchor/verdict.ts`, run with bun and a minimal stand-in for the two viem functions it uses, so it
+     runs in a plain checkout (skipped only where bun is missing). Another test checks that the stand-in hashes exactly like the ledger does.
 """
 
 import json
@@ -110,25 +110,45 @@ class BlockedByDivergenceParityTest(unittest.TestCase):
         forged["evidence"]["freshness"] = {**forged["evidence"]["freshness"], "ok": False, "reason": "forged"}
         self.assertIs(run_node(BROWSER, forged)["agrees"], False)
 
-    @unittest.skipUnless(BUN and (CRE / "node_modules" / "viem").exists(), "bun, or the CRE workflow's node_modules (run `bun install` in cre/anchor), is not here")
+    @unittest.skipUnless(BUN, "bun is not installed here")
     def test_the_cre_workflow_replays_it(self):
-        script = f"""
-import {{ replayDossier }} from {json.dumps(str(CRE / 'verdict.ts'))}
-const d = JSON.parse(await Bun.stdin.text())
-process.stdout.write(JSON.stringify(replayDossier(d)))
-"""
-        with tempfile.NamedTemporaryFile("w", suffix=".ts", delete=False, dir=str(CRE)) as fh:
-            fh.write(script)
-            path = fh.name
-        try:
-            for d, action in ((divergent_dossier(), "BLOCKED_STALE"), (agreeing_dossier(), None)):
-                out = subprocess.run([BUN, "run", path], input=json.dumps(d), capture_output=True, text=True, timeout=120, cwd=str(CRE))
-                self.assertEqual(out.returncode, 0, out.stderr[:400])
-                replay = json.loads(out.stdout)
-                self.assertTrue(replay["matches"], replay)
-                self.assertEqual(replay["action"], action or d["verdict"]["action"])
-        finally:
-            Path(path).unlink(missing_ok=True)
+        """Runs the workflow's own `verdict.ts` with bun. It imports `sha256` and `toBytes` from viem and nothing else, so a minimal stand-in of
+        those two (node's own sha256) is put next to a copy of the file: no `bun install` and no network are needed, and the verdict logic
+        under test is the real one."""
+        work = Path(tempfile.mkdtemp())
+        (work / "node_modules" / "viem").mkdir(parents=True)
+        (work / "node_modules" / "viem" / "package.json").write_text(json.dumps({"name": "viem", "type": "module", "main": "index.js"}))
+        (work / "node_modules" / "viem" / "index.js").write_text(
+            "import { createHash } from 'node:crypto'\n"
+            "export const toBytes = (s) => new TextEncoder().encode(s)\n"
+            "export const sha256 = (bytes) => '0x' + createHash('sha256').update(bytes).digest('hex')\n")
+        shutil.copy(CRE / "verdict.ts", work / "verdict.ts")
+        (work / "run.ts").write_text(
+            "import { replayDossier } from './verdict'\n"
+            "const d = JSON.parse(await Bun.stdin.text())\n"
+            "process.stdout.write(JSON.stringify(replayDossier(d)))\n")
+        for d, action in ((divergent_dossier(), "BLOCKED_STALE"), (agreeing_dossier(), None)):
+            out = subprocess.run([BUN, "run", str(work / "run.ts")], input=json.dumps(d), capture_output=True, text=True, timeout=120, cwd=str(work))
+            self.assertEqual(out.returncode, 0, out.stderr[:400])
+            replay = json.loads(out.stdout)
+            self.assertTrue(replay["matches"], replay)
+            self.assertEqual(replay["action"], action or d["verdict"]["action"])
+
+    def test_the_stand_in_is_a_faithful_sha256_of_what_the_workflow_hashes(self):
+        """The shim must not be what makes the test pass: the hash of a dossier body, as the workflow computes it, equals Python's."""
+        if not BUN:
+            self.skipTest("bun is not installed here")
+        work = Path(tempfile.mkdtemp())
+        (work / "node_modules" / "viem").mkdir(parents=True)
+        (work / "node_modules" / "viem" / "package.json").write_text(json.dumps({"name": "viem", "type": "module", "main": "index.js"}))
+        (work / "node_modules" / "viem" / "index.js").write_text(
+            "import { createHash } from 'node:crypto'\nexport const toBytes = (s) => new TextEncoder().encode(s)\n"
+            "export const sha256 = (bytes) => '0x' + createHash('sha256').update(bytes).digest('hex')\n")
+        shutil.copy(CRE / "verdict.ts", work / "verdict.ts")
+        (work / "run.ts").write_text("import { dossierHash } from './verdict'\nconst d = JSON.parse(await Bun.stdin.text())\nprocess.stdout.write(dossierHash(d))\n")
+        d = divergent_dossier()
+        out = subprocess.run([BUN, "run", str(work / "run.ts")], input=json.dumps(d), capture_output=True, text=True, timeout=120, cwd=str(work))
+        self.assertEqual(out.stdout.strip(), d["hash"])
 
 
 class RefusalReasonsStayApartTest(unittest.TestCase):

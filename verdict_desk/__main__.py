@@ -353,6 +353,9 @@ def print_record(record: dict) -> None:
                   + (f" (answered by {layer[side]['served_by']})" if layer[side].get("served_by") else ""))
         judge = layer.get("judge")
         if isinstance(judge, dict):
+            route = judge.get("route_rule")
+            if isinstance(route, dict):
+                print(f"  [otari judge route] {'HARD, the larger model' if route['hard'] else 'standard'}: {route['model']}; {route['reason']}")
             ruling = judge.get("ruling") or {}
             print(f"  [llm judge] lean {ruling.get('lean')} ({ruling.get('conviction')}) on {ruling.get('relied_on')}: "
                   + (f"counts {judge['weight']}" if judge.get("accepted") else f"voided ({judge.get('rejected_because') or judge.get('error')})"))

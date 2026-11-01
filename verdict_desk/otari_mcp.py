@@ -11,8 +11,9 @@ A model writes the TypeScript the server runs, so the code it sent is checked to
 prices are marked untrusted and unused.
 
 The trusted price then takes part in the decision as a second price source. It is compared with the latest price in the packet (the
-close of its newest candle) with a tolerance that grows with that candle's age: the base limit (1 percent) plus one hourly ATR
-for every hour of age, because a price may move that much while the candle waits. Beyond the tolerance the two sources DIVERGE,
+close of its newest candle) with a tolerance that grows with that candle's age: the base limit (1 percent) plus one candle's ATR
+for every candle interval of age (the interval is the packet's own, 1h, 15m, 4h...; with an interval we cannot read there is no
+allowance), because a price may move that much while the candle waits. Beyond the tolerance the two sources DIVERGE,
 and that is a blocking freshness class of its own, `classes.divergence`, next to the untouched `classes.market` (age of the candle).
 The packet's freshness `ok` becomes false, which is the fail-closed path the replay, the browser verifier and the CRE workflow already
 know (`BLOCKED_STALE`, no position, the refusal recorded with the numbers); the original staleness reason is never overwritten.
@@ -141,6 +142,12 @@ def collect(opener=None) -> dict:
     return block
 
 
+def interval_minutes(interval) -> float | None:
+    """The length of a candle interval such as 15m, 1h, 4h or 1d in minutes; None when it cannot be read (no guess is made)."""
+    found = re.fullmatch(r"\s*(\d+)\s*([mhdw])\s*", str(interval or ""), re.I)
+    return int(found.group(1)) * {"m": 1, "h": 60, "d": 1440, "w": 10080}[found.group(2).lower()] if found and int(found.group(1)) > 0 else None
+
+
 def _atr_pct(candles: list[dict]) -> float:
     """The average true range of the last 14 candles as a percent of the last close (the same ATR the features use)."""
     ranges = [c["h"] - c["l"] for c in candles[-14:]]
@@ -149,7 +156,8 @@ def _atr_pct(candles: list[dict]) -> float:
 
 def check_for(block: dict, packet: dict, limit_pct: float = LIMIT_PCT) -> dict:
     """The comparison of the MCP price of the packet's symbol with the latest price in the packet (its newest candle's close), within
-    a tolerance of `limit_pct` plus one hourly ATR per hour of candle age (from the frozen freshness block, 0 when it has none)."""
+    a tolerance of `limit_pct` plus one candle's ATR per candle interval of that candle's age (the age is in the frozen freshness block, 0
+    when it has none; the interval is the packet's market interval, no allowance at all when it cannot be read)."""
     base = packet["symbol"].upper().removesuffix("USDT")
     candles = packet["market"]["candles"]
     close = candles[-1]["c"]
@@ -160,9 +168,10 @@ def check_for(block: dict, packet: dict, limit_pct: float = LIMIT_PCT) -> dict:
     age = (packet.get("freshness") or {}).get("newest_candle_age_minutes")
     age = float(age) if isinstance(age, (int, float)) and not isinstance(age, bool) and age > 0 else 0.0
     atr = round(_atr_pct(candles), 4)
-    tolerance = round(limit_pct + atr * age / 60, 4)
+    interval = interval_minutes((packet.get("market") or {}).get("interval"))
+    tolerance = round(limit_pct + (atr * age / interval if interval else 0.0), 4)
     diff = round(abs(price - close) / close * 100, 4)
-    return {**out, "mcp_price": price, "diff_pct": diff, "candle_age_minutes": age, "atr_pct": atr, "tolerance_pct": tolerance,
+    return {**out, "mcp_price": price, "diff_pct": diff, "candle_age_minutes": age, "candle_interval_minutes": interval, "atr_pct": atr, "tolerance_pct": tolerance,
             "status": "ok" if diff <= tolerance else "divergence", "ok": diff <= tolerance}
 
 

@@ -80,7 +80,13 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
         layer["otari"]["evidence_use"] = {"web_items": len(web_ids), "web_items_cited": len(web_ids & cited), "web_excerpts": len(excerpt_ids),
                                           "web_excerpts_cited": len(excerpt_ids & cited), "mcp_items": len(mcp_ids), "mcp_items_cited": len(mcp_ids & cited)}
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
-        layer["judge"] = _judge_layer(m, layer, items, ask)
+        route = None
+        if summary and ask is None and hasattr(m["llm"], "judge_route"):
+            # the arguments the judge cannot change, to measure how tight the case is: the deterministic scores before its vote
+            first = _decide(m, feats if feats is not None else m["features"].compute(packet), None, packet.get("narrative"), packet.get("symbol"), layer)
+            bull_ok, bear_ok = (layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or []
+            route = m["llm"].judge_route(len(bull_ok), len(bear_ok), sum(a["weight"] for a in first["bull"]), sum(a["weight"] for a in first["bear"]))
+        layer["judge"] = _judge_layer(m, layer, items, ask, route)
     if summary and hasattr(m["llm"], "cycle_status"):  # what the app's own cycle cap has counted so far in this cycle
         layer["otari"]["cycle"] = m["llm"].cycle_status()
     return layer
@@ -115,7 +121,7 @@ def _served(m: dict, block: dict) -> None:
             block["routing_policy"] = route["policy"]
 
 
-def _judge_layer(m: dict, layer: dict, items: dict, ask=None) -> dict:
+def _judge_layer(m: dict, layer: dict, items: dict, ask=None, route: dict | None = None) -> dict:
     """Regras v6: o juiz LLM le so as afirmacoes aceitas; o veredito bruto e a checagem ficam congelados."""
     cit = m["citations"]
     bull_ok = (layer.get("bull") or {}).get("accepted") or []
@@ -123,13 +129,20 @@ def _judge_layer(m: dict, layer: dict, items: dict, ask=None) -> dict:
     labels = cit.claim_labels(bull_ok, bear_ok)
     if not labels:
         return {"ruling": None, "accepted": False, "weight": 0.0, "rejected_because": "no validated claims to judge"}
+    kwargs = {"ask": ask} if ask else {}
+    if route and route["hard"]:
+        kwargs["model"] = route["model"]  # the larger open model, by catalog id; the standard route is the vd-judge policy
     try:
-        ruling = m["llm"].rule(labels, items, **({"ask": ask} if ask else {}))
+        ruling = m["llm"].rule(labels, items, **kwargs)
     except (OSError, ValueError, KeyError) as err:
         out = {"ruling": None, "accepted": False, "weight": 0.0, "error": str(err)}
     else:
         out = {"ruling": ruling, **cit.validate_ruling(ruling, bull_ok, bear_ok, items)}
     _served(m, out)
+    if route:  # the rule and its reason are in the judge block and in its receipt
+        out["route_rule"] = route
+        if isinstance(out.get("receipt"), dict):
+            out["receipt"]["route_rule"] = {"rule": route["rule"], "hard": route["hard"], "reason": route["reason"], "model": route["model"]}
     return out
 
 
@@ -235,6 +248,24 @@ def replay(dossier: dict, rules_version: str = "v1") -> dict:
             recheck = recheck and again["accepted"] == judged.get("accepted") and again["weight"] == judged.get("weight")
         result["llm_citations_valid"] = recheck and items == layer["evidence_index"]
         result["matches"] = same and result["llm_citations_valid"]
+    judged = ((dossier.get("llm") or {}).get("judge") or {}).get("route_rule")
+    if isinstance(judged, dict):
+        # the route is recomputed from the frozen claims and arguments with the thresholds that were sealed beside it
+        from . import llm as llm_module
+        try:
+            bull_ok, bear_ok = (dossier["llm"].get("bull") or {}).get("accepted") or [], (dossier["llm"].get("bear") or {}).get("accepted") or []
+            sums = [sum(a["weight"] for a in dossier[side] if a.get("evidence_ref") != "llm.judge") for side in ("bull", "bear")]
+            again = llm_module.route_decision(len(bull_ok), len(bear_ok), sums[0], sums[1], judged["thresholds"], dossier["llm"]["judge"]["receipt"]["sent_model"] if not judged["hard"] else judged["thresholds"]["hard_model"])
+            route_ok = {k: again[k] for k in ("rule", "hard", "reason", "metrics", "thresholds")} == {k: judged[k] for k in ("rule", "hard", "reason", "metrics", "thresholds")}
+        except (KeyError, TypeError, ValueError):
+            route_ok = False
+        result["route_rule_ok"] = route_ok
+        result["matches"] = result["matches"] and route_ok
+    if isinstance((dossier.get("evidence") or {}).get("web"), dict):
+        from . import otari_web
+        webcheck = otari_web.recheck(dossier)  # the sealed excerpt check, recomputed from its own fields: nothing is fetched again
+        result.update(webcheck)
+        result["matches"] = result["matches"] and webcheck.get("web_excerpt_ok", True)
     market = None
     if isinstance((dossier.get("evidence") or {}).get("market_mcp"), dict):
         from . import otari_mcp

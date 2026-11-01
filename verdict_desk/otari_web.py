@@ -87,7 +87,8 @@ def pick_items(tool_calls: list[dict], limit: int = MAX_ITEMS, today: str | None
                 continue  # old news is not news
             found.append({"url": url, "domain": (urllib.parse.urlsplit(url).hostname or "").removeprefix("www."), "title": title[:200],
                           "published_date": src.get("published_date"), "date": date, "date_status": status, "query": call.get("query")})
-    found.sort(key=lambda item: item["date"] is None)  # stable: dated first, Otari's order within each group
+    dated = sorted((i for i in found if i["date"]), key=lambda i: i["date"], reverse=True)  # the most recent dated source leads (it is the one fetched)
+    found = dated + [i for i in found if not i["date"]]  # undated ones last, in Otari's order
     items, seen = [], set()
     for item in found:
         if item["domain"] not in seen:
@@ -107,13 +108,18 @@ def _words(text: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", _plain(text))
 
 
+def excerpt_runs(excerpt: str, title: str = "") -> list[str]:
+    """The runs of six consecutive words of the excerpt that count: those with at least three words that are not words of the title."""
+    title_words = set(_words(title))
+    words = _words(excerpt)
+    return [" ".join(words[i:i + 6]) for i in range(0, max(0, len(words) - 5)) if sum(1 for w in words[i:i + 6] if w not in title_words) >= 3]
+
+
 def excerpt_check(url: str, excerpt: str, title: str = "", opener=None) -> dict:
     """Does the excerpt come from the page? Runs of six consecutive words of the excerpt are looked up in our own GET of the page
     (markup, punctuation and case ignored). Runs made mostly of words of the title do not count: the title is in the page anyway.
     Verified needs at least five runs and 80 percent of them found; None when the page cannot be read this way or the excerpt is too short."""
-    title_words = set(_words(title))
-    words = _words(excerpt)
-    runs = [" ".join(words[i:i + 6]) for i in range(0, max(0, len(words) - 5)) if sum(1 for w in words[i:i + 6] if w not in title_words) >= 3]
+    runs = excerpt_runs(excerpt, title)
     out = {"method": "runs of six words against our own GET of the page, title words not counted", "runs": len(runs), "threshold": MATCH_FRACTION}
     if len(runs) < MIN_RUNS:
         return {**out, "verified": None, "reason": "the excerpt is too short to judge"}
@@ -142,7 +148,8 @@ def _fetched(receipt: dict, url: str) -> bool:
 def fetch_page(item: dict, ask=None, opener=None) -> dict:
     """Reads one item with Otari's fetch tool and returns the `page` block: the excerpt, its sha256, the receipt, the checks."""
     ask = ask or llm.chat
-    page = {"url": item["url"], "domain": item["domain"], "source_tool": "otari_web_fetch"}
+    page = {"url": item["url"], "domain": item["domain"], "source_tool": "otari_web_fetch", "date": item.get("date"), "date_status": item.get("date_status", "undated"),
+            "title": item.get("title")}
     try:
         answer = ask(FETCH_SYSTEM, f"Fetch this page and give the excerpt: {item['url']}", timeout=120, max_tokens=500, role="fetcher",
                      extra={"tools": [{"type": "otari_web_fetch"}]})
@@ -188,6 +195,28 @@ def collect(symbols: list[str], narrative: dict | None = None, today: str | None
     return block
 
 
+def recheck(dossier: dict) -> dict:
+    """The replay of a sealed page excerpt, offline: its sha256 is the excerpt's, the runs counted are the ones the excerpt and the title give,
+    and the verdict of the check follows from the sealed counts and the threshold (the page itself is not fetched again). No sealed flag is believed."""
+    web = (dossier.get("evidence") or {}).get("web")
+    page = web.get("page") if isinstance(web, dict) else None
+    if not isinstance(page, dict) or not isinstance(page.get("excerpt"), str):
+        return {}
+    ok = hashlib.sha256(page["excerpt"].encode("utf-8")).hexdigest() == page.get("excerpt_sha256")
+    check = page.get("excerpt_check")
+    if isinstance(check, dict):  # excerpts sealed before the check was sealed carry only the sha256 and the old flag
+        title = page.get("title") or next((i.get("title", "") for i in web.get("items") or [] if i.get("url") == page.get("url")), "")
+        runs = len(excerpt_runs(page["excerpt"], title))
+        ok = ok and check.get("runs") == runs
+        if "found" in check:
+            fraction = round(check["found"] / runs, 4) if runs else None
+            ok = ok and runs >= MIN_RUNS and check["found"] <= runs and check.get("fraction") == fraction and check.get("verified") == (fraction >= check.get("threshold", MATCH_FRACTION))
+        else:
+            ok = ok and check.get("verified") is None
+        ok = ok and page.get("excerpt_verified") == check.get("verified")
+    return {"web_excerpt_ok": bool(ok)}
+
+
 def index_texts(web: dict | None) -> list[str]:
     """The evidence lines the analysts see for a `web` block: one per item, and the page excerpt when there is one."""
     # items sealed before the recency filter have no `date_status` and keep their original line, so their replay does not change
@@ -195,5 +224,7 @@ def index_texts(web: dict | None) -> list[str]:
              for i in (web or {}).get("items") or []]
     page = (web or {}).get("page") or {}
     if page.get("excerpt"):
-        lines.append(f"Web page excerpt ({page.get('domain', '')}, relayed from Otari's fetch): {page['excerpt']}")
+        # an excerpt sealed before its date was recorded keeps its original line, so that dossier's replay does not change
+        when = f"{page.get('date') or 'undated'}, " if "date_status" in page else ""
+        lines.append(f"Web page excerpt ({page.get('domain', '')}, {when}relayed from Otari's fetch): {page['excerpt']}")
     return lines
