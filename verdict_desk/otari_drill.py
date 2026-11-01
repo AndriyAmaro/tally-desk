@@ -20,7 +20,7 @@ from . import dossier, llm
 
 EVIDENCE = Path("docs/evidence/otari-drills.jsonl")
 SCHEMA = "otari-drill/1"
-TARGET_CHARS = 165_000  # about 39k tokens at 4.2 characters a token: over the 32,768 of the Mistral main model
+TARGET_CHARS = 165_000  # over 32,768 tokens, the context of the Mistral main model (the first run counted 66,438 prompt tokens for 187,928 characters, about 2.8 characters a token)
 MAX_PROMPT_COST_USD = 0.005  # the backup's input price times the prompt: the drill refuses to run if it would cost more
 INPUT_USD_PER_MILLION = 0.06  # deepseek/deepseek-v4-flash-0731 in the public catalog on 2026-11-01
 BIG_MAX_TOKENS = 100_000  # a worst-case hold of about USD 0.018 on the judge model, more than the USD 0.01 budget holds
@@ -41,7 +41,7 @@ def long_pack(ledger: list[dict], target: int = TARGET_CHARS) -> tuple[str, dict
     text = "\n".join(parts)
     return text, {"chars": len(text), "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                   "source": f"frozen evidence of dossiers {min(seqs)} to {max(seqs)} of the ledger",
-                  "estimated_cost_usd": round(len(text) / 4.0 * INPUT_USD_PER_MILLION / 1e6, 6)}
+                  "estimated_cost_usd": round(len(text) / 2.8 * INPUT_USD_PER_MILLION / 1e6, 6)}
 
 
 def fallback_drill(ledger: list[dict], ask=llm.chat, usage=llm.usage_for) -> dict:

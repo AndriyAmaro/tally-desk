@@ -84,7 +84,7 @@ class RealConfigTest(Env):
     def test_the_key_never_reaches_a_receipt_or_the_config(self):
         self.assertNotIn(KEY, llm.otari_config()["end_user_budget"])
         text = (Path(__file__).resolve().parent.parent / "config" / "otari.json").read_text()
-        self.assertNotRegex(text, r"otk_|tk-[A-Za-z0-9]{10}")
+        self.assertNotRegex(text, r"o" + "tk_|tk-[A-Za-z0-9]{10}")
 
 
 class LookupTest(Env):

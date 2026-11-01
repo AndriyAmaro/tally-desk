@@ -70,7 +70,7 @@ class ReceiptParserTest(unittest.TestCase):
     def test_a_plain_reply_becomes_a_receipt(self):
         r = llm.parse_receipt(HEADERS, BODY, "bull", "openai/gpt-oss-120b", None, now="2026-11-01T15:00:00Z")
         self.assertEqual(r, {
-            "schema": "otari-receipt/1", "role": "bull", "request_id": "req-1111", "sent_model": "openai/gpt-oss-120b",
+            "schema": "otari-receipt/1", "role": "bull", "request_id": "req-1111", "request_id_source": "otari", "sent_model": "openai/gpt-oss-120b", "policy": None,
             "provider": "deepinfra", "served_model": "openai/gpt-oss-120b", "served_by": "deepinfra:openai/gpt-oss-120b",
             "attempt_count": 1, "fallback": False, "duration_ms": 1880, "tokens": {"prompt": 61, "completion": 42},
             "cost_usd": "0.000009", "pricing_source": "deployment", "end_user": None, "captured_at": "2026-11-01T15:00:00Z",
@@ -94,7 +94,9 @@ class ReceiptParserTest(unittest.TestCase):
 
     def test_missing_headers_and_usage_give_none_not_a_crash(self):
         r = llm.parse_receipt({}, {"choices": []}, "bear", "x")
-        self.assertEqual((r["request_id"], r["served_by"], r["attempt_count"], r["duration_ms"], r["cost_usd"], r["fallback"]), (None, None, None, None, None, False))
+        self.assertEqual((r["served_by"], r["attempt_count"], r["duration_ms"], r["cost_usd"], r["fallback"]), (None, None, None, None, False))
+        self.assertTrue(r["request_id"].startswith("client:"))
+        self.assertEqual(r["request_id_source"], "client")
         self.assertEqual(llm.parse_receipt(None, None, "bear", "x")["tokens"], {"prompt": None, "completion": None})
 
     def test_an_unpriced_reply_has_no_cost_and_a_number_cost_is_kept_as_text(self):

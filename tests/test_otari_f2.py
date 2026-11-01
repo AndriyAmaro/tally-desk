@@ -122,7 +122,8 @@ class CycleCapTest(Base):
         self.assertEqual((err.code, err.scope), ("cycle_cap_exceeded", "cycle"))
         r = llm.served_receipt()
         self.assertEqual(r["refusal"], {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"})
-        self.assertEqual((r["role"], r["request_id"]), ("judge", None))
+        self.assertEqual((r["role"], r["request_id_source"]), ("judge", "client"))
+        self.assertTrue(r["request_id"].startswith("client:"))
         with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0005"}):
             self.assertEqual(llm.cycle_status(), {"cap_usd": "0.0005", "spent_usd": "0.000600", "calls": 2, "refused": 1, "unpriced_calls": 0})
 
@@ -211,6 +212,101 @@ class RefusalInTheDossierTest(Base):
         self.assertEqual(d["llm"]["judge"]["receipt"]["refusal"]["source"], "client")
         self.assertGreaterEqual(d["llm"]["otari"]["cycle"]["refused"], 1)
         self.assertEqual(dossier.verify(dossier.read_ledger(self.path)), [])
+
+
+class ReceiptCompletenessTest(Base):
+    """Whatever happens to a call, its receipt says who asked (role, end user), what was named (policy), which id it has and
+    how many tries it took. A receipt without an id would be unauditable, so a client id stands in when the gateway sent none."""
+
+    def assert_complete(self, r, role, source):
+        self.assertTrue(r["request_id"], r)
+        self.assertEqual((r["role"], r["request_id_source"]), (role, source))
+        self.assertTrue(r["request_id"].startswith("client:") == (source == "client"))
+        for field in ("sent_model", "policy", "end_user", "captured_at", "schema"):
+            self.assertIn(field, r)
+
+    def test_success_refusal_gateway_failure_timeout_and_cap_all_leave_an_identified_receipt(self):
+        with self.fake():
+            llm.chat("s", "u", role="bull")
+        self.assert_complete(llm.served_receipt(), "bull", "otari")
+
+        def refuse(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", message({"Otari-Request-ID": "req-403", "Otari-Error-Code": "budget_exceeded"}), io.BytesIO(b"{}"))
+        with mock.patch.object(urllib.request, "urlopen", refuse), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="bear")
+        self.assert_complete(llm.served_receipt(), "bear", "otari")
+
+        def edge504(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 504, "Gateway Timeout", message({}), io.BytesIO(b"<html></html>"))
+        with mock.patch.object(urllib.request, "urlopen", edge504), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="checker")
+        r = llm.served_receipt()
+        self.assert_complete(r, "checker", "client")
+        self.assertEqual(r["client_attempts"], llm.MAX_RETRIES + 1)
+
+        with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=urllib.error.URLError(TimeoutError()))), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="judge")
+        self.assert_complete(llm.served_receipt(), "judge", "client")
+
+        llm.reset_cycle()
+        with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0000001"}), self.fake(cost="0.001"):
+            llm.chat("s", "u", role="bull")
+            with self.assertRaises(llm.OtariError):
+                llm.chat("s", "u", role="bear")
+        self.assert_complete(llm.served_receipt(), "bear", "client")
+
+    def test_the_client_id_is_the_idempotency_key_so_the_receipt_can_be_matched_to_the_request_we_sent(self):
+        keys = []
+
+        def edge504(request, timeout=None):
+            keys.append(request.get_header("Idempotency-key"))
+            raise urllib.error.HTTPError(request.full_url, 504, "Gateway Timeout", message({}), io.BytesIO(b""))
+        with mock.patch.object(urllib.request, "urlopen", edge504), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="bull")
+        self.assertEqual(llm.served_receipt()["request_id"], f"client:{keys[0]}")
+        self.assertEqual(len(set(keys)), 1)
+
+    def test_a_policy_call_names_the_policy_and_a_plain_call_names_none(self):
+        with mock.patch.dict(os.environ, {"OTARI_USE_POLICIES": "1"}), self.fake():
+            llm.chat("s", "u", role="judge")
+            policy_receipt = llm.served_receipt()
+            llm.chat("s", "u", role="bull")
+            plain_receipt = llm.served_receipt()
+        self.assertEqual((policy_receipt["policy"], plain_receipt["policy"]), ("vd-judge", None))
+
+    def test_the_guardrail_result_is_one_word_and_never_a_pass_otari_did_not_report(self):
+        def result(valid):
+            g = json.dumps([{"profile": "prompt-injection", "mode": "monitor", "valid": valid, "score": None}])
+            return llm.parse_receipt({**HEADERS, "Otari-Guardrails": g}, BODY, "judge", "vd-judge")["guardrail_result"]
+        self.assertEqual(result(None), {"prompt-injection": "not_evaluated"})
+        self.assertEqual(result(True), {"prompt-injection": "pass"})
+        self.assertEqual(result(False), {"prompt-injection": "flagged"})
+        self.assertNotIn("guardrail_result", llm.parse_receipt(HEADERS, BODY, "judge", "vd-judge"))
+
+    def test_waits_between_tries_grow_exponentially_and_stop_at_the_cap(self):
+        calls = []
+
+        def in_progress(request, timeout=None):
+            calls.append(request.get_header("Idempotency-key"))
+            body = b'{"detail":"A request with this Idempotency-Key is still in progress."}'
+            raise urllib.error.HTTPError(request.full_url, 409, "Conflict", message({}), io.BytesIO(body))
+        with mock.patch.object(urllib.request, "urlopen", in_progress), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="narrator")
+        waits = [c.args[0] for c in llm._pause.call_args_list]
+        self.assertEqual(waits, [5.0, 10.0, 20.0, 40.0])
+        self.assertEqual((len(calls), len(set(calls))), (llm.MAX_RETRIES + 1, 1))
+        self.assertTrue(all(w <= llm.MAX_WAIT for w in waits))
+
+    def test_nothing_that_is_recorded_or_raised_holds_the_key(self):
+        leaking = urllib.error.HTTPError("https://otari.ai/x", 403, "Forbidden", message({"Otari-Error-Code": "x"}), io.BytesIO(f'{{"detail":"key {KEY} refused"}}'.encode()))
+        with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=leaking)), self.assertRaises(llm.OtariError) as ctx:
+            llm.chat("s", "u", role="bull")
+        self.assertNotIn(KEY, str(ctx.exception))
+        self.assertNotIn(KEY, json.dumps(llm.served_receipt()))
+        with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=urllib.error.URLError(ConnectionRefusedError(KEY)))), self.assertRaises(llm.OtariError) as ctx2:
+            llm.chat("s", "u", role="bull")
+        self.assertNotIn(KEY, str(ctx2.exception))
+        self.assertNotIn(KEY, json.dumps(llm.served_receipt()))
 
 
 class NarrativeRefusalTest(unittest.TestCase):

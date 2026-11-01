@@ -185,8 +185,8 @@ def _cycle_check(cap, role: str, sent: str, end_user: str | None) -> None:
         if over:
             _cycle["refused"] += 1
     if over:
-        _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, "request_id": None, "sent_model": sent, "end_user": end_user,
-                           "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"},
+        _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, **_who({}, None), "sent_model": sent, "policy": _policy(sent, role), "end_user": end_user,
+                           "client_attempts": 0, "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"},
                            "captured_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         raise OtariError(f"cycle cap reached: ${spent:.6f} spent of ${cap} for this decision cycle; no call was sent for role {role}",
                          code="cycle_cap_exceeded", scope="cycle")
@@ -244,8 +244,25 @@ def _int(value) -> int | None:
         return None
 
 
+def _who(h: dict, local_id: str | None) -> dict:
+    """The id of a receipt: Otari's `Otari-Request-ID` when the gateway answered, else `client:<our idempotency key>`, so no
+    receipt is ever anonymous. `request_id_source` says which one it is, so a client id is never read as a gateway id."""
+    gateway = h.get("otari-request-id")
+    if gateway:
+        return {"request_id": gateway, "request_id_source": "otari"}
+    return {"request_id": f"client:{local_id or uuid.uuid4().hex}", "request_id_source": "client"}
+
+
+def _policy(sent_model: str | None, role: str) -> str | None:
+    """The routing policy the call named: the sent model when it is not the role's own catalog id (a policy or a drill override)."""
+    try:
+        return sent_model if sent_model and sent_model != role_model(role) else None
+    except LLMError:
+        return None
+
+
 def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_user: str | None = None,
-                  client_attempts: int = 1, now: str | None = None) -> dict:
+                  client_attempts: int = 1, now: str | None = None, local_id: str | None = None) -> dict:
     """The `otari-receipt/1` of one successful call, read from the response headers and the usage block of the body.
 
     `headers` is any mapping (names are matched case-insensitively). `usage.cost_usd` is kept as the string Otari sent.
@@ -257,8 +274,9 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
     receipt = {
         "schema": RECEIPT_SCHEMA,
         "role": role,
-        "request_id": h.get("otari-request-id"),
+        **_who(h, local_id),
         "sent_model": sent_model,
+        "policy": _policy(sent_model, role),
         "provider": provider,
         "served_model": served_model,
         "served_by": f"{provider}:{served_model}" if provider and served_model else None,
@@ -281,6 +299,8 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
             parsed = None
         if isinstance(parsed, list) and all(isinstance(g, dict) for g in parsed):
             receipt["guardrails"] = parsed  # [{"profile","mode","valid","score"}]: valid and score are null when nothing evaluated the input
+            # one word per guardrail, never a pass that Otari did not report: not_evaluated (valid null), pass, flagged
+            receipt["guardrail_result"] = {str(g.get("profile")): ("not_evaluated" if g.get("valid") is None else "pass" if g.get("valid") else "flagged") for g in parsed}
     for name, field in (("otari-guardrails", "guardrails_raw"), ("otari-end-user-budget", "end_user_budget"),
                         ("otari-idempotent-replayed", "replayed")):
         if h.get(name) is not None:
@@ -288,12 +308,13 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
     return receipt
 
 
-def refusal_receipt(headers, status: int, role: str, sent_model: str, end_user: str | None = None, now: str | None = None) -> dict:
+def refusal_receipt(headers, status: int, role: str, sent_model: str, end_user: str | None = None, now: str | None = None,
+                    client_attempts: int = 1, local_id: str | None = None) -> dict:
     """The receipt of a call Otari refused or failed: its error code, the budget scope that refused and Retry-After."""
     h = {str(k).lower(): v for k, v in (headers.items() if headers is not None else [])}
     return {
-        "schema": RECEIPT_SCHEMA, "role": role, "request_id": h.get("otari-request-id"), "sent_model": sent_model,
-        "end_user": end_user,
+        "schema": RECEIPT_SCHEMA, "role": role, **_who(h, local_id), "sent_model": sent_model, "policy": _policy(sent_model, role),
+        "end_user": end_user, "client_attempts": client_attempts,
         # a 4xx is a refusal (budget, credit, model not allowed); a 5xx is a failure, not a refusal
         ("refusal" if status < 500 else "error"): {"status": status, "code": h.get("otari-error-code"),
                                                    "budget_scope": h.get("otari-budget-scope"), "retry_after": h.get("retry-after")},
@@ -301,10 +322,11 @@ def refusal_receipt(headers, status: int, role: str, sent_model: str, end_user: 
     }
 
 
-def transport_receipt(kind: str, role: str, sent_model: str, end_user: str | None = None, now: str | None = None) -> dict:
+def transport_receipt(kind: str, role: str, sent_model: str, end_user: str | None = None, now: str | None = None,
+                      client_attempts: int = 1, local_id: str | None = None) -> dict:
     """The receipt of a call that got no HTTP answer at all (client timeout, connection failure): only what we know."""
-    return {"schema": RECEIPT_SCHEMA, "role": role, "request_id": None, "sent_model": sent_model, "end_user": end_user,
-            "error": {"kind": kind},
+    return {"schema": RECEIPT_SCHEMA, "role": role, **_who({}, local_id), "sent_model": sent_model, "policy": _policy(sent_model, role),
+            "end_user": end_user, "client_attempts": client_attempts, "error": {"kind": kind},
             "captured_at": now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
@@ -405,7 +427,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
                 raw = response.read()
                 reply_headers = getattr(response, "headers", None)
             data = json.loads(raw.decode("utf-8"))
-            receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=attempt + 1)
+            receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
             _served.receipt = receipt
             _cycle_add(receipt)
             _served.model = receipt["served_by"] or (data.get("model") if isinstance(data, dict) else None)
@@ -415,19 +437,19 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             break
         except urllib.error.HTTPError as err:
             detail = _read_detail(err)
-            _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user)
+            _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
             delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
             if delay is None and err.code == 409 and "in progress" in detail and attempt < MAX_RETRIES:
                 # Our first try timed out at the edge (504) while Otari kept working: the same Idempotency-Key answers 409
                 # "still in progress" until it finishes, and then replays the stored reply. Wait and ask again.
-                delay = 5.0 * (attempt + 1)
+                delay = min(5.0 * 2 ** attempt, MAX_WAIT)  # exponential, capped, on the same Idempotency-Key
             if delay is None:
                 raise _otari_error(err, key, detail, base, model) from err
             _pause(delay)
         except (urllib.error.URLError, TimeoutError, ConnectionError) as err:  # no HTTP answer: record what happened, never a stale status
             reason = getattr(err, "reason", err)
             kind = "timeout" if isinstance(reason, TimeoutError) else "connection"
-            _served.receipt = transport_receipt(kind, role, model, end_user)
+            _served.receipt = transport_receipt(kind, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
             raise OtariError(f"{kind} calling {base} model {model} ({type(reason).__name__})") from err
     message = choice.get("message")
     content = message_text(message.get("content") if isinstance(message, dict) else None)
