@@ -173,6 +173,23 @@ def cmd_decide_v6(opts) -> int:
     return _decide_flow(opts, "v6")
 
 
+def cmd_otari_drill(opts) -> int:
+    """Runs the fallback and/or budget drill against the live gateway (needs OTARI_API_KEY) and appends the records."""
+    from . import otari_drill
+    if not llm.otari_active():
+        print("refused: the drills talk to the Otari gateway, set OTARI_API_KEY", file=sys.stderr)
+        return 2
+    records = otari_drill.run(opts.which, dossier.read_ledger(opts.ledger), opts.evidence or otari_drill.EVIDENCE)
+    for r in records:
+        receipt = r.get("receipt") or (r.get("big_call") or {}).get("receipt") or {}
+        print(f"drill {r['drill']}: {'PASS' if r['pass'] else 'FAIL'}"
+              + (f" request {receipt.get('request_id')}" if receipt.get("request_id") else "")
+              + (f" attempts {receipt.get('attempt_count')} fallback {receipt.get('fallback')} served by {receipt.get('served_by')}" if r["drill"] == "fallback" and receipt else "")
+              + (f" refused {r['big_call']['error'].get('code')} scope {r['big_call']['error'].get('budget_scope')}" if r["drill"] == "budget" and (r.get("big_call") or {}).get("error") else "")
+              + (f" ({r['error']})" if r.get("error") else ""))
+    return 0 if all(r["pass"] for r in records) else 1
+
+
 def cmd_trust(opts) -> int:
     """Per-voice track record, measured from the ledger alone."""
     result = trust.compute(dossier.read_ledger(opts.ledger))
@@ -322,6 +339,11 @@ def print_record(record: dict) -> None:
                 what = refused.get("code") or refused.get("kind") or refused.get("status")
                 print(f"  [otari {part}] NOT answered: {what}" + (f", budget scope {refused['budget_scope']}" if refused.get("budget_scope") else "")
                       + (f", retry after {refused['retry_after']} s" if refused.get("retry_after") else "") + f" (request {receipt.get('request_id') or 'none'})")
+        for part in ("bull", "bear", "checker", "judge"):
+            receipt = (layer.get(part) or {}).get("receipt") or {}
+            for g in receipt.get("guardrails") or []:  # the guardrail Otari attached to the call, as the header reported it
+                verdict = "not evaluated (valid null)" if g.get("valid") is None else f"valid={g['valid']} score={g.get('score')}"
+                print(f"  [otari {part}] guardrail {g.get('profile')} ({g.get('mode')}): {verdict}")
         cycle = (layer.get("otari") or {}).get("cycle")
         if cycle:
             print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"
@@ -867,6 +889,10 @@ def main() -> int:
     p.add_argument("--address", default="0x50443D51Db71A61E131B147B1d36aF21d48CDdF7")
     p.add_argument("--seq", type=int, help="check a specific anchored sequence instead of the latest")
     p.set_defaults(func=cmd_monitor)
+    p = sub.add_parser("otari-drill", help="real Otari requests that prove a routing fallback and a budget refusal; receipts go to an evidence file, not to the ledger")
+    p.add_argument("which", choices=["fallback", "budget", "all"])
+    p.add_argument("--evidence", type=Path, default=None, help="evidence file to append to (default docs/evidence/otari-drills.jsonl)")
+    p.set_defaults(func=cmd_otari_drill)
     p = sub.add_parser("verify", help="check the hash chain")
     p.set_defaults(func=cmd_verify)
     p = sub.add_parser("head", help="print the verified head of the chain as JSON, for the CRE anchor workflow")

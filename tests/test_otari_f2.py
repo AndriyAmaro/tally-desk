@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.test_dossier import packet
-from tests.test_otari import BODY, HEADERS, FakeResponse, message, served_spelling
+from tests.test_otari import BODY, HEADERS, FakeResponse, message, plain_config, served_spelling
 from verdict_desk import __main__ as cli
 from verdict_desk import dossier, llm, narrative
 
@@ -29,6 +29,7 @@ class Base(unittest.TestCase):
             mock.patch.object(llm, "MIN_INTERVAL", 0.0),
             mock.patch.object(llm, "_next_start", 0.0),
             mock.patch.object(llm, "_pause"),
+            plain_config(),
         ):
             patch.start()
             self.addCleanup(patch.stop)

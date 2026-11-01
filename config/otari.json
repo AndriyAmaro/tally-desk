@@ -4,15 +4,15 @@
   "base_url": "https://otari.ai/api/v1",
   "auth_header": "Otari-Key",
   "default_role": "narrator",
-  "send_user": false,
+  "send_user": true,
   "_policies_doc": "Routing policies created once in the Otari dashboard, one per role that needs a fallback chain of our own. Used as the `model` of that role only when use_policies is true (or OTARI_USE_POLICIES=1); OTARI_POLICY_<ROLE> names one for a single role, for a drill. Without them the catalog id keeps Otari's automatic fallback across offerings of the same model.",
-  "use_policies": false,
+  "use_policies": true,
   "policies": {
     "judge": "vd-judge"
   },
   "_cycle_doc": "The app's own spend cap for one decision cycle, in USD: the sum of usage.cost_usd of the cycle's calls. Once reached, no further call is sent and each refused role leaves a client-side refusal receipt (code cycle_cap_exceeded). Otari's budgets are the first line, this is the second. OTARI_CYCLE_CAP_USD overrides.",
-  "cycle_cap_usd": "0.05",
-  "_send_user_doc": "false until the key is a service key: with an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\". Set true (or OTARI_SEND_USER=1) to send the role name as the `user` field, which is what per-user budgets bill.",
+  "cycle_cap_usd": "0.02",
+  "_send_user_doc": "true now that the key is a service key. With an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\" (docs/FEEDBACK_LOG.md, entry 2).",
   "roles": {
     "bull": {
       "model": "openai/gpt-oss-120b",
@@ -37,5 +37,11 @@
   },
   "rejected": {
     "meta/llama-4-scout-17b": "planned as the citation checker, but on 2026-11-01 four of five tiny calls answered 504 from CloudFront after 30 s and the fifth took 23 s (docs/FEEDBACK_LOG.md, entry 2)"
-  }
+  },
+  "end_user_prefix": "vd-",
+  "end_user_budget": "52a154a1-a369-45b9-8922-6728c4fe53c6",
+  "_end_user_doc": "Each role is billed to its own end user (`vd-bull`, `vd-bear`, `vd-judge`, `vd-checker`, `vd-narrator`). `end_user_budget` is the id of the dashboard budget `vd-analyst` (USD 0.10 a day per end user); it travels in the Otari-End-User-Budget header and applies when an end user is first created. The panel's `vd-drill-tiny` is `drill_budget`; `drill_user` is the end user the budget drill bills.",
+  "drill_user": "vd-drill",
+  "drill_budget": "c883d55f-b866-4ea9-b8d7-21c0d73cf2bb",
+  "drill_policy": "vd-judge-drill"
 }

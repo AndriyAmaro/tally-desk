@@ -34,6 +34,16 @@ def served_spelling(model: str) -> str:
     return model.replace("/", ".") + "-served"
 
 
+def plain_config():
+    """A patch that points llm at the repo config with the F2 switches off (no user field, no policies, no end-user budget,
+    a 0.05 cycle cap), so the F1-era tests keep testing what they were written for; the real switches are tested apart."""
+    cfg = json.loads(llm.OTARI_CONFIG.read_text(encoding="utf-8"))
+    cfg.update(send_user=False, use_policies=False, cycle_cap_usd="0.05", end_user_prefix="", end_user_budget="")
+    path = Path(tempfile.mkdtemp()) / "otari.json"
+    path.write_text(json.dumps(cfg), encoding="utf-8")
+    return mock.patch.object(llm, "OTARI_CONFIG", path)
+
+
 def message(headers: dict) -> Message:
     m = Message()
     for k, v in headers.items():
@@ -172,6 +182,7 @@ class OtariCallTest(unittest.TestCase):
             mock.patch.object(llm, "MIN_INTERVAL", 0.0),
             mock.patch.object(llm, "_next_start", 0.0),
             mock.patch.object(llm, "_pause"),
+            plain_config(),
         ):
             patch.start()
             self.addCleanup(patch.stop)
@@ -410,6 +421,7 @@ class OtariDossierTest(unittest.TestCase):
             mock.patch.object(llm, "MIN_INTERVAL", 0.0),
             mock.patch.object(llm, "_next_start", 0.0),
             mock.patch.object(llm, "_pause"),
+            plain_config(),
         ):
             patch.start()
             self.addCleanup(patch.stop)

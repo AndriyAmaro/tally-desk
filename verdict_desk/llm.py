@@ -28,6 +28,7 @@ import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -136,11 +137,12 @@ def sent_model(role: str | None, cfg: dict | None = None) -> str:
 
 
 def _end_user(role: str, cfg: dict) -> str | None:
-    """The `user` field: the role name once send_user is on (a service key), or OTARI_USER_<ROLE> for a drill user."""
+    """The `user` field: `end_user_prefix` plus the role name (`vd-judge`) once send_user is on (a service key),
+    or OTARI_USER_<ROLE> for a drill user. The id is stable: each distinct value creates an end user."""
     chosen = os.environ.get(f"OTARI_USER_{role.upper()}", "").strip()
     if chosen:
         return chosen[:256]
-    return role if _send_user(cfg) else None
+    return f"{cfg.get('end_user_prefix') or ''}{role}"[:256] if _send_user(cfg) else None
 
 
 _cycle_lock = threading.Lock()
@@ -271,6 +273,14 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
     }
     if client_attempts > 1:  # our own retries (for example after a gateway timeout), so the count is not hidden
         receipt["client_attempts"] = client_attempts
+    raw_guard = h.get("otari-guardrails")
+    if raw_guard is not None:
+        try:
+            parsed = json.loads(raw_guard)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list) and all(isinstance(g, dict) for g in parsed):
+            receipt["guardrails"] = parsed  # [{"profile","mode","valid","score"}]: valid and score are null when nothing evaluated the input
     for name, field in (("otari-guardrails", "guardrails_raw"), ("otari-end-user-budget", "end_user_budget"),
                         ("otari-idempotent-replayed", "replayed")):
         if h.get(name) is not None:
@@ -298,6 +308,55 @@ def transport_receipt(kind: str, role: str, sent_model: str, end_user: str | Non
             "captured_at": now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
+def usage_for(request_id: str | None, timeout: int = 20, tries: int = 4) -> dict | None:
+    """GET /usage/requests/{id} with the inference key: cost, tokens, status and `row_count` (a fallback leaves an absorbed
+    row besides the final one). It answers 404 until the background writer has settled the request, so it asks a few times."""
+    if not request_id or not otari_active():
+        return None
+    cfg = otari_config()
+    key = _otari_key()
+    auth = cfg["auth_header"]
+    headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key, "User-Agent": OTARI_USER_AGENT}
+    for attempt in range(tries):
+        try:
+            request = urllib.request.Request(f"{otari_base(cfg)}/usage/requests/{urllib.parse.quote(request_id)}", headers=headers)
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            return data if isinstance(data, dict) else None
+        except urllib.error.HTTPError as err:
+            err.close()
+            if err.code != 404:
+                return None
+        except (OSError, ValueError):
+            return None
+        if attempt < tries - 1:
+            _pause(3.0)
+    return None
+
+
+def end_user_info(external_id: str, timeout: int = 20) -> dict | None:
+    """GET /end-users?external_id=...: what a service key reads about one end user (budget id, spend, tokens, requests, reset)."""
+    if not otari_active():
+        return None
+    cfg = otari_config()
+    key = _otari_key()
+    auth = cfg["auth_header"]
+    headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key, "User-Agent": OTARI_USER_AGENT}
+    try:
+        request = urllib.request.Request(f"{otari_base(cfg)}/end-users?external_id={urllib.parse.quote(external_id, safe='')}", headers=headers)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        err.close()
+        return None
+    except (OSError, ValueError):
+        return None
+    rows = data if isinstance(data, list) else [data]
+    row = next((r for r in rows if isinstance(r, dict) and r.get("external_id") == external_id), None)
+    keep = ("external_id", "budget_id", "blocked", "spend", "reserved", "current_tokens", "current_requests", "budget_started_at", "next_budget_reset_at")
+    return {k: row.get(k) for k in keep} if row else None
+
+
 def served_receipt() -> dict | None:
     """The Otari receipt of the last call made on this thread, read once. None outside Otari mode."""
     receipt = getattr(_served, "receipt", None)
@@ -305,17 +364,18 @@ def served_receipt() -> dict | None:
     return receipt
 
 
-def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, role: str | None) -> str:
+def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, role: str | None, model: str | None = None,
+                end_user: str | None = None, end_user_budget: str | None = None) -> str:
     cfg = otari_config()
     role = role or cfg["default_role"]
-    model = sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
+    model = model or sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
     key = _otari_key()
     if not key.isprintable() or " " in key:
         raise LLMError("OTARI_API_KEY has spaces or control characters; paste only the key")
     spec = cfg["roles"][role]
     base = otari_base(cfg)
     interval = _otari_interval(cfg)
-    end_user = _end_user(role, cfg)
+    end_user = end_user or _end_user(role, cfg)
     tokens = _number(f"OTARI_MAX_TOKENS_{role.upper()}", 0, int, lambda v: v >= 0) or max_tokens or spec.get("max_tokens") or MAX_TOKENS
     payload = {"model": model, "temperature": 0, "max_tokens": tokens,
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
@@ -327,7 +387,8 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key,
                "Content-Type": "application/json", "User-Agent": OTARI_USER_AGENT, "Otari-Tags": f"role={role}",
                "Idempotency-Key": uuid.uuid4().hex}  # one per logical call, so a retry after a lost reply is not billed twice
-    budget = os.environ.get(f"OTARI_END_USER_BUDGET_{role.upper()}", "").strip() or str(spec.get("end_user_budget") or "")
+    budget = (end_user_budget or os.environ.get(f"OTARI_END_USER_BUDGET_{role.upper()}", "").strip()
+              or str(spec.get("end_user_budget") or cfg.get("end_user_budget") or ""))
     if end_user and budget:
         headers["Otari-End-User-Budget"] = budget  # applies only when this call creates the end user
     body = json.dumps(payload).encode("utf-8")
@@ -555,10 +616,12 @@ def _anthropic_text(raw: bytes) -> str:
     raise ValueError(f"model returned no text (stop_reason={stop}); raise MISTRAL_MAX_TOKENS" if stop == "max_tokens" else f"model returned no text (stop_reason={stop})")
 
 
-def chat(system: str, user: str, timeout: int = 90, max_tokens: int | None = None, role: str | None = None) -> str:
-    """One chat call. `role` picks the model in Otari mode (OTARI_API_KEY set) and is ignored otherwise."""
+def chat(system: str, user: str, timeout: int = 90, max_tokens: int | None = None, role: str | None = None,
+         model: str | None = None, end_user: str | None = None, end_user_budget: str | None = None) -> str:
+    """One chat call. `role` picks the model in Otari mode (OTARI_API_KEY set) and is ignored otherwise; `model`,
+    `end_user` and `end_user_budget` override the role's choice for one call (the drills use them)."""
     if otari_active():
-        return _otari_chat(system, user, timeout, max_tokens, role)
+        return _otari_chat(system, user, timeout, max_tokens, role, model, end_user, end_user_budget)
     keyless = _keyless()
     key = "" if keyless else _key()
     if not keyless:
