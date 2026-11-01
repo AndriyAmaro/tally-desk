@@ -78,6 +78,11 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - `Idempotency-Key`: the second call with the same key came back in 0.27 s with `Otari-Idempotent-Replayed: true` and the same `Otari-Request-ID`, with no second charge visible in `usage`. It makes retrying a 504 safe, which is exactly where we needed it (entries 1 and 7).
 - `Otari-Tags: role=bull` and `Otari-Conversation-Id` were accepted without error. We could not see them anywhere with an inference key, so we do not yet know whether they are visible in the dashboard or in `usage/summary` (to check in F2 with the panel).
 
+## Process notes
+
+- **A discarded test cycle.** The first full cycle on 2026-11-01 (BTCUSDT, local, `decide-v6`) appended a dossier 792 whose narrative had four of nine extraction batches failed by the 409 of entry 7 (its bull, bear, checker and judge requests were `11c4541b-8211-409b-ad47-d5828ce95e80`, `d061214b-c8d4-4278-b366-8b0d9a884176`, `4a7a1a13-2ece-429b-8b74-f194886eef6a` and `fb534b12-ebae-41cb-9666-d5f87c0d2a17`). It was never committed, pushed, stamped or published: the three ledger files were restored from git, the client was fixed to retry that 409, and the cycle was run again. The dossier 792 in this repository is the second run. The failed run is mentioned here so that nobody wonders about the missing first attempt; the ledger is append-only once it is committed, and this one never was.
+- **The legacy `route` field of dossier 792.** That dossier was sealed with a `route` list built from the receipt (and `routing_policy` empty) on each of bull, bear and judge. Otari does not send such a list, so the field was dropped for every later dossier (review finding F1.1). Dossier 792 is not rewritten; treat its `route` as derived from the receipt, which is the record of what Otari reported.
+
 ## Carried from the F0 reading of the spec and docs (not re-tested yet)
 
 | # | Observation | Status |

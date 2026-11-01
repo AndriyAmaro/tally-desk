@@ -111,12 +111,26 @@ def role_model(role: str | None, cfg: dict | None = None) -> str:
     return cfg["roles"][name]["model"]
 
 
+def otari_base(cfg: dict | None = None) -> str:
+    """The gateway base URL: OTARI_BASE_URL or the config value, https only (the key travels in a header), no trailing slash."""
+    cfg = cfg or otari_config()
+    base = (os.environ.get("OTARI_BASE_URL") or cfg["base_url"]).strip().rstrip("/")
+    if not base.lower().startswith("https://"):
+        raise LLMError("the Otari base URL must start with https:// (the key is sent in a header); check OTARI_BASE_URL and config/otari.json")
+    return base
+
+
+def _otari_interval(cfg: dict) -> float:
+    """Seconds between call starts in Otari mode: OTARI_MIN_INTERVAL, else the config (0: a burst of 12 parallel calls got no 429)."""
+    return _number("OTARI_MIN_INTERVAL", cfg.get("min_interval", 0.0), float, lambda v: math.isfinite(v) and v >= 0)
+
+
 def otari_summary() -> dict | None:
     """What the dossier records about the run: the base URL, the sha256 of the role config and the model of each role."""
     if not otari_active():
         return None
     cfg = otari_config()
-    return {"schema": "otari-run/1", "base_url": os.environ.get("OTARI_BASE_URL") or cfg["base_url"],
+    return {"schema": "otari-run/1", "base_url": otari_base(cfg),
             "config_sha256": hashlib.sha256(OTARI_CONFIG.read_bytes()).hexdigest(),
             "roles": {name: spec["model"] for name, spec in cfg["roles"].items()}}
 
@@ -180,10 +194,18 @@ def refusal_receipt(headers, status: int, role: str, sent_model: str, end_user: 
     return {
         "schema": RECEIPT_SCHEMA, "role": role, "request_id": h.get("otari-request-id"), "sent_model": sent_model,
         "end_user": end_user,
-        "refusal": {"status": status, "code": h.get("otari-error-code"), "budget_scope": h.get("otari-budget-scope"),
-                    "retry_after": h.get("retry-after")},
+        # a 4xx is a refusal (budget, credit, model not allowed); a 5xx is a failure, not a refusal
+        ("refusal" if status < 500 else "error"): {"status": status, "code": h.get("otari-error-code"),
+                                                   "budget_scope": h.get("otari-budget-scope"), "retry_after": h.get("retry-after")},
         "captured_at": now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+
+
+def transport_receipt(kind: str, role: str, sent_model: str, end_user: str | None = None, now: str | None = None) -> dict:
+    """The receipt of a call that got no HTTP answer at all (client timeout, connection failure): only what we know."""
+    return {"schema": RECEIPT_SCHEMA, "role": role, "request_id": None, "sent_model": sent_model, "end_user": end_user,
+            "error": {"kind": kind},
+            "captured_at": now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
 def served_receipt() -> dict | None:
@@ -201,7 +223,8 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     if not key.isprintable() or " " in key:
         raise LLMError("OTARI_API_KEY has spaces or control characters; paste only the key")
     spec = cfg["roles"][role]
-    base = (os.environ.get("OTARI_BASE_URL") or cfg["base_url"]).rstrip("/")
+    base = otari_base(cfg)
+    interval = _otari_interval(cfg)
     end_user = role if _send_user(cfg) else None
     payload = {"model": model, "temperature": 0, "max_tokens": max_tokens or spec.get("max_tokens") or MAX_TOKENS,
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
@@ -218,7 +241,8 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     _served.route = None
     _served.receipt = None
     for attempt in range(MAX_RETRIES + 1):
-        _wait_turn()
+        _wait_turn(interval)
+        _served.receipt = None  # each try starts clean: what is kept is the outcome of the LAST try, never an earlier one
         request = urllib.request.Request(f"{base}/chat/completions", data=body, headers=headers)
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -228,9 +252,9 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=attempt + 1)
             _served.receipt = receipt
             _served.model = receipt["served_by"] or (data.get("model") if isinstance(data, dict) else None)
-            if receipt["served_by"] and receipt["attempt_count"] == 1 and receipt["duration_ms"] is not None:
-                _served.route = {"attempts": [{"model": receipt["served_by"], "status": 200, "ms": receipt["duration_ms"]}], "policy": None}
-            choice = _first_choice(raw)
+            # No `route` is sealed in Otari mode: Otari sends counts (attempt_count, fallback), not the list of attempts,
+            # and a list built from the receipt would look like routing data the gateway never gave. The receipt is the record.
+            choice = _first_choice(raw, "the Otari gateway")
             break
         except urllib.error.HTTPError as err:
             detail = _read_detail(err)
@@ -243,6 +267,11 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             if delay is None:
                 raise _otari_error(err, key, detail, base, model) from err
             _pause(delay)
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as err:  # no HTTP answer: record what happened, never a stale status
+            reason = getattr(err, "reason", err)
+            kind = "timeout" if isinstance(reason, TimeoutError) else "connection"
+            _served.receipt = transport_receipt(kind, role, model, end_user)
+            raise OtariError(f"{kind} calling {base} model {model} ({type(reason).__name__})") from err
     message = choice.get("message")
     content = message_text(message.get("content") if isinstance(message, dict) else None)
     if not content:
@@ -341,13 +370,13 @@ def message_text(content) -> str:
     return ""
 
 
-def _wait_turn() -> None:
+def _wait_turn(interval: float | None = None) -> None:
     """Reserva o proximo horario de inicio de chamada; a reserva vale entre threads."""
     global _next_start
     with _gate:
         now = time.monotonic()
         start = max(now, _next_start)
-        _next_start = start + MIN_INTERVAL
+        _next_start = start + (MIN_INTERVAL if interval is None else interval)
     if start > now:
         _pause(start - now)
 
@@ -403,13 +432,13 @@ def _http_error(err: urllib.error.HTTPError, key: str, detail: str | None = None
     return LLMError(f"HTTP {err.code} {err.reason} from {BASE_URL} model {MODEL}: {detail or 'no body'}")
 
 
-def _first_choice(raw: bytes) -> dict:
+def _first_choice(raw: bytes, source: str = "the Mistral API") -> dict:
     try:
         choice = json.loads(raw.decode("utf-8"))["choices"][0]
     except (KeyError, IndexError, TypeError):
         choice = None
     if not isinstance(choice, dict):
-        raise ValueError("unexpected response shape from the Mistral API")
+        raise ValueError(f"unexpected response shape from {source}")
     return choice
 
 

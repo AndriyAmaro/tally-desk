@@ -28,6 +28,12 @@ BODY = {"model": "openai/gpt-oss-120b", "choices": [{"message": {"content": "ok"
         "usage": {"prompt_tokens": 61, "completion_tokens": 42, "total_tokens": 103, "cost_usd": "0.000009", "pricing_source": "deployment"}}
 
 
+def served_spelling(model: str) -> str:
+    """How a provider spells a catalog id in `Otari-Model` (bedrock answers `nvidia.nemotron-super-3-120b` for the catalog's
+    `nvidia/nemotron-3-super-120b-a12b`): never the same string as the one sent."""
+    return model.replace("/", ".") + "-served"
+
+
 def message(headers: dict) -> Message:
     m = Message()
     for k, v in headers.items():
@@ -175,7 +181,7 @@ class OtariCallTest(unittest.TestCase):
         def urlopen(request, timeout=None):
             payload = json.loads(request.data.decode("utf-8"))
             self.sent.append((request, payload))
-            h = {**HEADERS, "Otari-Model": payload["model"]}
+            h = {**HEADERS, "Otari-Model": served_spelling(payload["model"])}
             return FakeResponse({**BODY, "choices": [{"message": {"content": content}, "finish_reason": "stop"}]}, {**h, **(headers or {})})
         return mock.patch.object(urllib.request, "urlopen", urlopen)
 
@@ -218,19 +224,20 @@ class OtariCallTest(unittest.TestCase):
     def test_the_reply_fills_served_by_route_and_a_receipt_read_once(self):
         with self.fake("text"):
             self.assertEqual(llm.chat("s", "u", role="bull"), "text")
-        self.assertEqual(llm.served_by(), "deepinfra:openai/gpt-oss-120b")
+        self.assertEqual(llm.served_by(), "deepinfra:" + served_spelling("openai/gpt-oss-120b"))
         self.assertIsNone(llm.served_by())
-        route = llm.served_route()
-        self.assertEqual(route["attempts"], [{"model": "deepinfra:openai/gpt-oss-120b", "status": 200, "ms": 1880}])
+        self.assertIsNone(llm.served_route(), "Otari sends counts, not a list of attempts: no route is sealed")
         receipt = llm.served_receipt()
         self.assertEqual((receipt["role"], receipt["request_id"], receipt["cost_usd"]), ("bull", "req-1111", "0.000009"))
+        self.assertEqual((receipt["sent_model"], receipt["served_model"]), ("openai/gpt-oss-120b", served_spelling("openai/gpt-oss-120b")))
         self.assertIsNone(llm.served_receipt())
 
     def test_a_fallback_reply_does_not_pretend_the_first_provider_answered(self):
         with self.fake(headers={"Otari-Attempt-Count": "2", "Otari-Fallback": "true", "Otari-Provider": "nebius"}):
             llm.chat("s", "u", role="judge")
         self.assertIsNone(llm.served_route())
-        self.assertTrue(llm.served_receipt()["fallback"])
+        receipt = llm.served_receipt()
+        self.assertEqual((receipt["fallback"], receipt["attempt_count"], receipt["provider"]), (True, 2, "nebius"))
 
     def test_a_budget_refusal_is_an_otari_error_with_its_fields_and_is_not_retried(self):
         h = message({"Otari-Request-ID": "req-7", "Otari-Error-Code": "budget_exceeded", "Otari-Budget-Scope": "user", "Retry-After": "7200"})
@@ -247,6 +254,95 @@ class OtariCallTest(unittest.TestCase):
         self.assertNotIn(KEY, str(err))
         self.assertEqual(len(calls), 1)
         self.assertEqual(llm.served_receipt()["refusal"]["code"], "budget_exceeded")
+
+    def test_429_with_a_short_retry_after_waits_and_repeats_a_long_one_stops(self):
+        calls = []
+
+        def limited(retry_after):
+            def urlopen(request, timeout=None):
+                calls.append(retry_after)
+                if len(calls) == 1 or retry_after > 60:
+                    raise urllib.error.HTTPError(request.full_url, 429, "Too Many Requests", message({"Retry-After": str(retry_after), "Otari-Error-Code": "rate_limited"}), io.BytesIO(b"{}"))
+                return FakeResponse(BODY, HEADERS)
+            return urlopen
+        with mock.patch.object(urllib.request, "urlopen", limited(5)):
+            self.assertEqual(llm.chat("s", "u", role="bull"), "ok")
+        self.assertEqual(len(calls), 2)
+        llm._pause.assert_any_call(5.0)
+        calls.clear()
+        with mock.patch.object(urllib.request, "urlopen", limited(120)):
+            with self.assertRaises(llm.OtariError) as ctx:
+                llm.chat("s", "u", role="bull")
+        self.assertEqual((len(calls), ctx.exception.status, ctx.exception.code, ctx.exception.retry_after), (1, 429, "rate_limited", "120"))
+        self.assertEqual(llm.served_receipt()["refusal"]["status"], 429)
+
+    def test_a_504_that_never_clears_runs_out_of_retries_and_raises(self):
+        calls = []
+
+        def urlopen(request, timeout=None):
+            calls.append(request.get_header("Idempotency-key"))
+            raise urllib.error.HTTPError(request.full_url, 504, "Gateway Timeout", message({}), io.BytesIO(b"<html>504</html>"))
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            with self.assertRaises(llm.OtariError) as ctx:
+                llm.chat("s", "u", role="judge")
+        self.assertEqual(len(calls), llm.MAX_RETRIES + 1)
+        self.assertEqual(len(set(calls)), 1)
+        self.assertEqual(ctx.exception.status, 504)
+        receipt = llm.served_receipt()
+        self.assertEqual(receipt["error"]["status"], 504)
+        self.assertNotIn("refusal", receipt, "a gateway failure is not a refusal")
+
+    def test_a_client_timeout_is_recorded_as_a_timeout_not_as_the_504_before_it(self):
+        calls = []
+
+        def urlopen(request, timeout=None):
+            calls.append(1)
+            if len(calls) == 1:
+                raise urllib.error.HTTPError(request.full_url, 504, "Gateway Timeout", message({}), io.BytesIO(b"<html>504</html>"))
+            raise urllib.error.URLError(TimeoutError("timed out"))
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            with self.assertRaises(llm.OtariError) as ctx:
+                llm.chat("s", "u", role="bear")
+        self.assertIn("timeout", str(ctx.exception))
+        receipt = llm.served_receipt()
+        self.assertEqual(receipt["error"], {"kind": "timeout"})
+        self.assertNotIn("refusal", receipt)
+        self.assertEqual((receipt["role"], receipt["sent_model"]), ("bear", llm.role_model("bear")))
+
+    def test_a_bare_socket_timeout_and_a_refused_connection_are_otari_errors_too(self):
+        for exc, kind in ((TimeoutError("read timed out"), "timeout"), (urllib.error.URLError(ConnectionRefusedError()), "connection")):
+            with mock.patch.object(urllib.request, "urlopen", mock.Mock(side_effect=exc)):
+                with self.assertRaises(llm.OtariError):
+                    llm.chat("s", "u", role="bull")
+            self.assertEqual(llm.served_receipt()["error"]["kind"], kind)
+
+    def test_a_reply_with_an_unexpected_shape_names_otari(self):
+        def urlopen(request, timeout=None):
+            return FakeResponse({"id": "x"}, HEADERS)
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            with self.assertRaisesRegex(ValueError, "Otari gateway"):
+                llm.chat("s", "u", role="bull")
+
+    def test_the_base_url_must_be_https_and_loses_its_trailing_slash(self):
+        with mock.patch.dict(os.environ, {"OTARI_BASE_URL": "http://otari.example/api/v1"}), mock.patch.object(urllib.request, "urlopen") as opened:
+            with self.assertRaisesRegex(llm.LLMError, "https://"):
+                llm.chat("s", "u", role="bull")
+            opened.assert_not_called()
+            with self.assertRaises(llm.LLMError):
+                llm.otari_summary()
+        with mock.patch.dict(os.environ, {"OTARI_BASE_URL": "https://eu.example/api/v1//"}), self.fake():
+            llm.chat("s", "u", role="bull")
+        self.assertEqual(self.sent[-1][0].full_url, "https://eu.example/api/v1/chat/completions")
+
+    def test_otari_calls_do_not_inherit_the_mistral_spacing(self):
+        with mock.patch.object(llm, "MIN_INTERVAL", 5.0), mock.patch.object(llm, "_next_start", 0.0), self.fake():
+            for _ in range(3):
+                llm.chat("s", "u", role="bull")
+            llm._pause.assert_not_called()
+            with mock.patch.dict(os.environ, {"OTARI_MIN_INTERVAL": "2"}):
+                llm.chat("s", "u", role="bull")
+                llm.chat("s", "u", role="bull")
+            self.assertTrue(llm._pause.called)
 
     def test_a_gateway_timeout_is_retried_with_the_same_idempotency_key_and_the_receipt_counts_it(self):
         seen = []
@@ -333,7 +429,7 @@ class OtariDossierTest(unittest.TestCase):
         else:
             content = "[]"
         self.counter += 1
-        headers = {**HEADERS, "Otari-Request-ID": f"req-{self.counter}", "Otari-Model": payload["model"]}
+        headers = {**HEADERS, "Otari-Request-ID": f"req-{self.counter}", "Otari-Model": served_spelling(payload["model"])}
         return FakeResponse({**BODY, "choices": [{"message": {"content": content}, "finish_reason": "stop"}]}, headers)
 
     def test_the_sealed_dossier_names_the_models_and_keeps_every_receipt(self):
@@ -346,7 +442,10 @@ class OtariDossierTest(unittest.TestCase):
             receipt = layer[part]["receipt"]
             self.assertEqual(receipt["role"], role, part)
             self.assertEqual(receipt["sent_model"], llm.role_model(role))
-            self.assertEqual(layer[part]["served_by"], f"deepinfra:{llm.role_model(role)}")
+            self.assertEqual(receipt["served_model"], served_spelling(llm.role_model(role)))
+            self.assertEqual(layer[part]["served_by"], "deepinfra:" + served_spelling(llm.role_model(role)))
+            self.assertNotIn("route", layer[part], "no route is sealed in Otari mode")
+            self.assertNotIn("routing_policy", layer[part])
         self.assertEqual(len({layer[p]["receipt"]["request_id"] for p in ("bull", "bear", "checker", "judge")}), 4)
         self.assertEqual(layer["checker"]["supported"], 1)
         self.assertTrue(layer["checker"]["advisory"])
