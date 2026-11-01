@@ -30,7 +30,7 @@ PROMPT = "Get the current USD price of bitcoin, ethereum and solana with one cal
 LIMIT_PCT = 1.0
 
 _ARGS = r"\s*(?:(?:ids|vs_currencies)\s*:\s*'[a-z,\-]+'\s*,?\s*){1,2}"
-_CODE = re.compile(r"^\s*async function run\(client\)\s*\{\s*(?:const\s+\w+\s*=\s*)?(?:return\s+)?(?:await\s+)?client\.simple\.price\.get\(\s*\{" + _ARGS + r"\}\s*\)\s*;?\s*(?:return\s+\w+\s*;?\s*)?\}\s*$")
+_CODE = re.compile(r"^\s*async function run\(client\)\s*\{\s*(?:const\s+\w+\s*=\s*)?(?:return\s+)?(?:await\s+)?client\.simple\.price\.get\(\s*\{" + _ARGS + r"\}\s*\)\s*;?\s*(?:console\.log\(\s*\w+\s*\)\s*;?\s*)*(?:return\s+\w+\s*;?\s*)?\}\s*$")
 
 
 def code_trusted(code) -> tuple[bool, str | None]:

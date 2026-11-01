@@ -70,6 +70,7 @@ print(json.dumps(out, sort_keys=True))
 SCRIPTS = {"otari-sandbox/1": SCRIPT_V1, "otari-sandbox/2": SCRIPT}
 SCHEMA = "otari-sandbox/2"
 SYSTEM = "You run code in the sandbox exactly as given and reply with only what it prints, nothing else."
+MAX_TOKENS = 1500
 TOOLS = [{"type": "code_execution_20250825", "name": "code_execution"}]
 
 
@@ -133,18 +134,19 @@ def prompt_for(code: str) -> str:
 
 
 def native_blocks(data) -> dict:
-    """The sandbox's own result blocks of a Messages reply: the code it ran and its stdout and return code."""
-    ran, result = None, None
+    """The sandbox's own result blocks of a Messages reply: every run, in order, with the code it ran, its stdout, stderr and return code.
+    A model may run the code more than once (and each run is billed), so all runs are kept."""
+    uses, runs = {}, []
     for block in (data or {}).get("content") or []:
         if not isinstance(block, dict):
             continue
-        if block.get("type") == "server_tool_use" and ran is None:
-            ran = (block.get("input") or {}).get("code")
-        elif block.get("type") == "code_execution_tool_result" and result is None:
+        if block.get("type") == "server_tool_use":
+            uses[block.get("id")] = (block.get("input") or {}).get("code")
+        elif block.get("type") == "code_execution_tool_result":
             content = block.get("content") if isinstance(block.get("content"), dict) else {}
-            result = {"stdout": content.get("stdout"), "return_code": content.get("return_code"), "stderr": content.get("stderr"), "tool_use_id": block.get("tool_use_id")}
-    return {"code_ran": ran, "result": result,
-            "text": "".join(str(b.get("text", "")) for b in (data or {}).get("content") or [] if isinstance(b, dict) and b.get("type") == "text")}
+            runs.append({"code_ran": uses.get(block.get("tool_use_id")), "stdout": content.get("stdout"), "return_code": content.get("return_code"),
+                         "stderr": content.get("stderr"), "tool_use_id": block.get("tool_use_id")})
+    return {"runs": runs, "text": "".join(str(b.get("text", "")) for b in (data or {}).get("content") or [] if isinstance(b, dict) and b.get("type") == "text")}
 
 
 def _unfence(text: str) -> str:
@@ -170,18 +172,24 @@ def seal(body: dict, ask=None, nonce: str | None = None) -> dict:
         if ask is not None:
             reply = ask(SYSTEM, prompt_for(code))
         else:
-            reply = llm.messages_call("sandbox", SYSTEM, prompt_for(code), max_tokens=400, timeout=120, tools=TOOLS,
+            # max_tokens must leave room for the whole code in the tool call (a first try with 400 cut it short and billed three runs)
+            reply = llm.messages_call("sandbox", SYSTEM, prompt_for(code), max_tokens=MAX_TOKENS, timeout=120, tools=TOOLS, max_tool_iterations=2,
                                       extra_headers={"Otari-Code-Execution": "otari"})["data"]
     except (OSError, ValueError) as err:
         return {**block, "error": str(err), "receipt": llm.served_receipt(), "equal": False}
     block["receipt"] = llm.served_receipt()
     native = native_blocks(reply)
     local = json.loads(block["local_stdout"])
-    if native["result"] is not None:
-        stdout = str(native["result"].get("stdout") or "").strip()
-        block.update({"evidence": "native", "sandbox_stdout": stdout, "sandbox_return_code": native["result"].get("return_code"),
-                      "code_ran_sha256": sha(native["code_ran"]) if isinstance(native["code_ran"], str) else None,
-                      "code_ran_is_code_sent": isinstance(native["code_ran"], str) and native["code_ran"].strip() == code.strip(),
+    if native["runs"]:
+        # every run is recorded; the one that counts is the first whose code is exactly the code we sent (a model that cut or
+        # changed the code ran something else, which is not a re-derivation of this verdict)
+        block["runs"] = [{"code_ran_sha256": sha(r["code_ran"]) if isinstance(r["code_ran"], str) else None,
+                          "is_code_sent": isinstance(r["code_ran"], str) and r["code_ran"].strip() == code.strip(),
+                          "return_code": r["return_code"], "stdout": str(r["stdout"] or "").strip()[:2000], "stderr": str(r["stderr"] or "")[:300]} for r in native["runs"]]
+        chosen = next((r for r in native["runs"] if isinstance(r["code_ran"], str) and r["code_ran"].strip() == code.strip()), None)
+        stdout = str((chosen or {}).get("stdout") or "").strip()
+        block.update({"evidence": "native", "sandbox_stdout": stdout, "sandbox_return_code": (chosen or native["runs"][-1]).get("return_code"),
+                      "code_ran_sha256": sha(chosen["code_ran"]) if chosen else None, "code_ran_is_code_sent": chosen is not None,
                       "model_text_matches": _unfence(native["text"]) == stdout})
     else:  # no native block: all there is is the model's relay of stdout, which the proof line still binds to the nonce
         stdout = _unfence(native["text"])

@@ -175,6 +175,14 @@ class WebCollectTest(Env):
         self.assertEqual((page["request_id"], page["otari_reported_fetch"], page["excerpt_verified"]), ("req-fetch", True, True))
         self.assertIn("relay", page["excerpt_source"])
 
+    def test_the_check_ignores_markup_case_and_punctuation_and_needs_runs_of_words_not_a_prefix(self):
+        page = lambda text: (lambda request, timeout=None: _Page(text))
+        noisy = "<html><nav>Menu</nav><h1>Bitcoin ETFs: recorded their STRONGEST weekly inflows</h1><script>x()</script><p>in ten months, as the price surged past its October high.</p></html>"
+        self.assertTrue(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page(noisy)))
+        self.assertFalse(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page("<p>An unrelated page about gardening and soil acidity for tomato growers.</p>")))
+        self.assertFalse(otari_web.verify_excerpt("https://x.com/a/b", PAGE_TEXT, page("")))
+        self.assertIsNone(otari_web.verify_excerpt("https://x.com/a/b", "too short", page(noisy)))
+
     def test_an_excerpt_the_page_does_not_contain_is_marked_unverified_and_an_unreadable_page_is_unknown(self):
         ask = self.asks(fetch_text='{"excerpt": "An invented opening sentence that is nowhere on the page at all."}')
         block = otari_web.collect(["BTCUSDT"], ask=ask, opener=lambda r, timeout=None: _Page("<p>" + PAGE_TEXT + "</p>"))
@@ -299,6 +307,12 @@ class McpTest(Env):
                     "async function run(client) { await fetch('https://evil'); return await client.simple.price.get({ids: 'bitcoin', vs_currencies: 'usd'}); }",
                     None, 42):
             self.assertFalse(otari_mcp.code_trusted(bad)[0], bad)
+
+    def test_a_harmless_console_log_of_the_result_is_allowed_but_nothing_else_is(self):
+        logged = "async function run(client) {\n  const price = await client.simple.price.get({ ids: 'bitcoin,ethereum,solana', vs_currencies: 'usd' });\n  console.log(price);\n  return price;\n}"
+        self.assertEqual(otari_mcp.code_trusted(logged), (True, None))
+        self.assertFalse(otari_mcp.code_trusted(logged.replace("console.log(price)", "console.log(price.bitcoin)"))[0])
+        self.assertFalse(otari_mcp.code_trusted(logged.replace("console.log(price);", "price.bitcoin = other;"))[0])
 
     def test_the_stream_gives_the_tool_use_the_server_result_the_text_and_error_events(self):
         s = otari_mcp.parse_stream(sse())
@@ -554,7 +568,9 @@ class SandboxSealTest(Env):
         request = sent[0]
         self.assertTrue(request.full_url.endswith("/messages"))
         self.assertEqual(request.get_header("Otari-code-execution"), "otari")
-        self.assertEqual(json.loads(request.data.decode())["tools"], [{"type": "code_execution_20250825", "name": "code_execution"}])
+        sent_payload = json.loads(request.data.decode())
+        self.assertEqual(sent_payload["tools"], [{"type": "code_execution_20250825", "name": "code_execution"}])
+        self.assertEqual((sent_payload["max_tokens"], sent_payload["max_tool_iterations"]), (1500, 2))  # room for the whole code, and at most two billed runs
         self.assertTrue(block["equal"])
         self.assertEqual((block["receipt"]["cost_usd"], block["receipt"]["role"]), ("0.010081", "sandbox"))
         self.assertEqual(llm.cycle_status()["tools"]["calls"], 1)
@@ -570,6 +586,32 @@ class SandboxSealTest(Env):
         forged["sandbox"]["local_stdout"] = forged["sandbox"]["local_stdout"].replace("edge", "edgy")
         self.assertFalse(sandbox_rederive.recheck(forged)["sandbox_local_matches"])
         self.assertEqual(sandbox_rederive.recheck({}), {})
+
+    def test_every_run_is_recorded_and_the_first_one_with_exactly_the_code_sent_counts(self):
+        def ask(system, prompt):
+            code = re.search(r"```python\n(.*)```", prompt, re.S).group(1)
+            truncated = code[:code.index('out["trade"] = "LONG"')]  # a model that ran out of tokens and cut the code
+            reply = native_reply(truncated, "")
+            second = native_reply(code, sandbox_rederive.run_local(code))
+            reply["content"] = reply["content"][:2] + [{**second["content"][0], "id": "srv2"}, {**second["content"][1], "tool_use_id": "srv2"}, second["content"][2]]
+            return reply
+        block = sandbox_rederive.seal(self.body(), ask=ask)
+        self.assertEqual([r["is_code_sent"] for r in block["runs"]], [False, True])
+        self.assertTrue(block["equal"] and block["proof_ok"] and block["code_ran_is_code_sent"])
+        self.assertEqual(block["sandbox_stdout"], block["local_stdout"])
+
+    def test_when_no_run_used_the_code_sent_nothing_counts_and_an_invented_proof_is_caught(self):
+        def ask(system, prompt):
+            code = re.search(r"```python\n(.*)```", prompt, re.S).group(1)
+            local = json.loads(sandbox_rederive.run_local(code))
+            fabricated = json.dumps({**local, "proof": "9" * 64})
+            return native_reply(code[:200], "", text=fabricated)  # the sandbox ran a stub; the model then typed a plausible answer
+        block = sandbox_rederive.seal(self.body(), ask=ask)
+        self.assertFalse(block["code_ran_is_code_sent"])
+        self.assertEqual(block["sandbox_stdout"], "")
+        self.assertFalse(block["proof_ok"] or block["equal"])
+        self.assertFalse(block["model_text_matches"])
+        self.assertEqual(len(block["runs"]), 1)
 
     def test_a_block_with_an_error_means_not_sealed_not_a_diverging_verdict(self):
         d = stale_dossier()

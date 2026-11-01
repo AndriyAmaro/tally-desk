@@ -79,10 +79,17 @@ def _plain(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", text))).strip().lower()
 
 
+def _windows(text: str, size: int = 6) -> list[str]:
+    words = re.findall(r"[a-z0-9]+", _plain(text))
+    return [" ".join(words[i:i + size]) for i in range(0, max(0, len(words) - size + 1))]
+
+
 def verify_excerpt(url: str, excerpt: str, opener=None) -> bool | None:
-    """Best effort: is the start of the excerpt in the page as we fetch it ourselves? None when the page cannot be read this way."""
-    needle = _plain(excerpt)[:60]
-    if len(needle) < 20:
+    """Best effort: do runs of six consecutive words of the excerpt appear in the page as we fetch it ourselves (markup, punctuation
+    and case ignored)? True with at least two such runs, False when the page was read and they are not there, None when the page
+    cannot be read this way (blocked, or built in the browser)."""
+    wanted = _windows(excerpt)[:40]
+    if len(wanted) < 2:
         return None
     try:
         request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; verdict-desk/1.0)"})
@@ -90,7 +97,8 @@ def verify_excerpt(url: str, excerpt: str, opener=None) -> bool | None:
             page = response.read(2_000_000).decode("utf-8", "replace")
     except (OSError, ValueError):
         return None
-    return needle in _plain(page)
+    have = " ".join(re.findall(r"[a-z0-9]+", _plain(page)))
+    return sum(1 for w in wanted if w in have) >= 2
 
 
 def _fetched(receipt: dict, url: str) -> bool:
