@@ -131,7 +131,10 @@ class CycleCapTest(Base):
         self.assertEqual((r["role"], r["request_id_source"]), ("judge", "client"))
         self.assertRegex(r["request_id"], r"^client:[0-9a-f]{32}$")
         with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0005"}):
-            self.assertEqual(llm.cycle_status(), {"cap_usd": "0.0005", "spent_usd": "0.000600", "calls": 2, "refused": 1, "unpriced_calls": 0})
+            status = llm.cycle_status()
+            self.assertEqual({k: status[k] for k in ("cap_usd", "spent_usd", "calls", "refused", "unpriced_calls")},
+                             {"cap_usd": "0.0005", "spent_usd": "0.000600", "calls": 2, "refused": 1, "unpriced_calls": 0})
+            self.assertEqual(status["total_spent_usd"], "0.000600")
 
     def test_the_cap_refusal_carries_the_exact_idempotency_key_of_the_call_that_was_not_sent(self):
         fixed = mock.Mock()

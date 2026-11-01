@@ -146,18 +146,27 @@ def _end_user(role: str, cfg: dict) -> str | None:
 
 
 _cycle_lock = threading.Lock()
-_cycle = {"spent": decimal.Decimal(0), "calls": 0, "refused": 0, "unpriced": 0}
+_cycle = {"spent": decimal.Decimal(0), "calls": 0, "refused": 0, "unpriced": 0,
+          "tspent": decimal.Decimal(0), "tcalls": 0, "trefused": 0, "tunpriced": 0}
 
 
 def reset_cycle() -> None:
-    """Starts a decision cycle: the spend counted against the app's own cycle cap goes back to zero."""
+    """Starts a decision cycle: the spend counted against the app's own caps goes back to zero."""
     with _cycle_lock:
-        _cycle.update(spent=decimal.Decimal(0), calls=0, refused=0, unpriced=0)
+        _cycle.update(spent=decimal.Decimal(0), calls=0, refused=0, unpriced=0, tspent=decimal.Decimal(0), tcalls=0, trefused=0, tunpriced=0)
 
 
-def cycle_cap(cfg: dict | None = None) -> decimal.Decimal | None:
-    """The most one cycle may spend through Otari, in USD: OTARI_CYCLE_CAP_USD, else `cycle_cap_usd` in the config; none if 0 or unset."""
-    raw = os.environ.get("OTARI_CYCLE_CAP_USD", "").strip() or str((cfg or otari_config()).get("cycle_cap_usd") or "")
+def is_tool_role(role: str | None, cfg: dict | None = None) -> bool:
+    """True for the roles that only drive an Otari tool (searcher, fetcher, sandbox, mcp): they have a cap of their own, so a tool
+    that costs a cent a call can never use up the money the analysts, the judge and the checker need."""
+    try:
+        return bool(((cfg or otari_config())["roles"].get(role) or {}).get("tool_role"))
+    except LLMError:
+        return False
+
+
+def _cap(env: str, key: str, cfg: dict | None) -> decimal.Decimal | None:
+    raw = os.environ.get(env, "").strip() or str((cfg or otari_config()).get(key) or "")
     try:
         cap = decimal.Decimal(raw)
     except decimal.InvalidOperation:
@@ -165,43 +174,58 @@ def cycle_cap(cfg: dict | None = None) -> decimal.Decimal | None:
     return cap if cap.is_finite() and cap > 0 else None
 
 
+def cycle_cap(cfg: dict | None = None, tools: bool = False) -> decimal.Decimal | None:
+    """The spend after which no new call starts in a cycle, in USD. The core roles (bull, bear, judge, checker, narrator) have
+    `cycle_cap_usd` (OTARI_CYCLE_CAP_USD); the tool roles have `tool_cap_usd` (OTARI_TOOL_CAP_USD). None if 0 or unset."""
+    return _cap("OTARI_TOOL_CAP_USD", "tool_cap_usd", cfg) if tools else _cap("OTARI_CYCLE_CAP_USD", "cycle_cap_usd", cfg)
+
+
 def cycle_status() -> dict | None:
-    """What this cycle has spent through Otari, for the dossier: the cap, the settled spend, calls, calls the cap refused."""
+    """What this cycle has spent through Otari, for the dossier: the cap, the settled spend, calls, calls the cap refused; the tool
+    roles are counted apart under `tools`, and `total_spent_usd` is both together (the sum of the receipts' cost_usd)."""
     if not otari_active():
         return None
-    cap = cycle_cap()
+    cap, tcap = cycle_cap(), cycle_cap(tools=True)
     with _cycle_lock:
         return {"cap_usd": None if cap is None else format(cap, "f"), "spent_usd": f"{_cycle['spent']:.6f}", "calls": _cycle["calls"],
-                "refused": _cycle["refused"], "unpriced_calls": _cycle["unpriced"]}
+                "refused": _cycle["refused"], "unpriced_calls": _cycle["unpriced"],
+                "tools": {"cap_usd": None if tcap is None else format(tcap, "f"), "spent_usd": f"{_cycle['tspent']:.6f}", "calls": _cycle["tcalls"],
+                          "refused": _cycle["trefused"], "unpriced_calls": _cycle["tunpriced"]},
+                "total_spent_usd": f"{_cycle['spent'] + _cycle['tspent']:.6f}"}
 
 
 def _cycle_check(cap, role: str, sent: str, end_user: str | None, local_id: str | None = None) -> None:
-    """The app's own second line behind Otari's budgets: once the cycle has spent its cap, no further call STARTS.
+    """The app's own second line behind Otari's budgets: once the cycle (or its tools) has spent the cap, no further call STARTS.
 
     Calls already in flight (the narrative batches run in parallel) finish and are counted, so the spend can pass the cap by
     what those calls cost; the cap is not a reservation. The refusal carries `client:<local_id>`, the call's Idempotency-Key."""
     if cap is None:
         return
+    tools = is_tool_role(role)
+    spent_key, refused_key = ("tspent", "trefused") if tools else ("spent", "refused")
     with _cycle_lock:
-        spent = _cycle["spent"]
+        spent = _cycle[spent_key]
         over = spent >= cap
         if over:
-            _cycle["refused"] += 1
+            _cycle[refused_key] += 1
     if over:
+        scope = "cycle_tools" if tools else "cycle"
         _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, **_who({}, local_id), "sent_model": sent, "policy": _policy(sent, role), "end_user": end_user,
-                           "client_attempts": 0, "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"},
+                           "client_attempts": 0, "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": scope, "retry_after": None, "source": "client"},
                            "captured_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-        raise OtariError(f"cycle cap reached: ${spent:.6f} spent of ${cap} for this decision cycle; no call was sent for role {role}",
-                         code="cycle_cap_exceeded", scope="cycle")
+        raise OtariError(f"{'tool ' if tools else ''}cycle cap reached: ${spent:.6f} spent of ${cap} for this decision cycle; no call was sent for role {role}",
+                         code="cycle_cap_exceeded", scope=scope)
 
 
 def _cycle_add(receipt: dict) -> None:
+    tools = is_tool_role(receipt.get("role"))
+    keys = ("tspent", "tcalls", "tunpriced") if tools else ("spent", "calls", "unpriced")
     with _cycle_lock:
-        _cycle["calls"] += 1
+        _cycle[keys[1]] += 1
         try:
-            _cycle["spent"] += decimal.Decimal(str(receipt.get("cost_usd")))
+            _cycle[keys[0]] += decimal.Decimal(str(receipt.get("cost_usd")))
         except (decimal.InvalidOperation, TypeError):
-            _cycle["unpriced"] += 1
+            _cycle[keys[2]] += 1
 
 
 def otari_base(cfg: dict | None = None) -> str:
@@ -443,7 +467,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     _served.model = None
     _served.route = None
     _served.receipt = None
-    _cycle_check(cycle_cap(cfg), role, model, end_user, headers["Idempotency-Key"])
+    _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, headers["Idempotency-Key"])
     for attempt in range(MAX_RETRIES + 1):
         _wait_turn(interval)
         _served.receipt = None  # each try starts clean: what is kept is the outcome of the LAST try, never an earlier one
@@ -462,26 +486,99 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             choice = _first_choice(raw, "the Otari gateway")
             break
         except urllib.error.HTTPError as err:
-            detail = _read_detail(err)
-            _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
-            delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
-            if delay is None and err.code == 409 and "in progress" in detail and attempt < MAX_RETRIES:
-                # Our first try timed out at the edge (504) while Otari kept working: the same Idempotency-Key answers 409
-                # "still in progress" until it finishes, and then replays the stored reply. Wait and ask again.
-                delay = min(5.0 * 2 ** attempt, MAX_WAIT)  # exponential, capped, on the same Idempotency-Key
-            if delay is None:
-                raise _otari_error(err, key, detail, base, model) from err
-            _pause(delay)
+            _pause(_retry_or_raise(err, attempt, key, base, role, model, end_user, headers["Idempotency-Key"]))
         except (urllib.error.URLError, TimeoutError, ConnectionError) as err:  # no HTTP answer: record what happened, never a stale status
-            reason = getattr(err, "reason", err)
-            kind = "timeout" if isinstance(reason, TimeoutError) else "connection"
-            _served.receipt = transport_receipt(kind, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
-            raise OtariError(f"{kind} calling {base} model {model} ({type(reason).__name__})") from err
+            _transport_failure(err, attempt, base, role, model, end_user, headers["Idempotency-Key"])
     message = choice.get("message")
     content = message_text(message.get("content") if isinstance(message, dict) else None)
     if not content:
         raise ValueError(f"model returned no content (finish_reason={choice.get('finish_reason')}); raise max_tokens for the {role} role")
     return content
+
+
+def _retry_or_raise(err: urllib.error.HTTPError, attempt: int, key: str, base: str, role: str, model: str, end_user: str | None, local_id: str) -> float:
+    """After an HTTP error: records the receipt and returns the seconds to wait before the next try on the same Idempotency-Key,
+    or raises an OtariError when retrying cannot help (402, 403, 424...) or the tries are used up."""
+    detail = _read_detail(err)
+    _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user, client_attempts=attempt + 1, local_id=local_id)
+    delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
+    if delay is None and err.code == 409 and "in progress" in detail and attempt < MAX_RETRIES:
+        # Our first try timed out at the edge (504) while Otari kept working: the same Idempotency-Key answers 409
+        # "still in progress" until it finishes, and then replays the stored reply. Wait and ask again.
+        delay = min(5.0 * 2 ** attempt, MAX_WAIT)  # exponential, capped, on the same Idempotency-Key
+    if delay is None:
+        raise _otari_error(err, key, detail, base, model) from err
+    return delay
+
+
+def _transport_failure(err: Exception, attempt: int, base: str, role: str, model: str, end_user: str | None, local_id: str) -> None:
+    reason = getattr(err, "reason", err)
+    kind = "timeout" if isinstance(reason, TimeoutError) else "connection"
+    _served.receipt = transport_receipt(kind, role, model, end_user, client_attempts=attempt + 1, local_id=local_id)
+    raise OtariError(f"{kind} calling {base} model {model} ({type(reason).__name__})") from err
+
+
+def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, timeout: int = 120, tools: list | None = None,
+                  mcp_servers: list | None = None, max_tool_iterations: int | None = None, beta: str | None = None, stream: bool = False,
+                  extra_headers: dict | None = None, reader=None, opener=None) -> dict:
+    """One call to Otari's Messages API (the path that returns native tool blocks): same key, end user, budget header, cycle cap,
+    retries on the same Idempotency-Key and receipts as `chat`. Returns {"data": the reply JSON (not streamed), "stream": what
+    `reader` made of the stream, "receipt": the receipt}; raises OtariError on a refusal or a failure (its receipt is on the thread)."""
+    opener = opener or urllib.request.urlopen
+    cfg = otari_config()
+    model = sent_model(role, cfg)
+    key = _otari_key()
+    if not key.isprintable() or " " in key:
+        raise LLMError("OTARI_API_KEY has spaces or control characters; paste only the key")
+    base, interval, end_user = otari_base(cfg), _otari_interval(cfg), _end_user(role, cfg)
+    payload = {"model": model, "max_tokens": max_tokens, "system": system, "messages": [{"role": "user", "content": user}]}
+    for name, value in (("tools", tools), ("mcp_servers", mcp_servers), ("max_tool_iterations", max_tool_iterations)):
+        if value:
+            payload[name] = value
+    if stream:
+        payload["stream"] = True
+    if end_user:
+        payload["user"] = end_user
+    auth = cfg["auth_header"]
+    local_id = uuid.uuid4().hex
+    headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key, "Content-Type": "application/json", "anthropic-version": "2023-06-01",
+               "User-Agent": OTARI_USER_AGENT, "Otari-Tags": f"role={role}", "Idempotency-Key": local_id, **(extra_headers or {})}
+    if beta:
+        headers["anthropic-beta"] = beta
+    budget = os.environ.get(f"OTARI_END_USER_BUDGET_{role.upper()}", "").strip() or str((cfg["roles"].get(role) or {}).get("end_user_budget") or cfg.get("end_user_budget") or "")
+    if end_user and budget:
+        headers["Otari-End-User-Budget"] = budget
+    body = json.dumps(payload).encode("utf-8")
+    _served.receipt = None
+    _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, local_id)
+    for attempt in range(MAX_RETRIES + 1):
+        _wait_turn(interval)
+        _served.receipt = None
+        request = urllib.request.Request(f"{base}/messages", data=body, headers=headers)
+        try:
+            with opener(request, timeout=timeout) as response:
+                reply_headers = getattr(response, "headers", None)
+                if stream:
+                    data, streamed = None, (reader(response) if reader else None)
+                else:
+                    data, streamed = json.loads(response.read().decode("utf-8")), None
+            break
+        except urllib.error.HTTPError as err:
+            _pause(_retry_or_raise(err, attempt, key, base, role, model, end_user, local_id))
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as err:
+            _transport_failure(err, attempt, base, role, model, end_user, local_id)
+    usage = data.get("usage") if isinstance(data, dict) and isinstance(data.get("usage"), dict) else {}
+    mapped = {"usage": {"prompt_tokens": usage.get("input_tokens"), "completion_tokens": usage.get("output_tokens"),
+                        "cost_usd": usage.get("cost_usd"), "pricing_source": usage.get("pricing_source")}}
+    receipt = parse_receipt(reply_headers, mapped, role, model, end_user, client_attempts=attempt + 1, local_id=local_id)
+    if receipt["cost_usd"] is None and receipt["request_id_source"] == "otari":
+        row = usage_for(receipt["request_id"])  # a stream carries no cost: the settled row gives it
+        if row and row.get("cost_usd") is not None:
+            receipt["cost_usd"] = str(row["cost_usd"])
+            receipt["tokens"] = {"prompt": row.get("prompt_tokens"), "completion": row.get("completion_tokens")}
+    _served.receipt = receipt
+    _cycle_add(receipt)
+    return {"data": data, "stream": streamed, "receipt": receipt}
 
 
 def _otari_error(err: urllib.error.HTTPError, key: str, detail: str, base: str, model: str) -> OtariError:

@@ -72,7 +72,7 @@ class RealConfigTest(Env):
 
     def test_the_cycle_cap_is_a_couple_of_cents_and_the_drill_ids_are_in_the_config(self):
         cfg = llm.otari_config()
-        self.assertEqual(str(llm.cycle_cap(cfg)), "0.05")
+        self.assertEqual((str(llm.cycle_cap(cfg)), str(llm.cycle_cap(cfg, tools=True))), ("0.02", "0.06"))
         self.assertEqual((cfg["drill_user"], cfg["drill_policy"]), ("vd-drill", "vd-judge-drill"))
         self.assertNotEqual(cfg["drill_budget"], cfg["end_user_budget"])
 

@@ -10,8 +10,8 @@
   "policies": {
     "judge": "vd-judge"
   },
-  "_cycle_doc": "The app's own spend cap for one decision cycle, in USD: the sum of usage.cost_usd of the cycle's calls. Once reached, no further call is sent and each refused role leaves a client-side refusal receipt (code cycle_cap_exceeded). Otari's budgets are the first line, this is the second. OTARI_CYCLE_CAP_USD overrides.",
-  "cycle_cap_usd": "0.05",
+  "_cycle_doc": "The app's own spend caps for one decision cycle, in USD, each the sum of usage.cost_usd of the calls so far: `cycle_cap_usd` for the roles that argue, rule, check and read headlines (bull, bear, judge, checker, narrator), and `tool_cap_usd` for the roles that only drive an Otari tool (searcher, fetcher, sandbox, mcp), so a tool that costs a cent a call can never use up the money the analysts and the judge need. No new call starts once a cap is reached; calls already started finish. Each refusal is a client-side receipt (code cycle_cap_exceeded). OTARI_CYCLE_CAP_USD and OTARI_TOOL_CAP_USD override.",
+  "cycle_cap_usd": "0.02",
   "_send_user_doc": "true now that the key is a service key. With an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\" (docs/FEEDBACK_LOG.md, entry 2).",
   "roles": {
     "bull": {
@@ -48,6 +48,11 @@
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
       "tool_role": true
+    },
+    "fetcher": {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "vendor": "DeepSeek",
+      "tool_role": true
     }
   },
   "rejected": {
@@ -65,5 +70,8 @@
     "code_execution": true,
     "mcp": true
   },
-  "_features_doc": "Otari tools the app uses in a decision cycle: one web search (about USD 0.01 a call), one MCP price read (the public CoinGecko server, free) and one sandbox re-derivation per dossier (about USD 0.01 a call). The roles searcher, sandbox and mcp run the model that drives the tool; they share the judge's model on purpose (the one tool loop we measured end to end) and bill to their own end users. OTARI_WEB_SEARCH, OTARI_CODE_EXECUTION and OTARI_MCP set to 0 or 1 override."
+  "_features_doc": "Otari tools the app uses in a decision cycle: one web search (about USD 0.01 a call), one MCP price read (the public CoinGecko server, free) and one sandbox re-derivation per dossier (about USD 0.01 a call). The roles searcher, sandbox and mcp run the model that drives the tool; they share the judge's model on purpose (the one tool loop we measured end to end) and bill to their own end users. OTARI_WEB_SEARCH, OTARI_CODE_EXECUTION and OTARI_MCP set to 0 or 1 override.",
+  "tool_cap_usd": "0.06",
+  "market_check_limit_pct": 1.0,
+  "_market_doc": "`market_check_limit_pct`: the most the MCP spot price may differ from the exchange close before the packet's freshness is marked not ok and the verdict refuses to decide (fail closed). A missing or untrusted MCP price blocks nothing."
 }

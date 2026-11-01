@@ -143,12 +143,13 @@ def _decide_flow(opts, rules_version: str) -> int:
     web = market_mcp = None
     if llm.feature_on("web_search"):
         from . import otari_web
-        web = otari_web.collect(opts.symbols)
-        print(f"web search via Otari: {len(web['items'])} items" + (f" ({web['error'][:80]})" if web.get("error") else ""))
+        web = otari_web.collect(opts.symbols, block)
+        page = web.get("page") or {}
+        print(f"web via Otari: {len(web['items'])} items, page excerpt {'yes' if page.get('excerpt') else 'no'}" + (f" ({web['error'][:80]})" if web.get("error") else ""))
     if llm.feature_on("mcp"):
         from . import otari_mcp
         market_mcp = otari_mcp.collect()
-        print(f"MCP via Otari ({market_mcp['server']}): prices {market_mcp.get('prices')}" + (f" ({market_mcp['error'][:80]})" if market_mcp.get("error") else ""))
+        print(f"MCP via Otari ({market_mcp['server']}): prices {market_mcp.get('prices')}, code trusted {market_mcp.get('trusted')}" + (f" ({market_mcp['error'][:80]})" if market_mcp.get("error") else ""))
     from . import practice
     execute = practice.chain_executor()  # practice trades on Sepolia when the key is present; otherwise simulated as before
     recorded = 0
@@ -163,7 +164,9 @@ def _decide_flow(opts, rules_version: str) -> int:
         if web is not None:
             packet["web"] = web
         if market_mcp is not None:
-            packet["market_mcp"] = market_mcp
+            from . import otari_mcp
+            check = otari_mcp.apply(packet, market_mcp, float(llm.otari_config().get("market_check_limit_pct", otari_mcp.LIMIT_PCT)))
+            print(f"{symbol}: MCP price check {check['status']}" + (f" ({check['diff_pct']}% from the exchange close, limit {check['limit_pct']}%)" if "diff_pct" in check else f" ({check.get('reason')})"))
         recorded += 1
         print_record(dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, execute=execute))
     if recorded and opts.ledger == DEFAULT_LEDGER:
@@ -367,14 +370,20 @@ def print_record(record: dict) -> None:
                 print(f"  [otari {part}] guardrail {g.get('profile')} ({g.get('mode')}): {verdict}")
         cycle = (layer.get("otari") or {}).get("cycle")
         web = (record.get("evidence") or {}).get("web") or {}
+        use = (layer.get("otari") or {}).get("evidence_use") or {}
         if web.get("items"):
-            print(f"  [otari web] {len(web['items'])} items frozen: " + "; ".join(i["domain"] for i in web["items"]) + f" (request {(web.get('receipt') or {}).get('request_id')})")
+            page = web.get("page") or {}
+            print(f"  [otari web] {len(web['items'])} items frozen: " + "; ".join(i["domain"] for i in web["items"]) + f" (request {(web.get('receipt') or {}).get('request_id')})"
+                  + (f"; page excerpt sha256 {page['excerpt_sha256'][:12]}, verified {page.get('excerpt_verified')} (request {page.get('request_id')})" if page.get("excerpt") else "")
+                  + f"; cited by the analysts: {use.get('web_items_cited', 0)} of {use.get('web_items', 0)}")
         mcp = (record.get("evidence") or {}).get("market_mcp") or {}
         if mcp.get("prices"):
-            print(f"  [otari mcp] {mcp['server']} prices {mcp['prices']} from the server's own result block (request {(mcp.get('receipt') or {}).get('request_id')})")
+            chk = mcp.get("check") or {}
+            print(f"  [otari mcp] {mcp['server']} prices {mcp['prices']} from the server's own result block (request {(mcp.get('receipt') or {}).get('request_id')}); "
+                  f"check vs the exchange close: {chk.get('status')}" + (f" {chk['diff_pct']}% of a {chk['limit_pct']}% limit" if "diff_pct" in chk else ""))
         sandbox = record.get("sandbox")
         if sandbox:
-            print(f"  [otari sandbox] sandbox output {'IDENTICAL to' if sandbox.get('equal') else 'DIFFERENT from'} the local re-derivation"
+            print(f"  [otari sandbox] sandbox ({sandbox.get('evidence')}) output {'IDENTICAL to' if sandbox.get('equal') else 'DIFFERENT from'} the local re-derivation, proof hash {'ok' if sandbox.get('proof_ok') else 'NOT ok'}"
                   f"; local agrees with the verdict: {sandbox.get('local_agrees_with_verdict')} (request {(sandbox.get('receipt') or {}).get('request_id')})")
         if cycle:
             print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"

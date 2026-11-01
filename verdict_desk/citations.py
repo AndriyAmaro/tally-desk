@@ -32,8 +32,9 @@ def index(packet: dict, feats: dict | None = None) -> dict[str, str]:
         items.append(f"News ({article.get('domain', '')}): {article.get('title', '')}")
     block = packet.get("narrative") or {}
     base = packet["symbol"].upper().removesuffix("USDT")
-    for item in (packet.get("web") or {}).get("items") or []:  # news found by Otari's web search tool: untrusted text, like any headline
-        items.append(f"Web ({item.get('domain', '')}): {item.get('title', '')}")
+    from . import otari_web
+    for line in otari_web.index_texts(packet.get("web")):  # news found by Otari's web tools: untrusted text, like any headline
+        items.append(line)
     usd = ((packet.get("market_mcp") or {}).get("prices") or {}).get(base)
     if usd:  # a spot price read by Otari from a public MCP server, from the server's own result block
         items.append(f"CoinGecko MCP via Otari: {base} spot price {usd} USD")

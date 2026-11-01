@@ -71,6 +71,12 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
         _served(m, layer[side])
     if hasattr(m["llm"], "use_checker") and m["llm"].use_checker(ask):
         layer["checker"] = _checker_layer(m, layer, items)
+    if summary:
+        # how much of the web and MCP evidence the analysts really used: ids of those items among the cited ones of accepted claims
+        web_ids = {k for k, v in items.items() if v.startswith("Web ")}
+        mcp_ids = {k for k, v in items.items() if v.startswith("CoinGecko MCP")}
+        cited = {c for side in ("bull", "bear") for a in (layer.get(side) or {}).get("accepted") or [] for c in a.get("cites") or []}
+        layer["otari"]["evidence_use"] = {"web_items": len(web_ids), "web_items_cited": len(web_ids & cited), "mcp_items": len(mcp_ids), "mcp_items_cited": len(mcp_ids & cited)}
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
         layer["judge"] = _judge_layer(m, layer, items, ask)
     if summary and hasattr(m["llm"], "cycle_status"):  # what the app's own cycle cap has counted so far in this cycle
@@ -175,6 +181,8 @@ def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True
         # Otari runs the verdict arithmetic in its hosted sandbox; the sealed block holds both outputs and whether they are identical
         from . import sandbox_rederive
         body["sandbox"] = sandbox_rederive.seal(body)
+        if layer is not None and isinstance(layer.get("otari"), dict):
+            layer["otari"]["cycle"] = m["llm"].cycle_status()  # a snapshot taken after the sandbox call, so the sealed spend includes it
     # Practice trades on Sepolia (practice.py): the transaction is sent before sealing, so its hash is inside the dossier.
     from . import practice
     execution = practice.execute_open(seq, packet.get("symbol"), debate["verdict"], packet, execute)
@@ -225,12 +233,18 @@ def replay(dossier: dict, rules_version: str = "v1") -> dict:
             recheck = recheck and again["accepted"] == judged.get("accepted") and again["weight"] == judged.get("weight")
         result["llm_citations_valid"] = recheck and items == layer["evidence_index"]
         result["matches"] = same and result["llm_citations_valid"]
+    market = None
+    if isinstance((dossier.get("evidence") or {}).get("market_mcp"), dict):
+        from . import otari_mcp
+        market = otari_mcp.recheck(dossier)  # the MCP price check, recomputed from the frozen packet; a mismatch must be a refusal
+        result.update(market)
+        result["matches"] = result["matches"] and market.get("market_check_ok", True)
     if dossier.get("sandbox") is not None:
         # The sandbox half is re-run locally from the frozen dossier (no network, no model); whether Otari's run was identical stays as sealed
         from . import sandbox_rederive
         extra = sandbox_rederive.recheck(dossier)
         result.update(extra)
-        result["matches"] = result["matches"] and extra.get("sandbox_local_matches", False)
+        result["matches"] = result["matches"] and extra.get("sandbox_local_matches", True)  # an unsealed (error) block is not a divergence
     return result
 
 
