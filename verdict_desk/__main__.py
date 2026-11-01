@@ -181,6 +181,9 @@ def cmd_otari_drill(opts) -> int:
         return 2
     records = otari_drill.run(opts.which, dossier.read_ledger(opts.ledger), opts.evidence or otari_drill.EVIDENCE)
     for r in records:
+        if r["drill"] == "end-users":
+            print("end users: " + ("PASS" if r["pass"] else "FAIL") + "; " + ", ".join(f"{n} {'on vd-analyst' if v['on_vd_analyst'] else 'budget ' + str(v['budget_id'])}" for n, v in r["end_users"].items()))
+            continue
         receipt = r.get("receipt") or (r.get("big_call") or {}).get("receipt") or {}
         print(f"drill {r['drill']}: {'PASS' if r['pass'] else 'FAIL'}"
               + (f" request {receipt.get('request_id')}" if receipt.get("request_id") else "")
@@ -890,7 +893,7 @@ def main() -> int:
     p.add_argument("--seq", type=int, help="check a specific anchored sequence instead of the latest")
     p.set_defaults(func=cmd_monitor)
     p = sub.add_parser("otari-drill", help="real Otari requests that prove a routing fallback and a budget refusal; receipts go to an evidence file, not to the ledger")
-    p.add_argument("which", choices=["fallback", "budget", "all"])
+    p.add_argument("which", choices=["fallback", "budget", "users", "all"])
     p.add_argument("--evidence", type=Path, default=None, help="evidence file to append to (default docs/evidence/otari-drills.jsonl)")
     p.set_defaults(func=cmd_otari_drill)
     p = sub.add_parser("verify", help="check the hash chain")

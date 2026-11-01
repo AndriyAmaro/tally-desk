@@ -104,9 +104,15 @@ class EndUserTest(Base):
     def test_a_drill_user_and_budget_and_token_limit_can_be_set_for_one_role(self):
         env = {"OTARI_USER_JUDGE": "judge-drill", "OTARI_END_USER_BUDGET_JUDGE": "vd-drill-tiny", "OTARI_MAX_TOKENS_JUDGE": "8000"}
         with mock.patch.dict(os.environ, env), self.fake():
-            llm.chat("s", "u", role="judge", max_tokens=100)
+            llm.chat("s", "u", role="judge")
         request, payload = self.sent[0]
         self.assertEqual((payload["user"], payload["max_tokens"], request.get_header("Otari-end-user-budget")), ("judge-drill", 8000, "vd-drill-tiny"))
+
+    def test_an_explicit_max_tokens_of_the_caller_beats_the_role_environment_knob(self):
+        with mock.patch.dict(os.environ, {"OTARI_MAX_TOKENS_JUDGE": "8000"}), self.fake():
+            llm.chat("s", "u", role="judge", max_tokens=100)
+            llm.chat("s", "u", role="judge")
+        self.assertEqual([p["max_tokens"] for _, p in self.sent], [100, 8000])
 
 
 class CycleCapTest(Base):
@@ -123,9 +129,41 @@ class CycleCapTest(Base):
         r = llm.served_receipt()
         self.assertEqual(r["refusal"], {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"})
         self.assertEqual((r["role"], r["request_id_source"]), ("judge", "client"))
-        self.assertTrue(r["request_id"].startswith("client:"))
+        self.assertRegex(r["request_id"], r"^client:[0-9a-f]{32}$")
         with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0005"}):
             self.assertEqual(llm.cycle_status(), {"cap_usd": "0.0005", "spent_usd": "0.000600", "calls": 2, "refused": 1, "unpriced_calls": 0})
+
+    def test_the_cap_refusal_carries_the_exact_idempotency_key_of_the_call_that_was_not_sent(self):
+        fixed = mock.Mock()
+        fixed.hex = "0123456789abcdef0123456789abcdef"
+        with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0000001"}), self.fake(cost="0.001"):
+            llm.chat("s", "u", role="bull")
+            llm.served_receipt()
+            with mock.patch.object(llm.uuid, "uuid4", return_value=fixed), self.assertRaises(llm.OtariError):
+                llm.chat("s", "u", role="bear")
+        r = llm.served_receipt()
+        self.assertEqual((r["request_id"], r["request_id_source"]), ("client:0123456789abcdef0123456789abcdef", "client"))
+
+    def test_the_cap_stops_new_calls_but_never_a_call_already_started(self):
+        """Behavior behind the wording in the README: a call that began before the cap was reached is allowed to finish and is counted."""
+        started = []
+
+        def slow(request, timeout=None):
+            started.append(1)
+            if len(started) == 1:  # while the first call is in flight a second one starts and passes the check (nothing spent yet)
+                with mock.patch.object(urllib.request, "urlopen", self.fake_reply(cost="0.001")):
+                    llm.chat("s", "u", role="bear")
+            return FakeResponse({**BODY, "usage": {**BODY["usage"], "cost_usd": "0.001"}}, HEADERS)
+        with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0005"}), mock.patch.object(urllib.request, "urlopen", slow):
+            llm.chat("s", "u", role="bull")
+            with self.assertRaises(llm.OtariError):
+                llm.chat("s", "u", role="judge")
+        status = llm.cycle_status()
+        self.assertEqual((status["calls"], status["refused"], status["spent_usd"]), (2, 1, "0.002000"))
+        self.assertGreater(float(status["spent_usd"]), 0.0005)
+
+    def fake_reply(self, cost):
+        return lambda request, timeout=None: FakeResponse({**BODY, "usage": {**BODY["usage"], "cost_usd": cost}}, HEADERS)
 
     def test_a_new_cycle_starts_from_zero(self):
         with mock.patch.dict(os.environ, {"OTARI_CYCLE_CAP_USD": "0.0001"}), self.fake(cost="0.000300"):
@@ -283,7 +321,7 @@ class ReceiptCompletenessTest(Base):
         self.assertEqual(result(False), {"prompt-injection": "flagged"})
         self.assertNotIn("guardrail_result", llm.parse_receipt(HEADERS, BODY, "judge", "vd-judge"))
 
-    def test_waits_between_tries_grow_exponentially_and_stop_at_the_cap(self):
+    def test_waits_between_tries_grow_exponentially(self):
         calls = []
 
         def in_progress(request, timeout=None):
@@ -295,7 +333,14 @@ class ReceiptCompletenessTest(Base):
         waits = [c.args[0] for c in llm._pause.call_args_list]
         self.assertEqual(waits, [5.0, 10.0, 20.0, 40.0])
         self.assertEqual((len(calls), len(set(calls))), (llm.MAX_RETRIES + 1, 1))
-        self.assertTrue(all(w <= llm.MAX_WAIT for w in waits))
+
+    def test_the_wait_stops_growing_at_the_cap(self):
+        def in_progress(request, timeout=None):
+            body = b'{"detail":"A request with this Idempotency-Key is still in progress."}'
+            raise urllib.error.HTTPError(request.full_url, 409, "Conflict", message({}), io.BytesIO(body))
+        with mock.patch.object(llm, "MAX_WAIT", 15.0), mock.patch.object(urllib.request, "urlopen", in_progress), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="narrator")
+        self.assertEqual([c.args[0] for c in llm._pause.call_args_list], [5.0, 10.0, 15.0, 15.0])
 
     def test_nothing_that_is_recorded_or_raised_holds_the_key(self):
         leaking = urllib.error.HTTPError("https://otari.ai/x", 403, "Forbidden", message({"Otari-Error-Code": "x"}), io.BytesIO(f'{{"detail":"key {KEY} refused"}}'.encode()))

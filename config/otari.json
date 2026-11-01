@@ -43,5 +43,6 @@
   "_end_user_doc": "Each role is billed to its own end user (`vd-bull`, `vd-bear`, `vd-judge`, `vd-checker`, `vd-narrator`). `end_user_budget` is the id of the dashboard budget `vd-analyst` (USD 0.10 a day per end user); it travels in the Otari-End-User-Budget header and applies when an end user is first created. The panel's `vd-drill-tiny` is `drill_budget`; `drill_user` is the end user the budget drill bills.",
   "drill_user": "vd-drill",
   "drill_budget": "c883d55f-b866-4ea9-b8d7-21c0d73cf2bb",
-  "drill_policy": "vd-judge-drill"
+  "drill_policy": "vd-judge-drill",
+  "drill_fallback_user": "vd-drill-fallback"
 }

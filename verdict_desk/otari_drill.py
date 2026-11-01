@@ -44,7 +44,8 @@ def long_pack(ledger: list[dict], target: int = TARGET_CHARS) -> tuple[str, dict
                   "estimated_cost_usd": round(len(text) / 2.8 * INPUT_USD_PER_MILLION / 1e6, 6)}
 
 
-def fallback_drill(ledger: list[dict], ask=llm.chat, usage=llm.usage_for) -> dict:
+def fallback_drill(ledger: list[dict], ask=None, usage=None) -> dict:
+    ask, usage = ask or llm.chat, usage or llm.usage_for  # looked up at call time, so a test can replace them
     cfg = llm.otari_config()
     policy = cfg.get("drill_policy") or "vd-judge-drill"
     pack, source = long_pack(ledger)
@@ -52,8 +53,10 @@ def fallback_drill(ledger: list[dict], ask=llm.chat, usage=llm.usage_for) -> dic
     if source["estimated_cost_usd"] > MAX_PROMPT_COST_USD:
         return {**record, "pass": False, "error": f"estimated prompt cost ${source['estimated_cost_usd']} is over the ${MAX_PROMPT_COST_USD} drill limit; nothing was sent"}
     system = "You are the judge in a market debate. Read the evidence packs and answer with one word: bull, bear or neutral."
+    user = cfg.get("drill_fallback_user") or "vd-drill-fallback"  # never the production end user vd-judge: its spend is the judge's alone
+    record["end_user"] = user
     try:
-        answer = ask(system, pack, timeout=120, max_tokens=16, role="judge", model=policy)
+        answer = ask(system, pack, timeout=120, max_tokens=16, role="judge", model=policy, end_user=user, end_user_budget=cfg.get("end_user_budget"))
     except (OSError, ValueError) as err:
         return {**record, "pass": False, "error": str(err), "receipt": llm.served_receipt()}
     receipt = llm.served_receipt()
@@ -64,7 +67,8 @@ def fallback_drill(ledger: list[dict], ask=llm.chat, usage=llm.usage_for) -> dic
                        if ok else "the fallback did not show in the receipt"}
 
 
-def budget_drill(ask=llm.chat, usage=llm.usage_for, end_user_info=llm.end_user_info) -> dict:
+def budget_drill(ask=None, usage=None, end_user_info=None) -> dict:
+    ask, usage, end_user_info = ask or llm.chat, usage or llm.usage_for, end_user_info or llm.end_user_info
     cfg = llm.otari_config()
     user, budget = cfg.get("drill_user") or "vd-drill", cfg.get("drill_budget")
     model = llm.role_model("judge", cfg)
@@ -93,19 +97,40 @@ def budget_drill(ask=llm.chat, usage=llm.usage_for, end_user_info=llm.end_user_i
             "pass": ok, "reading": "the worst-case cost of the second call is larger than what the drill budget has left, so Otari refused it before calling a model; the refusal is a receipt, not a crash"}
 
 
+def end_users_check(end_user_info=None) -> dict:
+    """What Otari says about the production end users, read with GET /end-users (no cost): each must sit on the vd-analyst
+    budget. A receipt may say "billed on vd-analyst" only while this record says pass. An end user does not take a budget after
+    it exists, so one born without the header is replaced by a new name, never patched."""
+    end_user_info = end_user_info or llm.end_user_info
+    cfg = llm.otari_config()
+    want = cfg.get("end_user_budget")
+    rows = {}
+    for role in cfg["roles"]:
+        name = f"{cfg.get('end_user_prefix') or ''}{role}"
+        info = end_user_info(name)
+        rows[name] = {"role": role, "found": info is not None, "budget_id": (info or {}).get("budget_id"), "spend": (info or {}).get("spend"),
+                      "current_requests": (info or {}).get("current_requests"), "blocked": (info or {}).get("blocked"),
+                      "on_vd_analyst": bool(info and info.get("budget_id") == want)}
+    return {"schema": SCHEMA, "drill": "end-users", "at": _now(), "expected_budget_id": want, "end_users": rows,
+            "pass": all(r["on_vd_analyst"] for r in rows.values()),
+            "reading": "each production end user was created with the vd-analyst budget id" }
+
+
 def append(path: Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def run(which: str, ledger: list[dict], path: Path = EVIDENCE, ask=llm.chat) -> list[dict]:
+def run(which: str, ledger: list[dict], path: Path = EVIDENCE, ask=None) -> list[dict]:
     llm.reset_cycle()
     out = []
     if which in ("fallback", "all"):
         out.append(fallback_drill(ledger, ask=ask))
     if which in ("budget", "all"):
         out.append(budget_drill(ask=ask))
+    if which in ("users", "all"):
+        out.append(end_users_check())
     for record in out:
         append(path, record)
     return out

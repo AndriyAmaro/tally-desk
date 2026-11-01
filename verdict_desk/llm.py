@@ -175,8 +175,11 @@ def cycle_status() -> dict | None:
                 "refused": _cycle["refused"], "unpriced_calls": _cycle["unpriced"]}
 
 
-def _cycle_check(cap, role: str, sent: str, end_user: str | None) -> None:
-    """The app's own second line behind Otari's budgets: once the cycle has spent its cap, no further call is sent."""
+def _cycle_check(cap, role: str, sent: str, end_user: str | None, local_id: str | None = None) -> None:
+    """The app's own second line behind Otari's budgets: once the cycle has spent its cap, no further call STARTS.
+
+    Calls already in flight (the narrative batches run in parallel) finish and are counted, so the spend can pass the cap by
+    what those calls cost; the cap is not a reservation. The refusal carries `client:<local_id>`, the call's Idempotency-Key."""
     if cap is None:
         return
     with _cycle_lock:
@@ -185,7 +188,7 @@ def _cycle_check(cap, role: str, sent: str, end_user: str | None) -> None:
         if over:
             _cycle["refused"] += 1
     if over:
-        _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, **_who({}, None), "sent_model": sent, "policy": _policy(sent, role), "end_user": end_user,
+        _served.receipt = {"schema": RECEIPT_SCHEMA, "role": role, **_who({}, local_id), "sent_model": sent, "policy": _policy(sent, role), "end_user": end_user,
                            "client_attempts": 0, "refusal": {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "retry_after": None, "source": "client"},
                            "captured_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         raise OtariError(f"cycle cap reached: ${spent:.6f} spent of ${cap} for this decision cycle; no call was sent for role {role}",
@@ -398,7 +401,8 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     base = otari_base(cfg)
     interval = _otari_interval(cfg)
     end_user = end_user or _end_user(role, cfg)
-    tokens = _number(f"OTARI_MAX_TOKENS_{role.upper()}", 0, int, lambda v: v >= 0) or max_tokens or spec.get("max_tokens") or MAX_TOKENS
+    # an explicit max_tokens of the caller wins; then OTARI_MAX_TOKENS_<ROLE> (a drill knob), the role config, the default
+    tokens = max_tokens or _number(f"OTARI_MAX_TOKENS_{role.upper()}", 0, int, lambda v: v >= 0) or spec.get("max_tokens") or MAX_TOKENS
     payload = {"model": model, "temperature": 0, "max_tokens": tokens,
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     if end_user:
@@ -417,7 +421,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     _served.model = None
     _served.route = None
     _served.receipt = None
-    _cycle_check(cycle_cap(cfg), role, model, end_user)
+    _cycle_check(cycle_cap(cfg), role, model, end_user, headers["Idempotency-Key"])
     for attempt in range(MAX_RETRIES + 1):
         _wait_turn(interval)
         _served.receipt = None  # each try starts clean: what is kept is the outcome of the LAST try, never an earlier one

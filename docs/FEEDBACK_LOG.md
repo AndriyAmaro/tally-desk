@@ -32,7 +32,7 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - **Why it hurts.** Per-user budgets are one of the headline features, and the first thing a developer tries is the `user` field. The text says "does not match", which reads like a typo in the id, not like "this key cannot name end users".
 - **What the docs say.** The text matches the deployment-wide `reject_user_mismatch` setting and the per-key override of the same name on `POST /organizations/me/keys`, which the message does not mention. Setting the override to `false` would make the field accepted, but spend then binds to the key's owner, so it gives no per-user budget; only a service key does.
 - **Suggestion.** A stable `Otari-Error-Code` such as `end_user_requires_service_key`, and a detail that says "end users need a service key; this key is not one". A pointer from the key-creation screen to the fact that `is_service_key` cannot be changed later would save a key rotation.
-- **Our handling.** `config/otari.json` has `send_user: false`; the role name goes in the `user` field only after `send_user` (or `OTARI_SEND_USER=1`) is switched on for a service key.
+- **Our handling.** While the key was an ordinary one, `config/otari.json` had `send_user: false`. Since the key became a service key (2026-11-01) `send_user` is true and each role sends `vd-<role>` as its `user` (an id with a prefix of our own, because the earlier test end user `analyst-judge` had been created without a budget).
 
 ### 3. `usage.cost_usd` is rounded to six decimals, which erases the cost of small calls (open, worked around)
 
@@ -67,7 +67,7 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - **Reproduce.** Send a long non-streaming completion that needs more than 30 s (for example `max_tokens` 6000 on a 10-headline extraction prompt, nine at once), then repeat it with the same `Idempotency-Key` after the first 504.
 - **Why it hurts.** The 409 text does tell the caller what to do, which is good, but it only appears after a timeout whose own page does not name the key or the request (entry 1), and the status code suggests a client error.
 - **Suggestion.** Answer 409 here with `Retry-After`; better, hold the second request open until the first finishes (the key already identifies it); and consider `202` or a documented polling route for completions longer than the edge allows. Document the non-streaming ceiling next to the idempotency section.
-- **Our handling.** The client retries that exact 409 with a 5 s growing wait on the same key; the stored reply then comes back with `Otari-Idempotent-Replayed: true`, which the receipt records. In the final cycle one batch needed three tries (`client_attempts: 3`) and all nine succeeded.
+- **Our handling.** The client retries that exact 409 with an exponential wait on the same key (5, 10, 20, 40 s, capped at 60 s, at most five tries); the stored reply then comes back with `Otari-Idempotent-Replayed: true`, which the receipt records. In the final cycle one batch needed three tries (`client_attempts: 3`) and all nine succeeded.
 
 ### 8. Management routes answer an ordinary key with `401 Invalid master key` (open)
 
@@ -99,6 +99,7 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 ### 12. The end-user budget header takes the budget id, and a service key cannot read a budget's name or limit (open, worked around)
 
 - **Symptom.** `Otari-End-User-Budget: vd-analyst` (the name shown in the dashboard) answers `403 end_user_budget_not_allowed`, "This key may not assign budget 'vd-analyst' to its end users"; only the UUID works. With a service key, `GET /end-user-budgets` returns `budget_id`, `is_default`, `end_user_count` and `blocked_end_user_count` and no name, limit or period, so the four UUIDs of the account were indistinguishable.
+- **An end user does not take a budget after it exists.** The docs say the header applies only when the request creates the end user, and the end user `analyst-judge`, created by a test call without the header, still read `budget_id: null` hours later while the same key's other end users had one. A production name born without a budget therefore cannot be repaired from the app: it is replaced by a new name created with the header. The five production end users were read back with `GET /end-users` and all sit on the `vd-analyst` budget id (`docs/evidence/otari-drills.jsonl`, record `end-users`).
 - **Also.** An end user created without the header is born with `budget_id: null` (the key had a list of allowed budgets and no default, so nothing capped it but the key's own ceiling). The 403 above is the only hint that the header is wanted.
 - **Reproduce.** `GET /api/v1/end-user-budgets` with a service key; then a chat call with `user: "x"` and `Otari-End-User-Budget: <name>`.
 - **Suggestion.** Accept the budget name as well as its id, or return `name`, `max_budget` and the period in `GET /end-user-budgets`; consider a warning header (or a refusal) when a service key with a list of budgets and no default creates an end user with no budget.

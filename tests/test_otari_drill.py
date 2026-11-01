@@ -154,6 +154,10 @@ class FallbackDrillTest(Env):
             record = otari_drill.fallback_drill(ledger_of(8), ask=ask, usage=usage)
         self.assertTrue(record["pass"])
         self.assertEqual((ask.calls[0]["model"], ask.calls[0]["role"], ask.calls[0]["max_tokens"]), (self.POLICY, "judge", 16))
+        cfg = llm.otari_config()
+        self.assertEqual((ask.calls[0]["end_user"], ask.calls[0]["end_user_budget"]), ("vd-drill-fallback", cfg["end_user_budget"]))
+        self.assertNotEqual(ask.calls[0]["end_user"], llm._end_user("judge", cfg), "the drill must not bill the production judge")
+        self.assertEqual(record["end_user"], "vd-drill-fallback")
         self.assertEqual((record["receipt"]["attempt_count"], record["usage"]["row_count"], record["policy"]), (2, 2, self.POLICY))
         json.dumps(record)
 
@@ -226,6 +230,40 @@ class BudgetDrillTest(Env):
         record = otari_drill.budget_drill(ask=ask, usage=lambda rid: None, end_user_info=lambda user: None)
         self.assertFalse(record["pass"])
         self.assertEqual(len(calls), 1)
+
+
+class EndUsersCheckTest(Env):
+    """The claim "each role is billed on vd-analyst" is only as good as this read of the end users."""
+
+    def info(self, **overrides):
+        want = llm.otari_config()["end_user_budget"]
+
+        def read(name):
+            row = {"external_id": name, "budget_id": want, "spend": 0.001, "current_requests": 2, "blocked": False}
+            return overrides.get(name, row) if name in overrides else row
+        return read
+
+    def test_all_five_production_end_users_on_the_budget_pass_and_each_budget_id_is_recorded(self):
+        record = otari_drill.end_users_check(self.info())
+        self.assertTrue(record["pass"])
+        self.assertEqual(sorted(record["end_users"]), ["vd-bear", "vd-bull", "vd-checker", "vd-judge", "vd-narrator"])
+        self.assertEqual({v["budget_id"] for v in record["end_users"].values()}, {llm.otari_config()["end_user_budget"]})
+        self.assertEqual(record["expected_budget_id"], llm.otari_config()["end_user_budget"])
+
+    def test_an_end_user_born_without_a_budget_or_missing_fails_the_check(self):
+        record = otari_drill.end_users_check(self.info(**{"vd-judge": {"external_id": "vd-judge", "budget_id": None, "spend": 0.0}, "vd-bull": None}))
+        self.assertFalse(record["pass"])
+        self.assertFalse(record["end_users"]["vd-judge"]["on_vd_analyst"])
+        self.assertIsNone(record["end_users"]["vd-judge"]["budget_id"])
+        self.assertFalse(record["end_users"]["vd-bull"]["found"])
+        self.assertTrue(record["end_users"]["vd-bear"]["on_vd_analyst"])
+
+    def test_the_check_reads_only_and_run_users_appends_one_record(self):
+        path = Path(tempfile.mkdtemp()) / "e.jsonl"
+        with mock.patch.object(llm, "end_user_info", self.info()):
+            otari_drill.run("users", [], path)
+        lines = path.read_text().splitlines()
+        self.assertEqual((len(lines), json.loads(lines[0])["drill"]), (1, "end-users"))
 
 
 class RunAndCommandTest(Env):
