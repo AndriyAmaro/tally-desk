@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "_doc": "Which open-weight model plays which role when OTARI_API_KEY is set (verdict_desk/llm.py). Every id is a catalog id of the hosted Otari gateway, so Otari picks the provider and falls back across offerings of the same model. Checked against the public catalog (GET /api/v1/catalog/models) by tools/otari_catalog_check.py: each id must exist and be open_weights.",
+  "base_url": "https://otari.ai/api/v1",
+  "auth_header": "Otari-Key",
+  "default_role": "narrator",
+  "send_user": false,
+  "_send_user_doc": "false until the key is a service key: with an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\". Set true (or OTARI_SEND_USER=1) to send the role name as the `user` field, which is what per-user budgets bill.",
+  "roles": {
+    "bull": {"model": "openai/gpt-oss-120b", "vendor": "OpenAI"},
+    "bear": {"model": "nvidia/nemotron-3-super-120b-a12b", "vendor": "NVIDIA"},
+    "judge": {"model": "deepseek/deepseek-v4-flash-0731", "vendor": "DeepSeek"},
+    "checker": {"model": "google/gemma-3-27b-it", "vendor": "Google"},
+    "narrator": {"model": "alibaba/qwen3-235b-a22b-instruct-2507", "vendor": "Alibaba"}
+  },
+  "rejected": {
+    "meta/llama-4-scout-17b": "planned as the citation checker, but on 2026-11-01 four of five tiny calls answered 504 from CloudFront after 30 s and the fifth took 23 s (docs/FEEDBACK_LOG.md, entry 2)"
+  }
+}

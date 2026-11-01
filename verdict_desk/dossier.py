@@ -56,7 +56,10 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
     if ask is None and not m["llm"].available():
         return None
     items = m["citations"].index(packet, feats if feats is not None else m["features"].compute(packet))
-    layer = {"model": m["llm"].MODEL, "evidence_index": items}
+    layer = {"model": m["llm"].model_name() if hasattr(m["llm"], "model_name") else m["llm"].MODEL, "evidence_index": items}
+    summary = m["llm"].otari_summary() if hasattr(m["llm"], "otari_summary") else None
+    if summary:  # Otari run: the base URL, the role config hash and the model of every role
+        layer["otari"] = summary
     for side in ("bull", "bear"):
         try:
             claims = m["llm"].argue(side, items, **({"ask": ask} if ask else {}))
@@ -66,9 +69,25 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
             continue
         layer[side] = m["citations"].validate(claims, items)
         _served(m, layer[side])
+    if hasattr(m["llm"], "use_checker") and m["llm"].use_checker(ask):
+        layer["checker"] = _checker_layer(m, layer, items)
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
         layer["judge"] = _judge_layer(m, layer, items, ask)
     return layer
+
+
+def _checker_layer(m: dict, layer: dict, items: dict) -> dict:
+    """Otari runs: a fourth model re-reads each validated claim against its citations. Advisory only, never in the verdict."""
+    cit = m["citations"]
+    labels = cit.claim_labels((layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or [])
+    if not labels:
+        return {"advisory": True, "skipped": "no validated claims to check"}
+    try:
+        out = {"advisory": True, **m["llm"].check_claims(labels, items)}
+    except (OSError, ValueError, KeyError) as err:
+        out = {"advisory": True, "error": str(err)}
+    _served(m, out)
+    return out
 
 
 def _served(m: dict, block: dict) -> None:
@@ -76,6 +95,9 @@ def _served(m: dict, block: dict) -> None:
     model = m["llm"].served_by() if hasattr(m["llm"], "served_by") else None
     if model:
         block["served_by"] = model
+    receipt = m["llm"].served_receipt() if hasattr(m["llm"], "served_receipt") else None
+    if receipt:  # Otari: the sealed receipt of this call (request id, provider, model served, attempts, fallback, cost)
+        block["receipt"] = receipt
     route = m["llm"].served_route() if hasattr(m["llm"], "served_route") else None
     if route:  # which models the gateway tried and why it moved on, and the routing policy it followed
         block["route"] = route["attempts"]

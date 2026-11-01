@@ -69,8 +69,8 @@ def cmd_decide(opts) -> int:
     if feeds:
         # As vozes valem para todos os simbolos: busca e extracao rodam uma vez por execucao.
         voices = narrative.collect(feeds, log=lambda m: print(m, file=sys.stderr))
-        ask = (lambda system, user: llm.chat(system, user, timeout=narrative.LLM_TIMEOUT, max_tokens=narrative.LLM_MAX_TOKENS)) if llm.available() else None
-        block = narrative.build(voices, ask, llm.MODEL if ask else "")
+        ask = (lambda system, user: llm.chat(system, user, timeout=narrative.LLM_TIMEOUT, max_tokens=narrative.LLM_MAX_TOKENS, role="narrator")) if llm.available() else None
+        block = narrative.build(voices, ask, llm.model_name() if ask else "")
         print(f"narrative ({block['method']}): {len(voices)} headlines from {len({v['name'] for v in voices})} voices, {len(block['convergence'])} convergences")
     recorded = 0
     for symbol in opts.symbols:
@@ -127,8 +127,8 @@ def _decide_flow(opts, rules_version: str) -> int:
     block = None
     if feeds:
         voices, gaps = narrative.collect_with_gaps(feeds, log=lambda m: print(m, file=sys.stderr))
-        ask = (lambda system, user: llm.chat(system, user, timeout=narrative.LLM_TIMEOUT, max_tokens=narrative.LLM_MAX_TOKENS)) if llm.available() else None
-        block = narrative.build(voices, ask, llm.MODEL if ask else "")
+        ask = (lambda system, user: llm.chat(system, user, timeout=narrative.LLM_TIMEOUT, max_tokens=narrative.LLM_MAX_TOKENS, role="narrator")) if llm.available() else None
+        block = narrative.build(voices, ask, llm.model_name() if ask else "")
         if config is not None:
             block["config"] = {**config["record"], "gaps": gaps}
         if rules_version in ("v5", "v6"):
