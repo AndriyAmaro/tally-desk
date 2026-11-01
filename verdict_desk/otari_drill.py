@@ -97,6 +97,18 @@ def budget_drill(ask=None, usage=None, end_user_info=None) -> dict:
             "pass": ok, "reading": "the worst-case cost of the second call is larger than what the drill budget has left, so Otari refused it before calling a model; the refusal is a receipt, not a crash"}
 
 
+def mcp_drill(collect=None) -> dict:
+    """One MCP price read through Otari (the public CoinGecko server, free): passes when Otari reported the tool use, the server's
+    result block carried a price, and the receipt has a request id. Costs a fraction of a cent."""
+    from . import otari_mcp
+    collect = collect or otari_mcp.collect
+    block = collect()
+    ok = bool(block.get("mcp_calls") and block.get("prices") and (block.get("receipt") or {}).get("request_id_source") == "otari")
+    return {"schema": SCHEMA, "drill": "mcp", "at": _now(), "pass": ok, "block": block,
+            "reading": "Otari ran the model and called the public MCP server; the price is the server's own result, not the model's text" if ok
+                       else "no MCP tool call with a price was reported"}
+
+
 def end_users_check(end_user_info=None) -> dict:
     """What Otari says about the production end users, read with GET /end-users (no cost): each must sit on the vd-analyst
     budget. A receipt may say "billed on vd-analyst" only while this record says pass. An end user does not take a budget after
@@ -129,6 +141,8 @@ def run(which: str, ledger: list[dict], path: Path = EVIDENCE, ask=None) -> list
         out.append(fallback_drill(ledger, ask=ask))
     if which in ("budget", "all"):
         out.append(budget_drill(ask=ask))
+    if which in ("mcp", "all"):
+        out.append(mcp_drill())
     if which in ("users", "all"):
         out.append(end_users_check())
     for record in out:

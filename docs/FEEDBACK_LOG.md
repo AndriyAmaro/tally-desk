@@ -105,12 +105,43 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - **Suggestion.** Accept the budget name as well as its id, or return `name`, `max_budget` and the period in `GET /end-user-budgets`; consider a warning header (or a refusal) when a service key with a list of budgets and no default creates an end user with no budget.
 - **Our handling.** The id is in `config/otari.json` and sent on every call; to learn which UUID was which we sent one request per budget with `max_tokens` 1,000,000 (a worst-case hold larger than any cap, refused before a model is called, no cost) and read "has $0.10 of budget remaining" from the 403 message.
 
-### 13. Three credential headers all work, and the docs could say which one to prefer (note)
+### 13. Why `valid` is null: the hosted gateway has no guardrails service, and the output side fails open without a word (open)
+
+- **Diagnosis (2026-11-01, service key).** A request-level guardrail in block mode answers `502 {"detail":"guardrail profile 'prompt-injection' requested but no guardrails service is configured. Set OTARI_GUARDRAILS_URL on the gateway or pass `url` on the guardrail entry."}`; a made-up profile name gets the same text. So the profile `prompt-injection` that the policy `vd-judge` mandates points at a service the hosted gateway does not have, and the mandated monitor entry, with `on_unavailable: monitor`, reports `valid: null` instead of that sentence. Every guardrail Otari can run itself (`GET /tool-settings/guardrails/catalog`: Alinia, Azure Content Safety and Prompt Shields, Bedrock Guardrails, Lakera Guard, OpenAI Moderation, Patronus, watsonx, any_llm) needs a vendor API key, so none runs without an account elsewhere.
+- **Silent fail-open on the output side.** The same block-mode entry with `"on": ["output"]` and `on_unavailable: block` answered `200` with the model's text, no 502 and no header, although the input-side entry fails closed with the 502 above. A guardrail someone believes is enforcing the judge's output is not evaluated and says nothing.
+- **Reproduce.** `curl -sS -w '%{http_code}\n' https://otari.ai/api/v1/chat/completions -H "Otari-Key: $OTARI_API_KEY" -H 'Content-Type: application/json' -d '{"model":"deepseek/deepseek-v4-flash-0731","max_tokens":8,"guardrails":[{"profile":"prompt-injection","mode":"block","on_unavailable":"block"}],"messages":[{"role":"user","content":"hi"}]}'` (502), then the same with `"on":["output"]` (200).
+- **Suggestion.** In the `Otari-Guardrails` header, say why `valid` is null (`status: "no_service"`), and fail an output-side block entry the way the input side fails; list the profiles a deployment serves in a way a key can read (today the profile list is operator only), so a profile name that cannot work is refused at policy creation.
+- **Status for the app.** The guardrail stays "attached, not evaluated". It earns nothing until a call returns a non-null `valid`; the ways to get one are in the F3 report (a vendor key defined on the Guardrails page, or our own `/validate` service on a public URL).
+
+### 14. `/tools` says the web search is available, while the direct `POST /search` says no search tool is configured (open)
+
+- **Symptom.** `GET /tools` lists `otari_web_search` with `available: true`. `POST /search {"query": ...}` answers `400 No search tools are configured. Add one on the dashboard's Tools & Guardrails page ...`, and `GET /search-tools` answers 401. The in-loop tool works (one call, `otari_tool_calls` with five sources, USD 0.010215 for the request, of which USD 0.000184 was the model). So availability depends on the surface and `/tools` only says yes.
+- **Also.** No price is visible before the call: `/tools` and `/models` carry none for the tools, so the cost of a search (about USD 0.01) and of a sandbox run (about USD 0.01) was found by making one call each and reading `usage.cost_usd`. On an account with a two-dollar credit that is a real planning problem.
+- **Suggestion.** `price_per_call` and a per-surface `available` in `GET /tools`; the same number in the budget refusal text for a tool call.
+
+### 15. Web search sources are landing pages with no date and no snippet (open)
+
+- **Symptom.** The five sources of the first search and the three of the cycle search (`news.bitcoin.com`, a `/tag/current-crypto-market` archive page, a coingecko price page) have `published_date: null` and `otari_tool_calls` carries titles and URLs only, never text. For an agent that wants dated news as evidence, the field that would make a source citable is missing, and the model's own answer is the only place the content appears. The search also adds about 3,400 prompt tokens to the call.
+- **Suggestion.** Return the provider's date and a short snippet per source in `otari_tool_calls` (the direct-search response already has `date` and `snippet`).
+- **Our handling.** The app freezes URL, title, date (null when null), domain, the time asked and the request id, offers the titles to the analysts as evidence, and records that none of the three was cited in dossier 794.
+
+### 16. MCP activity is invisible on Chat Completions; the proof needs a streamed Messages request (open, worked around)
+
+- **Symptom.** A completion with `mcp_servers` returns the model's answer only; `otari_tool_calls` lists web calls and not MCP calls, so a reader cannot tell a real tool call from a made-up number. On `/messages` with `stream: true` and `anthropic-beta: mcp-client-2025-11-20`, Otari emits an `mcp_tool_use` block (server, tool, input) and an `mcp_tool_result` block (the server's own answer) around each call.
+- **Suggestion.** Report MCP calls in `otari_tool_calls` (type `mcp_tool`, server, tool, status) on Chat Completions and on non-streamed Messages, the way web calls are reported.
+- **Our handling.** The app reads the price from the `mcp_tool_result` block, never from the model's text, and keeps both blocks in the packet. The public CoinGecko server works through the managed loop at no charge (USD 0.000064 to 0.000087 per call, all of it model tokens), but it exposes `search_docs` and `execute` (TypeScript against its SDK) rather than a price tool, so the request carries a purpose hint with the exact snippet.
+
+### 17. Code execution on Chat Completions returns only the model's relay of stdout (open, worked around)
+
+- **Symptom.** `otari_code_execution` on `/chat/completions` reports nothing about the run in the response (no `otari_tool_calls` entry, as the docs say), so what the app sees is the model repeating stdout. The call cost USD 0.010074 for a two-line script.
+- **Our handling.** The app asks for the stdout of code it also runs locally and seals both outputs, and whether they are identical, in the dossier; a model that altered the output would show as a mismatch, which is recorded rather than hidden. Native result blocks on `/responses` or `/messages` would let the receipt carry the sandbox's own stdout; that is the improvement we would ask for on Chat Completions.
+
+### 18. Three credential headers all work, and the docs could say which one to prefer (note)
 
 - Measured on 2026-11-01: `Otari-Key: <key>`, `Authorization: Bearer <key>` and `x-api-key: <key>` each answered HTTP 200 on `/chat/completions`.
 - We use `Otari-Key` because it cannot be confused with a provider key in a shared environment, and `Authorization: Bearer` stays one config line away (`auth_header` in `config/otari.json`). A sentence in the quickstart on which header the team recommends, and whether the others stay supported, would remove a guess.
 
-### 14. Request fields, headers and answers that worked on the first try (what to keep)
+### 19. Request fields, headers and answers that worked on the first try (what to keep)
 
 - `Idempotency-Key`: the second call with the same key came back in 0.27 s with `Otari-Idempotent-Replayed: true` and the same `Otari-Request-ID`, with no second charge visible in `usage`. It makes retrying a 504 safe, which is exactly where we needed it (entries 1 and 7).
 - The budget refusal message is exactly what a developer needs: `User '...' has $0.009998 of budget remaining, less than this request's estimated cost of $0.018002. The estimate assumes 100000 output tokens; a lower output token limit on the request may let it fit` (403, `Otari-Error-Code: budget_exceeded`, `Otari-Budget-Scope: user`). A hold larger than the whole cap carries no `Retry-After`, as documented, and the refused request shows in `GET /usage/requests/{id}` as `status: error`, `cost_usd: null`.

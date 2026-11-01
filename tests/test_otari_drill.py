@@ -267,6 +267,21 @@ class EndUsersCheckTest(Env):
         self.assertEqual((len(lines), json.loads(lines[0])["drill"]), (1, "end-users"))
 
 
+class McpDrillTest(Env):
+    def block(self, **kw):
+        base = {"method": "otari_mcp", "mcp_calls": [{"tool": "execute"}], "prices": {"BTC": 77886.0}, "receipt": {"request_id": "req-m", "request_id_source": "otari", "cost_usd": "0.000087"}}
+        return {**base, **kw}
+
+    def test_a_tool_use_a_price_and_a_gateway_id_pass(self):
+        record = otari_drill.mcp_drill(collect=lambda: self.block())
+        self.assertTrue(record["pass"])
+        self.assertEqual(record["block"]["receipt"]["request_id"], "req-m")
+
+    def test_no_tool_call_no_price_or_a_client_id_fail(self):
+        for kw in ({"mcp_calls": []}, {"prices": {}}, {"receipt": {"request_id": "client:x", "request_id_source": "client"}}):
+            self.assertFalse(otari_drill.mcp_drill(collect=lambda kw=kw: self.block(**kw))["pass"], kw)
+
+
 class RunAndCommandTest(Env):
     def test_run_appends_one_json_line_per_drill_and_never_touches_a_ledger(self):
         folder = Path(tempfile.mkdtemp())
