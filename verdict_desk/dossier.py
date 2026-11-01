@@ -171,6 +171,10 @@ def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True
     }
     if layer is not None:
         body["llm"] = layer
+    if use_llm and ask is None and hasattr(m["llm"], "feature_on") and m["llm"].feature_on("code_execution"):
+        # Otari runs the verdict arithmetic in its hosted sandbox; the sealed block holds both outputs and whether they are identical
+        from . import sandbox_rederive
+        body["sandbox"] = sandbox_rederive.seal(body)
     # Practice trades on Sepolia (practice.py): the transaction is sent before sealing, so its hash is inside the dossier.
     from . import practice
     execution = practice.execute_open(seq, packet.get("symbol"), debate["verdict"], packet, execute)
@@ -221,6 +225,12 @@ def replay(dossier: dict, rules_version: str = "v1") -> dict:
             recheck = recheck and again["accepted"] == judged.get("accepted") and again["weight"] == judged.get("weight")
         result["llm_citations_valid"] = recheck and items == layer["evidence_index"]
         result["matches"] = same and result["llm_citations_valid"]
+    if dossier.get("sandbox") is not None:
+        # The sandbox half is re-run locally from the frozen dossier (no network, no model); whether Otari's run was identical stays as sealed
+        from . import sandbox_rederive
+        extra = sandbox_rederive.recheck(dossier)
+        result.update(extra)
+        result["matches"] = result["matches"] and extra.get("sandbox_local_matches", False)
     return result
 
 

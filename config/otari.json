@@ -11,7 +11,7 @@
     "judge": "vd-judge"
   },
   "_cycle_doc": "The app's own spend cap for one decision cycle, in USD: the sum of usage.cost_usd of the cycle's calls. Once reached, no further call is sent and each refused role leaves a client-side refusal receipt (code cycle_cap_exceeded). Otari's budgets are the first line, this is the second. OTARI_CYCLE_CAP_USD overrides.",
-  "cycle_cap_usd": "0.02",
+  "cycle_cap_usd": "0.05",
   "_send_user_doc": "true now that the key is a service key. With an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\" (docs/FEEDBACK_LOG.md, entry 2).",
   "roles": {
     "bull": {
@@ -33,6 +33,21 @@
     "narrator": {
       "model": "alibaba/qwen3-235b-a22b-instruct-2507",
       "vendor": "Alibaba"
+    },
+    "searcher": {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "vendor": "DeepSeek",
+      "tool_role": true
+    },
+    "sandbox": {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "vendor": "DeepSeek",
+      "tool_role": true
+    },
+    "mcp": {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "vendor": "DeepSeek",
+      "tool_role": true
     }
   },
   "rejected": {
@@ -44,5 +59,11 @@
   "drill_user": "vd-drill",
   "drill_budget": "c883d55f-b866-4ea9-b8d7-21c0d73cf2bb",
   "drill_policy": "vd-judge-drill",
-  "drill_fallback_user": "vd-drill-fallback"
+  "drill_fallback_user": "vd-drill-fallback",
+  "features": {
+    "web_search": true,
+    "code_execution": true,
+    "mcp": true
+  },
+  "_features_doc": "Otari tools the app uses in a decision cycle: one web search (about USD 0.01 a call), one MCP price read (the public CoinGecko server, free) and one sandbox re-derivation per dossier (about USD 0.01 a call). The roles searcher, sandbox and mcp run the model that drives the tool; they share the judge's model on purpose (the one tool loop we measured end to end) and bill to their own end users. OTARI_WEB_SEARCH, OTARI_CODE_EXECUTION and OTARI_MCP set to 0 or 1 override."
 }

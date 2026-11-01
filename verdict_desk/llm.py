@@ -235,6 +235,14 @@ def model_name() -> str:
     return "otari:multi-role" if otari_active() else MODEL
 
 
+def feature_on(name: str, cfg: dict | None = None) -> bool:
+    """Whether an Otari tool is used by the app: Otari mode, and `features.<name>` in the config (OTARI_<NAME>=0/1 overrides)."""
+    if not otari_active():
+        return False
+    cfg = cfg or otari_config()
+    return _flag(f"OTARI_{name.upper()}", (cfg.get("features") or {}).get(name))
+
+
 def _send_user(cfg: dict) -> bool:
     flag = os.environ.get("OTARI_SEND_USER", "").strip()
     return flag == "1" if flag in ("0", "1") else bool(cfg.get("send_user"))
@@ -292,6 +300,13 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
         "end_user": end_user,
         "captured_at": now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    calls = body.get("otari_tool_calls") if isinstance(body, dict) else None
+    if isinstance(calls, list) and calls:
+        # Otari's own web searches and fetches, as the reply reports them: what was asked, whether it worked and the sources found
+        receipt["tool_calls"] = [{"id": c.get("id"), "type": c.get("type"), "status": c.get("status"), "query": c.get("query"), "url": c.get("url"),
+                                  "sources": [{"url": x.get("url"), "title": x.get("title"), "published_date": x.get("published_date")}
+                                              for x in (c.get("sources") or []) if isinstance(x, dict)],
+                                  "error": c.get("error")} for c in calls if isinstance(c, dict)]
     if client_attempts > 1:  # our own retries (for example after a gateway timeout), so the count is not hidden
         receipt["client_attempts"] = client_attempts
     raw_guard = h.get("otari-guardrails")
@@ -389,8 +404,11 @@ def served_receipt() -> dict | None:
     return receipt
 
 
+EXTRA_FIELDS = ("tools", "mcp_servers", "max_tool_iterations", "guardrails")  # request fields an app may add for Otari's tools
+
+
 def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, role: str | None, model: str | None = None,
-                end_user: str | None = None, end_user_budget: str | None = None) -> str:
+                end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None) -> str:
     cfg = otari_config()
     role = role or cfg["default_role"]
     model = model or sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
@@ -405,6 +423,10 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     tokens = max_tokens or _number(f"OTARI_MAX_TOKENS_{role.upper()}", 0, int, lambda v: v >= 0) or spec.get("max_tokens") or MAX_TOKENS
     payload = {"model": model, "temperature": 0, "max_tokens": tokens,
                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    for name, value in (extra or {}).items():
+        if name not in EXTRA_FIELDS:
+            raise LLMError(f"request field {name!r} is not one the app may add")
+        payload[name] = value
     if end_user:
         payload["user"] = end_user  # per-user budgets bill this id; only a service key may send it
     if spec.get("reasoning_effort"):
@@ -643,11 +665,11 @@ def _anthropic_text(raw: bytes) -> str:
 
 
 def chat(system: str, user: str, timeout: int = 90, max_tokens: int | None = None, role: str | None = None,
-         model: str | None = None, end_user: str | None = None, end_user_budget: str | None = None) -> str:
+         model: str | None = None, end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None) -> str:
     """One chat call. `role` picks the model in Otari mode (OTARI_API_KEY set) and is ignored otherwise; `model`,
     `end_user` and `end_user_budget` override the role's choice for one call (the drills use them)."""
     if otari_active():
-        return _otari_chat(system, user, timeout, max_tokens, role, model, end_user, end_user_budget)
+        return _otari_chat(system, user, timeout, max_tokens, role, model, end_user, end_user_budget, extra)
     keyless = _keyless()
     key = "" if keyless else _key()
     if not keyless:

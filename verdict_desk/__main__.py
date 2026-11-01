@@ -139,6 +139,16 @@ def _decide_flow(opts, rules_version: str) -> int:
         print(f"narrative ({block['method']}): {len(voices)} headlines from {len({v['name'] for v in voices})} voices, {len(block['convergence'])} convergences"
               + (f", {len(gaps)} voices without a message ({', '.join(sorted(gaps))})" if gaps else ""))
     rules = _rules_from_opts(opts, rules_version)
+    # Otari tools, one use each per cycle: a web search and an MCP price read, frozen into every packet of the cycle
+    web = market_mcp = None
+    if llm.feature_on("web_search"):
+        from . import otari_web
+        web = otari_web.collect(opts.symbols)
+        print(f"web search via Otari: {len(web['items'])} items" + (f" ({web['error'][:80]})" if web.get("error") else ""))
+    if llm.feature_on("mcp"):
+        from . import otari_mcp
+        market_mcp = otari_mcp.collect()
+        print(f"MCP via Otari ({market_mcp['server']}): prices {market_mcp.get('prices')}" + (f" ({market_mcp['error'][:80]})" if market_mcp.get("error") else ""))
     from . import practice
     execute = practice.chain_executor()  # practice trades on Sepolia when the key is present; otherwise simulated as before
     recorded = 0
@@ -150,6 +160,10 @@ def _decide_flow(opts, rules_version: str) -> int:
             continue
         if block is not None:
             packet["narrative"] = block
+        if web is not None:
+            packet["web"] = web
+        if market_mcp is not None:
+            packet["market_mcp"] = market_mcp
         recorded += 1
         print_record(dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, execute=execute))
     if recorded and opts.ledger == DEFAULT_LEDGER:
@@ -348,6 +362,16 @@ def print_record(record: dict) -> None:
                 verdict = "not evaluated (valid null)" if g.get("valid") is None else f"valid={g['valid']} score={g.get('score')}"
                 print(f"  [otari {part}] guardrail {g.get('profile')} ({g.get('mode')}): {verdict}")
         cycle = (layer.get("otari") or {}).get("cycle")
+        web = (record.get("evidence") or {}).get("web") or {}
+        if web.get("items"):
+            print(f"  [otari web] {len(web['items'])} items frozen: " + "; ".join(i["domain"] for i in web["items"]) + f" (request {(web.get('receipt') or {}).get('request_id')})")
+        mcp = (record.get("evidence") or {}).get("market_mcp") or {}
+        if mcp.get("prices"):
+            print(f"  [otari mcp] {mcp['server']} prices {mcp['prices']} from the server's own result block (request {(mcp.get('receipt') or {}).get('request_id')})")
+        sandbox = record.get("sandbox")
+        if sandbox:
+            print(f"  [otari sandbox] sandbox output {'IDENTICAL to' if sandbox.get('equal') else 'DIFFERENT from'} the local re-derivation"
+                  f"; local agrees with the verdict: {sandbox.get('local_agrees_with_verdict')} (request {(sandbox.get('receipt') or {}).get('request_id')})")
         if cycle:
             print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"
                   + (f", cap ${cycle['cap_usd']}" if cycle.get("cap_usd") else "") + (f", {cycle['refused']} refused by the cap" if cycle.get("refused") else ""))

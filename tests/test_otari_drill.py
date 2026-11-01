@@ -72,7 +72,7 @@ class RealConfigTest(Env):
 
     def test_the_cycle_cap_is_a_couple_of_cents_and_the_drill_ids_are_in_the_config(self):
         cfg = llm.otari_config()
-        self.assertEqual(str(llm.cycle_cap(cfg)), "0.02")
+        self.assertEqual(str(llm.cycle_cap(cfg)), "0.05")
         self.assertEqual((cfg["drill_user"], cfg["drill_policy"]), ("vd-drill", "vd-judge-drill"))
         self.assertNotEqual(cfg["drill_budget"], cfg["end_user_budget"])
 
@@ -246,7 +246,8 @@ class EndUsersCheckTest(Env):
     def test_all_five_production_end_users_on_the_budget_pass_and_each_budget_id_is_recorded(self):
         record = otari_drill.end_users_check(self.info())
         self.assertTrue(record["pass"])
-        self.assertEqual(sorted(record["end_users"]), ["vd-bear", "vd-bull", "vd-checker", "vd-judge", "vd-narrator"])
+        self.assertEqual(sorted(record["end_users"]), sorted(f"vd-{r}" for r in llm.otari_config()["roles"]))
+        self.assertTrue({"vd-bull", "vd-bear", "vd-judge", "vd-checker", "vd-narrator", "vd-searcher", "vd-sandbox", "vd-mcp"} <= set(record["end_users"]))
         self.assertEqual({v["budget_id"] for v in record["end_users"].values()}, {llm.otari_config()["end_user_budget"]})
         self.assertEqual(record["expected_budget_id"], llm.otari_config()["end_user_budget"])
 

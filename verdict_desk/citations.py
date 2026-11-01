@@ -32,6 +32,11 @@ def index(packet: dict, feats: dict | None = None) -> dict[str, str]:
         items.append(f"News ({article.get('domain', '')}): {article.get('title', '')}")
     block = packet.get("narrative") or {}
     base = packet["symbol"].upper().removesuffix("USDT")
+    for item in (packet.get("web") or {}).get("items") or []:  # news found by Otari's web search tool: untrusted text, like any headline
+        items.append(f"Web ({item.get('domain', '')}): {item.get('title', '')}")
+    usd = ((packet.get("market_mcp") or {}).get("prices") or {}).get(base)
+    if usd:  # a spot price read by Otari from a public MCP server, from the server's own result block
+        items.append(f"CoinGecko MCP via Otari: {base} spot price {usd} USD")
     relevant_only = block.get("index_version", 1) >= 2  # blocos antigos mantem o indice antigo: o replay deles nao muda
     for voice in block.get("voices", []):
         if relevant_only and not narrative_mod.mentions(voice.get("title", ""), base):

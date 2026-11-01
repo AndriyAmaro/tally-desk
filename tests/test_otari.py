@@ -38,7 +38,7 @@ def plain_config():
     """A patch that points llm at the repo config with the F2 switches off (no user field, no policies, no end-user budget,
     a 0.05 cycle cap), so the F1-era tests keep testing what they were written for; the real switches are tested apart."""
     cfg = json.loads(llm.OTARI_CONFIG.read_text(encoding="utf-8"))
-    cfg.update(send_user=False, use_policies=False, cycle_cap_usd="0.05", end_user_prefix="", end_user_budget="")
+    cfg.update(send_user=False, use_policies=False, cycle_cap_usd="0.05", end_user_prefix="", end_user_budget="", features={})
     path = Path(tempfile.mkdtemp()) / "otari.json"
     path.write_text(json.dumps(cfg), encoding="utf-8")
     return mock.patch.object(llm, "OTARI_CONFIG", path)
@@ -118,11 +118,16 @@ class ReceiptParserTest(unittest.TestCase):
 class RoleConfigTest(unittest.TestCase):
     def test_the_repo_config_gives_every_role_its_own_model(self):
         cfg = llm.otari_config()
+        # the roles that argue, rule, check and read the news each have a model and a vendor of their own; the roles that only
+        # drive an Otari tool (marked tool_role) may share the judge's model
+        core = {name: spec for name, spec in cfg["roles"].items() if not spec.get("tool_role")}
         models = {name: spec["model"] for name, spec in cfg["roles"].items()}
         for role in ("bull", "bear", "judge", "checker"):
             self.assertIn(role, models)
-        self.assertEqual(len(set(models.values())), len(models), "two roles share a model")
-        self.assertEqual(len({spec["vendor"] for spec in cfg["roles"].values()}), len(models), "two roles share a vendor")
+        self.assertEqual(len({s["model"] for s in core.values()}), len(core), "two core roles share a model")
+        self.assertEqual(len({s["vendor"] for s in core.values()}), len(core), "two core roles share a vendor")
+        for role in ("searcher", "sandbox", "mcp"):
+            self.assertTrue(cfg["roles"][role].get("tool_role"), role)
         self.assertEqual(models["bull"], "openai/gpt-oss-120b")
         self.assertEqual(models["bear"], "nvidia/nemotron-3-super-120b-a12b")
         self.assertEqual(models["judge"], "deepseek/deepseek-v4-flash-0731")
