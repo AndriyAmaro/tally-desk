@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "voices": [
+    {"name": "Cointelegraph", "kind": "rss", "url": "https://cointelegraph.com/rss"},
+    {"name": "CoinDesk", "kind": "rss", "url": "https://www.coindesk.com/arc/outboundfeeds/rss"},
+    {"name": "Decrypt", "kind": "rss", "url": "https://decrypt.co/feed"},
+    {"name": "The Block", "kind": "rss", "url": "https://www.theblock.co/rss.xml"},
+    {"name": "CryptoSlate", "kind": "rss", "url": "https://cryptoslate.com/feed/"},
+    {"name": "Watcher Guru", "kind": "telegram", "url": "https://t.me/s/WatcherGuru"},
+    {"name": "Wu Blockchain", "kind": "telegram", "url": "https://t.me/s/wublockchainenglish"},
+    {"name": "Whale Alert", "kind": "telegram", "url": "https://t.me/s/whale_alert_io"},
+    {"name": "Whale Bot Alerts", "kind": "telegram", "url": "https://t.me/s/whalebotalerts"},
+    {"name": "Coin Bureau", "kind": "telegram", "url": "https://t.me/s/coinbureau"},
+    {"name": "Unfolded", "kind": "telegram", "url": "https://t.me/s/unfolded"},
+    {"name": "CryptoQuant", "kind": "telegram", "url": "https://t.me/s/CryptoQuant_Official"},
+    {"name": "Degenerate News", "kind": "telegram", "url": "https://t.me/s/DegenerateNews"}
+  ],
+  "risk": {"max_risk_pct": 1.0}
+}

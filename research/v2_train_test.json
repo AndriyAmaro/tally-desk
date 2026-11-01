@@ -1,0 +1,403 @@
+{
+ "label": "RESEARCH on past data with a time split, not live performance",
+ "verdict": {
+  "symbols": [
+   "BTCUSDT",
+   "ETHUSDT",
+   "SOLUSDT"
+  ],
+  "v2_beats_v1_out_of_sample": "3 of 3",
+  "v2_net_positive_out_of_sample": "1 of 3",
+  "adopt_v2_live": false,
+  "reading": "v2 did not clear the bar (beat v1 and stay positive out of sample on most symbols): v1 stays as the live rule set."
+ },
+ "studies": [
+  {
+   "label": "RESEARCH on past data with a time split, not live performance",
+   "symbol": "BTCUSDT",
+   "data": {
+    "candles": 4000,
+    "from": 1777820400000,
+    "to": 1792216800000,
+    "sha256": "12b45862209008b0ce019f4ed9c10f51d2d1eff37c145e07f4766b31d7f20b81",
+    "train_candles": 2400,
+    "test_candles": 1600
+   },
+   "protocol": {
+    "train_fraction": 0.6,
+    "min_trades": 20,
+    "configs_tried": 36,
+    "grid": {
+     "entry_threshold": [
+      1.5,
+      2.0,
+      2.5,
+      3.0
+     ],
+     "stop_atr": [
+      1.0,
+      1.5,
+      2.0
+     ],
+     "take_atr": [
+      2.0,
+      3.0,
+      4.0
+     ]
+    },
+    "fee_pct_per_side": 0.05,
+    "max_hold": 48
+   },
+   "v1_test": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 74,
+    "longs": 46,
+    "shorts": 28,
+    "by_exit": {
+     "TAKE": 25,
+     "STOP": 47,
+     "TIME": 2
+    },
+    "win_rate_pct": 35.1,
+    "net_pnl": -953.7229,
+    "return_pct": -9.54,
+    "fees_paid": 1220.2823,
+    "profit_factor": 0.828,
+    "max_drawdown_pct": 18.47,
+    "avg_bars_held": 9.8,
+    "buy_and_hold_pct": 27.97,
+    "start_capital": 10000.0
+   },
+   "v1_train": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 99,
+    "longs": 37,
+    "shorts": 62,
+    "by_exit": {
+     "TAKE": 32,
+     "STOP": 63,
+     "TIME": 4
+    },
+    "win_rate_pct": 36.4,
+    "net_pnl": -912.7,
+    "return_pct": -9.13,
+    "fees_paid": 1315.8046,
+    "profit_factor": 0.872,
+    "max_drawdown_pct": 18.23,
+    "avg_bars_held": 12.1,
+    "buy_and_hold_pct": -21.78,
+    "start_capital": 10000.0
+   },
+   "v2": {
+    "chosen": {
+     "entry_threshold": 2.0,
+     "stop_atr": 2.0,
+     "take_atr": 2.0
+    },
+    "train": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 113,
+     "longs": 45,
+     "shorts": 68,
+     "by_exit": {
+      "TAKE": 58,
+      "STOP": 51,
+      "TIME": 4
+     },
+     "win_rate_pct": 51.3,
+     "net_pnl": -641.4099,
+     "return_pct": -6.41,
+     "fees_paid": 1093.0523,
+     "profit_factor": 0.891,
+     "max_drawdown_pct": 10.68,
+     "avg_bars_held": 11.8,
+     "buy_and_hold_pct": -21.78,
+     "start_capital": 10000.0
+    },
+    "test": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 82,
+     "longs": 51,
+     "shorts": 31,
+     "by_exit": {
+      "TAKE": 44,
+      "STOP": 36,
+      "TIME": 2
+     },
+     "win_rate_pct": 54.9,
+     "net_pnl": -204.6742,
+     "return_pct": -2.05,
+     "fees_paid": 984.3464,
+     "profit_factor": 0.95,
+     "max_drawdown_pct": 11.61,
+     "avg_bars_held": 9.0,
+     "buy_and_hold_pct": 27.97,
+     "start_capital": 10000.0
+    },
+    "test_beats_v1": true,
+    "test_net_positive": false,
+    "train_rank_of_chosen": 1,
+    "train_configs_with_positive_net": 0,
+    "configs_scored": 36
+   }
+  },
+  {
+   "label": "RESEARCH on past data with a time split, not live performance",
+   "symbol": "ETHUSDT",
+   "data": {
+    "candles": 4000,
+    "from": 1777820400000,
+    "to": 1792216800000,
+    "sha256": "3be4cf1abe775af6a14318c66838b1e81179f6fb3c570a1facf993cef3a861f6",
+    "train_candles": 2400,
+    "test_candles": 1600
+   },
+   "protocol": {
+    "train_fraction": 0.6,
+    "min_trades": 20,
+    "configs_tried": 36,
+    "grid": {
+     "entry_threshold": [
+      1.5,
+      2.0,
+      2.5,
+      3.0
+     ],
+     "stop_atr": [
+      1.0,
+      1.5,
+      2.0
+     ],
+     "take_atr": [
+      2.0,
+      3.0,
+      4.0
+     ]
+    },
+    "fee_pct_per_side": 0.05,
+    "max_hold": 48
+   },
+   "v1_test": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 79,
+    "longs": 53,
+    "shorts": 26,
+    "by_exit": {
+     "TAKE": 26,
+     "STOP": 53,
+     "TIME": 0
+    },
+    "win_rate_pct": 32.9,
+    "net_pnl": -976.8803,
+    "return_pct": -9.77,
+    "fees_paid": 876.8803,
+    "profit_factor": 0.834,
+    "max_drawdown_pct": 17.25,
+    "avg_bars_held": 7.9,
+    "buy_and_hold_pct": 29.8,
+    "start_capital": 10000.0
+   },
+   "v1_train": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 99,
+    "longs": 44,
+    "shorts": 55,
+    "by_exit": {
+     "TAKE": 33,
+     "STOP": 59,
+     "TIME": 7
+    },
+    "win_rate_pct": 37.4,
+    "net_pnl": -21.3924,
+    "return_pct": -0.21,
+    "fees_paid": 924.9962,
+    "profit_factor": 0.997,
+    "max_drawdown_pct": 11.16,
+    "avg_bars_held": 13.0,
+    "buy_and_hold_pct": -20.58,
+    "start_capital": 10000.0
+   },
+   "v2": {
+    "chosen": {
+     "entry_threshold": 2.5,
+     "stop_atr": 1.0,
+     "take_atr": 4.0
+    },
+    "train": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 91,
+     "longs": 42,
+     "shorts": 49,
+     "by_exit": {
+      "TAKE": 21,
+      "STOP": 69,
+      "TIME": 1
+     },
+     "win_rate_pct": 24.2,
+     "net_pnl": 405.0255,
+     "return_pct": 4.05,
+     "fees_paid": 1320.5914,
+     "profit_factor": 1.051,
+     "max_drawdown_pct": 15.49,
+     "avg_bars_held": 10.7,
+     "buy_and_hold_pct": -20.58,
+     "start_capital": 10000.0
+    },
+    "test": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 80,
+     "longs": 53,
+     "shorts": 27,
+     "by_exit": {
+      "TAKE": 17,
+      "STOP": 63,
+      "TIME": 0
+     },
+     "win_rate_pct": 21.2,
+     "net_pnl": -879.8449,
+     "return_pct": -8.8,
+     "fees_paid": 1379.8449,
+     "profit_factor": 0.881,
+     "max_drawdown_pct": 25.4,
+     "avg_bars_held": 6.4,
+     "buy_and_hold_pct": 29.8,
+     "start_capital": 10000.0
+    },
+    "test_beats_v1": true,
+    "test_net_positive": false,
+    "train_rank_of_chosen": 1,
+    "train_configs_with_positive_net": 4,
+    "configs_scored": 36
+   }
+  },
+  {
+   "label": "RESEARCH on past data with a time split, not live performance",
+   "symbol": "SOLUSDT",
+   "data": {
+    "candles": 4000,
+    "from": 1777820400000,
+    "to": 1792216800000,
+    "sha256": "4649145e69819fab82e462d6676ab918a96444c125db1321937d8635b6ab0681",
+    "train_candles": 2400,
+    "test_candles": 1600
+   },
+   "protocol": {
+    "train_fraction": 0.6,
+    "min_trades": 20,
+    "configs_tried": 36,
+    "grid": {
+     "entry_threshold": [
+      1.5,
+      2.0,
+      2.5,
+      3.0
+     ],
+     "stop_atr": [
+      1.0,
+      1.5,
+      2.0
+     ],
+     "take_atr": [
+      2.0,
+      3.0,
+      4.0
+     ]
+    },
+    "fee_pct_per_side": 0.05,
+    "max_hold": 48
+   },
+   "v1_test": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 81,
+    "longs": 51,
+    "shorts": 30,
+    "by_exit": {
+     "TAKE": 30,
+     "STOP": 50,
+     "TIME": 1
+    },
+    "win_rate_pct": 37.0,
+    "net_pnl": 353.4392,
+    "return_pct": 3.53,
+    "fees_paid": 647.8636,
+    "profit_factor": 1.065,
+    "max_drawdown_pct": 9.74,
+    "avg_bars_held": 10.2,
+    "buy_and_hold_pct": 39.42,
+    "start_capital": 10000.0
+   },
+   "v1_train": {
+    "label": "BACKTEST on past data, not live performance",
+    "trades": 101,
+    "longs": 44,
+    "shorts": 57,
+    "by_exit": {
+     "TAKE": 33,
+     "STOP": 62,
+     "TIME": 6
+    },
+    "win_rate_pct": 38.6,
+    "net_pnl": -59.348,
+    "return_pct": -0.59,
+    "fees_paid": 796.3033,
+    "profit_factor": 0.991,
+    "max_drawdown_pct": 11.3,
+    "avg_bars_held": 13.3,
+    "buy_and_hold_pct": -14.92,
+    "start_capital": 10000.0
+   },
+   "v2": {
+    "chosen": {
+     "entry_threshold": 2.5,
+     "stop_atr": 1.5,
+     "take_atr": 4.0
+    },
+    "train": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 80,
+     "longs": 37,
+     "shorts": 43,
+     "by_exit": {
+      "TAKE": 21,
+      "STOP": 49,
+      "TIME": 10
+     },
+     "win_rate_pct": 37.5,
+     "net_pnl": 687.1687,
+     "return_pct": 6.87,
+     "fees_paid": 661.9058,
+     "profit_factor": 1.129,
+     "max_drawdown_pct": 9.66,
+     "avg_bars_held": 17.4,
+     "buy_and_hold_pct": -14.92,
+     "start_capital": 10000.0
+    },
+    "test": {
+     "label": "BACKTEST on past data, not live performance",
+     "trades": 70,
+     "longs": 41,
+     "shorts": 29,
+     "by_exit": {
+      "TAKE": 22,
+      "STOP": 44,
+      "TIME": 4
+     },
+     "win_rate_pct": 35.7,
+     "net_pnl": 1307.8859,
+     "return_pct": 13.08,
+     "fees_paid": 581.3516,
+     "profit_factor": 1.274,
+     "max_drawdown_pct": 9.55,
+     "avg_bars_held": 11.6,
+     "buy_and_hold_pct": 39.42,
+     "start_capital": 10000.0
+    },
+    "test_beats_v1": true,
+    "test_net_positive": true,
+    "train_rank_of_chosen": 1,
+    "train_configs_with_positive_net": 17,
+    "configs_scored": 36
+   }
+  }
+ ]
+}

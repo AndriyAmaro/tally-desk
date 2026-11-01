@@ -1,0 +1,26 @@
+{
+  "network": "ethereum-testnet-sepolia",
+  "chainId": 11155111,
+  "contract": "0xe42c24dd93ACe0178239f03c43dC3a707d20DF86",
+  "owner": "0x592d904bb5640B0D91D4D287938C5D51FF2DEcda",
+  "router": "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E",
+  "weth": "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14",
+  "usdc": "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+  "pool": "0x3289680dd4d6c10bb19b899729cda5eef58aeff1",
+  "fee": 500,
+  "funded": {
+    "weth": "0.02",
+    "usdc": "462.831999",
+    "testnetUsdcPerWeth": 46314
+  },
+  "transactions": {
+    "deploy": "0x6dd2c2dfd3f550e4d373f70f73780d9c5b6eaa46014d65ef6d3be1fa70bd741e",
+    "wrap": "0x553fa5566c36b3bed15bb90565e7c9c816ddc1d410dae1a748900ff301187697",
+    "approve": "0xed69020924792dd6543ad5c58fc406543b1bc2eb8c26376f1a29060fa8afc03a",
+    "swap": "0xb8c2abb16d999f4c96b726051c3b20d08c3771e1c3157bce00a7d6459c0e315c",
+    "fundWeth": "0xce5e8b6b478afe0cda56bb3509e5e40a3c887dc113f02fffef0f05644013dfc8",
+    "fundUsdc": "0xb58c4f279350388ad72606858d432b496b628df8cc74f13841e6234b771cc34d"
+  },
+  "explorer": "https://sepolia.etherscan.io/address/0xe42c24dd93ACe0178239f03c43dC3a707d20DF86",
+  "note": "Testnet practice only. The testnet pool price is not the market price."
+}

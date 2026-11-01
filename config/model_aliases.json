@@ -1,0 +1,20 @@
+{
+ "_doc": "The name the LLM gateway asks for, and the names providers answer with (recorded as served_by in each dossier). A name missing here is used as it was recorded.",
+ "aliases": {
+  "gpt-oss-120b": [
+   "openai/gpt-oss-120b",
+   "gpt-oss-120b"
+  ],
+  "agnes-3.0-flash": [
+   "agnes-3.0-flash"
+  ],
+  "dots3-note-preview": [
+   "dots-studio/dots-3-note-preview:free",
+   "dots3-note-preview"
+  ],
+  "nemotron-3-ultra-550b": [
+   "nvidia/nemotron-3-ultra-550b-a55b",
+   "nemotron-3-ultra-550b"
+  ]
+ }
+}

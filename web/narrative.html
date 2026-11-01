@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · market voices</title>
+<meta name="description" content="The multi-KOL narrative agent: watches user-selected market voices, extracts token, stance, conviction and urgency, and only reports a narrative when trusted voices converge.">
+<meta property="og:title" content="Verdict Desk: the multi-KOL narrative agent">
+<meta property="og:description" content="Watches market voices, extracts token + stance + conviction + urgency, and reports a narrative only when distinct voices converge.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0 auto;max-width:960px;padding:16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 6px}h3{font-size:14px;margin:14px 0 4px}
+.mut{color:var(--mut)}code{font-size:12px;word-break:break-all}
+nav a{margin-right:14px}
+section{border:1px solid var(--line);border-radius:12px;padding:4px 16px 16px;margin:14px 0;background:var(--card)}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.LONG,.ok,.bullish{color:var(--ok);font-weight:600}.SHORT,.bad,.bearish{color:var(--bad);font-weight:600}
+.WATCH_REVERSAL,.REDUCE_EXPOSURE{color:var(--warn);font-weight:600}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600}
+.stat .v{font-size:20px;font-weight:700;margin:2px 0 0}
+.stat .s{font-size:11.5px;color:var(--mut);margin-top:2px}
+.pill{display:inline-block;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;margin-right:6px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:10px 0}
+.chips label{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 11px;margin:3px 6px 3px 0;background:var(--bg);cursor:pointer;font-size:13px}
+.chips label.on{border-color:var(--accent);background:var(--card);font-weight:600}
+.box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0}
+select,input[type=number]{font:inherit;padding:3px 6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+
+<h1>Market voices: the multi-KOL narrative agent</h1>
+<nav class="mut"><a href="index.html">Dashboard</a><a href="judge.html">Judge path</a><a href="ask.html">Ask the record</a><a href="lab.html">Lab</a><a href="exhibit/index.html">Exhibits</a><a href="scorecard.html">Scorecard</a><a href="verify.html">Verify a record</a><b>Market voices</b><a href="witnesses.html">Witnesses</a><a href="evidence.html">Evidence</a><a href="learn.html">Learn</a></nav>
+<p class="mut">The spotlight feature: watch market voices, extract what they mention and how strongly, and report a narrative only when <b>two or more distinct voices agree on the same token and stance</b>. One voice is a claim; two agreeing is a signal. Every token that never converged is kept with the reason why.</p>
+
+<section>
+  <h2>The engine, at a glance</h2>
+  <div class="stats-grid" id="stats"></div>
+  <p class="mut">Each headline is read by the LLM into a closed vocabulary (<b>token, stance (bullish / bearish / neutral), conviction (low→extreme), urgency</b>) and must carry a <b>literal quote</b> from the headline. A grounding gate refuses an extraction whose quote or token is not in the source. Only validated extractions are counted; the rejected ones are kept too.</p>
+</section>
+
+<section>
+  <h2>Convergences, in order</h2>
+  <p class="mut">A convergence needs the same token <b>and</b> the same stance across at least two distinct voices. The row shows the voices that agreed and their top conviction and urgency.</p>
+  <div class="scroll" style="overflow-x:auto"><table id="conv"><thead><tr><th>#</th><th>When</th><th>Token</th><th>Stance</th><th>Voices agreeing</th><th>Conviction</th><th>Urgency</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section>
+  <h2>Which voices earned trust</h2>
+  <p class="mut">"Trusted voices converge" only means something if trust is measured. This table is <b>recomputed here, in your browser, from the raw ledger</b>: nothing below comes from a server. Each accepted bullish or bearish call is scored by the market's move over the next <span id="horizon">4</span> hours, read from the candles frozen in the dossiers. <b>Hit rate</b> alone flatters a voice that only ever says "up" in a rising market, so it is set beside the hit rate <b>luck alone would give</b> for that voice's own bias; <b>skill</b> is what is left, shrunk toward zero on small samples. A voice with fewer than <span id="mincalls">8</span> settled calls has no record yet and counts as 1.00. Weights stay inside 0.5 to 1.5.</p>
+  <div class="scroll" style="overflow-x:auto"><table id="trust"><thead><tr><th>Voice</th><th>Settled calls</th><th>Hit rate</th><th>By luck</th><th>Skill</th><th>Weight</th></tr></thead><tbody></tbody></table></div>
+  <p class="mut" id="trustnote"></p>
+  <p class="mut">No lookahead: each dossier freezes the table of the voices it read, computed only from the dossiers before its run, and <code>python3 -m verdict_desk trust-check</code> recomputes every frozen table from that earlier ledger. Small, overlapping samples from one market regime: read a weight as a nudge, not a rating. The worst voices are listed too.</p>
+</section>
+
+<section>
+  <h2>Try it: your voices, your limit, the position that follows</h2>
+  <p class="mut">Pick the voices that agree, choose how much of a simulated <b>$10,000</b> you are willing to lose, and see the practice position the same rules would open on the latest recorded market for that token. Every number is computed in your browser by the same formulas the Python judge uses, and a test compares the two over hundreds of random inputs. Nothing here is a trade: it is the rule, laid open.</p>
+  <div class="grid2" id="try">
+    <label>Token <select id="t-token"><option>BTC</option><option>ETH</option><option>SOL</option></select></label>
+    <label>The voices agree <select id="t-stance"><option value="bullish">bullish</option><option value="bearish">bearish</option></select></label>
+    <label>Rules <select id="t-rules"><option value="v5">v5: weigh each voice by its track record</option><option value="v4">v4: every voice counts the same</option></select></label>
+    <label><input type="checkbox" id="t-high"> top conviction is high (+0.5)</label>
+    <label>Risk limit, % of capital <input id="t-risk" type="number" min="0" max="100" step="0.1" value="1" style="width:5em"></label>
+  </div>
+  <div id="t-voices" class="chips"></div>
+  <div id="t-out" class="box"></div>
+</section>
+
+<section>
+  <h2>What a convergence does</h2>
+  <p class="mut">A convergence is not decoration: it <b>creates the position by a transparent rule</b>: a convergence matching the symbol becomes a deterministic argument on that side, with weight <b>0.5 × each voice's track-record weight (1.00 until it has a record; the four heaviest voices count) + 0.5 if top conviction is high</b> (rules v5; dossiers recorded under v4 count 0.5 per voice, flat). Two voices are a nudge; four trusted voices are decisive. The same convergence is also a citable evidence item the analysts may cite. Either way, the trail shows exactly which voices said it and the weight each carried.</p>
+  <ul class="mut">
+    <li>the voices are named, so a convergence can be checked back to its sources</li>
+    <li>the stance is closed-vocabulary, so "bullish" means the same thing every run</li>
+    <li>the quote is literal, so a headline cannot be paraphrased into a stronger signal</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Tokens that never became a narrative, and why</h2>
+  <p class="mut">Silence about the rejected candidates is where most agents stop being trustworthy. Here every mention that did not converge is kept with its reason.</p>
+  <table id="rejected"><thead><tr><th>Token</th><th>Mentions</th><th>Stances seen</th><th>Reason</th></tr></thead><tbody></tbody></table>
+</section>
+
+<p class="mut">Feeds are user-selected and extensible to 20 via <code>--feed NAME=URL</code>: RSS/Atom, X through any public bridge, and <b>Telegram channels natively</b> (the keyless public preview <code>https://t.me/s/&lt;channel&gt;</code>). The hourly run reads the voices listed in <code>config/voices.json</code> (today 5 newsrooms and 8 public Telegram channels); choose your own there, up to 20. The resulting practice position is sized inside a <b>user-set risk limit, capped at 25%</b> (<code>--risk-pct</code>). Simulated decisions only; no real-money order is ever placed.</p>
+
+<script src="policy.js"></script>
+<script src="trust.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  fetch("ledger/ledger.jsonl", { cache: "no-store" }).then((r) => r.text()).then((text) => {
+    const rows = text.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+
+    let headlines = 0, voices = {}, convs = [], tokens = {}, rejected = {};
+    rows.forEach((d) => {
+      const n = d.evidence && d.evidence.narrative;
+      if (!n) return;
+      (n.voices || []).forEach((v) => { headlines++; if (v.name) voices[v.name] = true; });
+      (n.convergence || []).forEach((c) => {
+        convs.push({ seq: d.seq, at: d.evidence.collected_at, c });
+        if (c.token) tokens[c.token] = (tokens[c.token] || 0) + 1;
+      });
+      (n.rejected_candidates || []).forEach((r) => {
+        rejected[r.token] = r;
+      });
+    });
+
+    $("stats").innerHTML =
+      `<div class="stat"><div class="k">Headlines read</div><div class="v">${headlines}</div><div class="s">from ${Object.keys(voices).length} distinct voices</div></div>` +
+      `<div class="stat"><div class="k">Convergences</div><div class="v">${convs.length}</div><div class="s">${Object.keys(tokens).length} token(s): ${Object.keys(tokens).join(", ")}</div></div>` +
+      `<div class="stat"><div class="k">Voices</div><div class="v">${Object.keys(voices).length}</div><div class="s">${Object.keys(voices).join(", ")}</div></div>` +
+      `<div class="stat"><div class="k">Rejected mentions</div><div class="v">${Object.keys(rejected).length}</div><div class="s">kept with the reason why</div></div>`;
+
+    $("conv").querySelector("tbody").innerHTML = convs.slice().reverse().map(({ seq, at, c }) =>
+      `<tr><td>${seq}</td><td class="mut">${esc((at || "").slice(0, 16))}</td><td><b>${esc(c.token)}</b></td><td class="${esc(c.bias)}">${esc(c.bias)}</td><td>${esc((c.voices || []).join(", "))}</td><td>${esc(c.max_conviction)}</td><td>${esc(c.max_urgency)}</td></tr>`
+    ).join("") || `<tr><td colspan="7" class="mut">no convergences yet</td></tr>`;
+
+    const record = VerdictTrust.compute(rows);
+    $("horizon").textContent = record.horizon_hours;
+    $("mincalls").textContent = record.min_calls;
+    const pct = (x) => (x * 100).toFixed(0) + "%";
+    const bar = (w) => `<span style="display:inline-block;width:${Math.round(((w - 0.5) / 1.0) * 70) + 4}px;height:8px;border-radius:4px;background:var(--${w >= 1 ? "ok" : "bad"});vertical-align:middle;margin-right:6px"></span>`;
+    $("trust").querySelector("tbody").innerHTML = Object.entries(record.voices).sort((a, b) => b[1].weight - a[1].weight).map(([name, v]) =>
+      `<tr><td><b>${esc(name)}</b>${v.proven ? "" : ' <span class="mut">(no record yet)</span>'}</td><td>${v.n}</td><td>${pct(v.hit_rate)}</td><td class="mut">${pct(v.chance_rate)}</td>` +
+      `<td class="${v.skill > 0 ? "ok" : v.skill < 0 ? "bad" : "mut"}">${v.skill > 0 ? "+" : ""}${(v.skill * 100).toFixed(1)} pts</td><td>${bar(v.weight)}<b>${v.weight.toFixed(2)}</b></td></tr>`
+    ).join("") || `<tr><td colspan="6" class="mut">no settled calls yet</td></tr>`;
+    $("trustnote").textContent = `As of dossier ${record.as_of_seq}: ${Object.keys(record.voices).length} voices with settled calls; ${record.pending_calls} calls still waiting for their ${record.horizon_hours}-hour window to close.`;
+
+    // Try it: your voices, your limit, the position that follows.
+    const P = window.VerdictPolicy;
+    const allVoices = {};
+    Object.keys(record.voices).forEach((n) => { allVoices[n] = record.voices[n].weight; });
+    rows.slice(-3).forEach((d) => (((d.evidence.narrative || {}).voices) || []).forEach((v) => { if (v.name && !(v.name in allVoices)) allVoices[v.name] = 1; }));
+    const chosen = new Set(Object.keys(record.voices).sort((a, b) => record.voices[b].weight - record.voices[a].weight).slice(0, 3));
+    const chips = $("t-voices");
+    chips.innerHTML = Object.keys(allVoices).sort().map((n) =>
+      `<label><input type="checkbox" value="${esc(n)}" ${chosen.has(n) ? "checked" : ""}> ${esc(n)} <span class="mut">${allVoices[n].toFixed(2)}${record.voices[n] && record.voices[n].proven ? "" : " · no record"}</span></label>`).join("");
+    const latest = (token) => [...rows].reverse().find((d) => d.evidence && d.evidence.symbol === token + "USDT" && d.features);
+    const n2 = (x, places) => Number(x).toLocaleString("en-US", { maximumFractionDigits: places == null ? 2 : places });
+    const isConv = (a) => String(a.evidence_ref || "").startsWith("narrative.convergence");
+
+    function renderTry() {
+      chips.querySelectorAll("label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
+      const token = $("t-token").value, stance = $("t-stance").value, v5 = $("t-rules").value === "v5", high = $("t-high").checked;
+      const picked = [...chips.querySelectorAll("input:checked")].map((i) => i.value);
+      const out = $("t-out");
+      const d = latest(token);
+      if (!d) { out.innerHTML = `<span class="mut">No recorded market for ${esc(token)} yet.</span>`; return; }
+      if (picked.length < 2) { out.innerHTML = '<span style="color:var(--warn);font-weight:600">A convergence needs at least two distinct voices on the same token and stance. Tick two or more.</span>'; return; }
+
+      const weights = picked.map((n) => allVoices[n]);
+      const w = VerdictTrust.convergenceWeight(weights, high, v5);
+      const counted = (v5 ? [...weights].sort((a, b) => b - a) : weights).slice(0, 4);
+      const formula = v5
+        ? `0.5 × (${counted.map((x) => x.toFixed(2)).join(" + ")})${high ? " + 0.5" : ""} = <b>${w}</b>`
+        : `0.5 × ${counted.length} voices${high ? " + 0.5" : ""} = <b>${w}</b>`;
+      const base = (list) => list.filter((a) => !isConv(a)).reduce((s, a) => s + a.weight, 0);
+      let bull = base(d.bull), bear = base(d.bear);
+      if (stance === "bullish") bull += w; else bear += w;
+      const f = d.features;
+      const verdict = P.evaluate({ bull, bear, atrPct: f.atr_14 / f.last_close * 100, ageMinutes: 0 });
+
+      let html = `<p>Your convergence is a <b class="${stance}">${stance}</b> argument on ${esc(token)} weighing ${formula}.</p>` +
+        `<p>Against the market recorded in dossier #${d.seq} (${esc(d.evidence.collected_at.slice(0, 16).replace("T", " "))} UTC), the other arguments add up to bull ${n2(base(d.bull))} and bear ${n2(base(d.bear))}; with yours, <b>bull ${n2(bull)} vs bear ${n2(bear)}</b>, edge ${n2(verdict.edge)}. The rule that fires: <span class="mut">${esc(verdict.rule)}</span>.</p>` +
+        `<p>The judge's verdict: <b class="${verdict.state}">${esc(verdict.state)}</b></p>`;
+      let risk = null, refused = null;
+      try { risk = P.riskPct($("t-risk").value); } catch (e) { refused = e.message; }
+      if (refused) {
+        html += `<p class="bearish">Refused: ${esc(refused)}. The command line refuses the same way (<code>--risk-pct</code>), so a limit above the ceiling can never be recorded by accident.</p>`;
+      } else if (verdict.state === "LONG" || verdict.state === "SHORT") {
+        const p = P.position(f.last_close, f.atr_14, verdict.state, risk, 10000);
+        html += `<table><tbody>` +
+          `<tr><td>Entry (last close)</td><td><b>${n2(p.entry, 6)}</b></td></tr>` +
+          `<tr><td>Stop, 1.5 × ATR away</td><td>${n2(p.stop, 6)}</td></tr>` +
+          `<tr><td>Take-profit, 3 × ATR away</td><td>${n2(p.take_profit, 6)}</td></tr>` +
+          `<tr><td>Size = (capital × ${n2(risk)}%) ÷ stop distance</td><td><b>${n2(p.size, 6)}</b> units</td></tr>` +
+          `<tr><td>If the stop is hit you lose</td><td><b>$${n2(p.risk_cash)}</b>, exactly your limit (${n2(risk)}% of $10,000)</td></tr></tbody></table>`;
+      } else {
+        html += `<p class="mut">No position opens in this state, so the risk limit has nothing to size. Try more voices, a bearish side, or the high-conviction box.</p>`;
+      }
+      out.innerHTML = html;
+    }
+    ["t-token", "t-stance", "t-rules", "t-high", "t-risk"].forEach((id) => $(id).addEventListener("input", renderTry));
+    chips.addEventListener("input", renderTry);
+    renderTry();
+
+    $("rejected").querySelector("tbody").innerHTML = Object.entries(rejected).sort().map(([tok, r]) =>
+      `<tr><td><b>${esc(tok)}</b></td><td>${esc((r.voices || []).join(", "))}</td><td>${esc((r.stances || []).join(", "))}</td><td class="mut">${esc(r.reason)}</td></tr>`
+    ).join("") || `<tr><td colspan="4" class="mut">nothing rejected</td></tr>`;
+  }).catch((e) => { $("stats").textContent = "Could not load the ledger here (open from the deployed site)."; });
+})();
+</script>
+</body></html>

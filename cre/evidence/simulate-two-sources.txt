@@ -1,0 +1,9 @@
+2026-10-25T04:37:19Z [SIMULATION] Simulator Initialized
+2026-10-25T04:37:19Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-25T04:37:19Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-25T04:37:20Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 80519.27712591 (updatedAt 1792910148)
+2026-10-25T04:37:21Z [USER LOG] Anchored seq 224 head 9e79123c070c995813b0a03e6c7ec33220e6c21de6da0e9a424cb4f1294aca96 at tx 0x
+✓ Workflow Simulation Result:
+"{\"seq\":224,\"head\":\"9e79123c070c995813b0a03e6c7ec33220e6c21de6da0e9a424cb4f1294aca96\",\"symbol\":\"SOLUSDT\",\"feed\":\"BTC / USD\",\"price\":\"80519.27712591\",\"txHash\":\"0x\"}"
+2026-10-25T04:37:21Z [SIMULATION] Execution finished signal received
+2026-10-25T04:37:21Z [SIMULATION] Skipping WorkflowEngineV2

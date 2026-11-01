@@ -1,0 +1,24 @@
+{
+ "language": "Solidity",
+ "sources": {
+  "LedgerAnchor.sol": {
+   "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.19;\n\ninterface IERC165 {\n    function supportsInterface(bytes4 interfaceId) external view returns (bool);\n}\n\n/// Receiver interface of the Chainlink CRE forwarder (same signature as Chainlink's IReceiver).\ninterface IReceiver is IERC165 {\n    function onReport(bytes calldata metadata, bytes calldata report) external;\n}\n\n/// @title LedgerAnchor\n/// @notice Stores, once per sequence number, the SHA-256 head of the Verdict Desk decision\n///         ledger next to a Chainlink Data Feed price, as delivered by a CRE workflow.\n/// @dev Append-only by construction: a report must carry a sequence number greater than the\n///      last accepted one, so an anchored head can never be overwritten. Only the CRE\n///      forwarder can call `onReport`; optionally only reports from one workflow owner.\ncontract LedgerAnchor is IReceiver {\n    struct Anchor {\n        bytes32 headHash;\n        int256 price;\n        uint8 priceDecimals;\n        uint256 priceUpdatedAt;\n        uint256 anchoredAt;\n    }\n\n    address public immutable forwarder;\n    address public immutable expectedWorkflowOwner; // zero disables the owner check\n    uint64 public latestSeq;\n    mapping(uint64 => Anchor) public anchors;\n\n    event Anchored(uint64 indexed seq, bytes32 indexed headHash, int256 price, uint8 priceDecimals, uint256 priceUpdatedAt);\n\n    error NotForwarder(address sender);\n    error NotWorkflowOwner(address owner);\n    error BadMetadata();\n    error StaleSequence(uint64 seq, uint64 latest);\n    error EmptyHead();\n\n    constructor(address forwarder_, address expectedWorkflowOwner_) {\n        require(forwarder_ != address(0), \"forwarder is zero\");\n        forwarder = forwarder_;\n        expectedWorkflowOwner = expectedWorkflowOwner_;\n    }\n\n    function onReport(bytes calldata metadata, bytes calldata report) external override {\n        if (msg.sender != forwarder) revert NotForwarder(msg.sender);\n        if (expectedWorkflowOwner != address(0)) {\n            // Forwarder metadata: workflow id (32 bytes), workflow name (10), workflow owner (20).\n            if (metadata.length < 62) revert BadMetadata();\n            address owner = address(bytes20(metadata[42:62]));\n            if (owner != expectedWorkflowOwner) revert NotWorkflowOwner(owner);\n        }\n        (uint64 seq, bytes32 headHash, int256 price, uint8 decimals, uint256 updatedAt) =\n            abi.decode(report, (uint64, bytes32, int256, uint8, uint256));\n        if (headHash == bytes32(0)) revert EmptyHead();\n        if (seq <= latestSeq) revert StaleSequence(seq, latestSeq);\n        latestSeq = seq;\n        anchors[seq] = Anchor(headHash, price, decimals, updatedAt, block.timestamp);\n        emit Anchored(seq, headHash, price, decimals, updatedAt);\n    }\n\n    /// @notice True when `headHash` is the head that was anchored for `seq`.\n    function isAnchored(uint64 seq, bytes32 headHash) external view returns (bool) {\n        return headHash != bytes32(0) && anchors[seq].headHash == headHash;\n    }\n\n    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {\n        return interfaceId == type(IReceiver).interfaceId || interfaceId == type(IERC165).interfaceId;\n    }\n}\n"
+  }
+ },
+ "settings": {
+  "optimizer": {
+   "enabled": true,
+   "runs": 200
+  },
+  "outputSelection": {
+   "*": {
+    "*": [
+     "abi",
+     "evm.bytecode.object",
+     "evm.deployedBytecode.object",
+     "metadata"
+    ]
+   }
+  }
+ }
+}

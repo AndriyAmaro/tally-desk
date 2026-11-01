@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 400" width="1240" height="400" font-family="Geist, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#958c7c"/>
+    </marker>
+    <linearGradient id="node" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf8f1"/>
+      <stop offset="1" stop-color="#f2ece0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1240" height="400" fill="#fbf8f1"/>
+
+  <text x="620" y="40" text-anchor="middle" font-size="26" font-weight="700" fill="#1c2230">Verdict Desk: the chain of custody</text>
+  <text x="620" y="62" text-anchor="middle" font-size="13" fill="#646a76">from a public market to a decision nobody can edit afterwards</text>
+
+  <!-- node helper coords: six boxes across -->
+  <!-- 1 -->
+  <g>
+    <rect x="20" y="120" width="180" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="48" cy="146" r="13" fill="#8a5a12"/>
+    <text x="48" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">1</text>
+    <text x="110" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Evidence</text>
+    <text x="110" y="172" text-anchor="middle" font-size="11" fill="#646a76">Binance · OKX · GDELT · RSS</text>
+    <text x="110" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">frozen at collection, with</text>
+    <text x="110" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">source and time each</text>
+    <text x="110" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#a3302a">gaps recorded, never faked</text>
+  </g>
+
+  <!-- 2 -->
+  <g>
+    <rect x="222" y="120" width="180" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="250" cy="146" r="13" fill="#8a5a12"/>
+    <text x="250" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">2</text>
+    <text x="312" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Debate</text>
+    <text x="312" y="172" text-anchor="middle" font-size="11" fill="#646a76">bull agent vs bear agent</text>
+    <text x="312" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">over the same packet;</text>
+    <text x="312" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">every claim must cite</text>
+    <text x="312" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2e3442">an evidence item</text>
+  </g>
+
+  <!-- 3 -->
+  <g>
+    <rect x="424" y="120" width="180" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="452" cy="146" r="13" fill="#8a5a12"/>
+    <text x="452" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">3</text>
+    <text x="514" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Validator</text>
+    <text x="514" y="172" text-anchor="middle" font-size="11" fill="#646a76">citation enforcement</text>
+    <text x="514" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">a claim whose cited item</text>
+    <text x="514" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">does not contain its number</text>
+    <text x="514" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#a3302a">is refused, and logged</text>
+  </g>
+
+  <!-- 4 -->
+  <g>
+    <rect x="626" y="120" width="180" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="654" cy="146" r="13" fill="#8a5a12"/>
+    <text x="654" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">4</text>
+    <text x="716" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Judge</text>
+    <text x="716" y="172" text-anchor="middle" font-size="11" fill="#646a76">deterministic code</text>
+    <text x="716" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">action · size · stop · target</text>
+    <text x="716" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">inside a declared risk limit</text>
+    <text x="716" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#a3302a">stale price → refuses to decide</text>
+  </g>
+
+  <!-- 5 -->
+  <g>
+    <rect x="828" y="120" width="180" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="856" cy="146" r="13" fill="#8a5a12"/>
+    <text x="856" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">5</text>
+    <text x="918" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Dossier</text>
+    <text x="918" y="172" text-anchor="middle" font-size="11" fill="#646a76">one public line per decision</text>
+    <text x="918" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">hash-chained to the previous</text>
+    <text x="918" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">RFC 8785 + SHA-256;</text>
+    <text x="918" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2e3442">replay re-derives 100%</text>
+  </g>
+
+  <!-- 6 -->
+  <g>
+    <rect x="1030" y="120" width="190" height="150" rx="10" fill="url(#node)" stroke="#ddd5c6"/>
+    <circle cx="1058" cy="146" r="13" fill="#a3302a"/>
+    <text x="1058" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#fbf8f1">6</text>
+    <text x="1125" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#1c2230">Anchored</text>
+    <text x="1125" y="172" text-anchor="middle" font-size="11" fill="#646a76">independent witnesses</text>
+    <text x="1125" y="206" text-anchor="middle" font-size="11.5" fill="#2e3442">Sepolia contract (CRE)</text>
+    <text x="1125" y="222" text-anchor="middle" font-size="11.5" fill="#2e3442">+ Bitcoin (OpenTimestamps)</text>
+    <text x="1125" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#2e3442">no key, no wallet</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#958c7c" stroke-width="2" marker-end="url(#arr)">
+    <line x1="202" y1="195" x2="220" y2="195"/>
+    <line x1="404" y1="195" x2="422" y2="195"/>
+    <line x1="606" y1="195" x2="624" y2="195"/>
+    <line x1="808" y1="195" x2="826" y2="195"/>
+    <line x1="1010" y1="195" x2="1028" y2="195"/>
+  </g>
+
+  <text x="620" y="318" text-anchor="middle" font-size="12.5" fill="#646a76">the ledger is public and the dashboard recomputes every hash in the visitor's own browser, no trust in the host required</text>
+  <text x="620" y="342" text-anchor="middle" font-size="12" fill="#a39a8a">simulated decisions only · no order is placed, signed or transmitted</text>
+</svg>

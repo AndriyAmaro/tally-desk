@@ -1,0 +1,18 @@
+data/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+cre/contracts/evm/build/
+cre/anchor/dist/
+# CRE CLI build output, and local environment files: keys never go in git (a throwaway testnet key still does not)
+cre/anchor/.cre_build_tmp.js
+.env
+.env.*
+**/.env
+**/.env.*
+*.key
+.sepolia.key
+
+# Local editor/agent state, never part of the project
+.claude/

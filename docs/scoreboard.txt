@@ -1,0 +1,19 @@
+LIVE SCOREBOARD: every number below is counted from the raw ledger, as of dossier 728 (head 48a5263430cad853).
+Rebuild and check it yourself: python3 -m verdict_desk scoreboard --check docs/scoreboard.txt. The check fails if any figure differs; no number here is typed by hand.
+
+- 728 dossiers, hash-chained. Proves integrity after recording: an edit, deletion or swap anywhere breaks every later hash.
+- 4237 analyst claims accepted and 297 refused by the citation validator (252 number not in cited evidence; 44 unknown evidence id; 1 no citation); 192 analyst calls failed before routing, when one provider at a time served the analysts (dossiers 5 to 344), each failure recorded in its dossier. Since routing across several models began (dossiers 384 to 728), 643 of 690 analyst calls were answered. Proves an audit trail: a refused claim is kept with its reason, so the record shows what was rejected and not only what survived.
+- 728 of 728 dossiers re-derive to the same verdict from their own frozen evidence. Proves repeatability: anyone can run the replay and get the same answer.
+- 400 practice positions closed by their own rule (118 at the target, 282 at the stop) and 73 still open: simulated -$4,600 on $10,000 before fees and -$9,106 after a 0.05% taker fee per side (slippage excluded), worst drawdown 70.35%. Each decision opens its own position, so positions overlap. Proves the practice trades are recorded and settled by rule: each is marked against candles frozen in later dossiers, the stop counted first when one candle hits both.
+- From dossier 375, new practice positions go to Sepolia testnet: 64 executed as a swap on Uniswap v3 (ETHUSDT), 167 recorded with a receipt but not executed (BTC and SOL have no testnet market), 18 failed sends, 164 closed on-chain by their stop or target; 242 positions, mostly from before that, stay simulated. Proves the practice trades leave the operator's hands: each transaction carries a digest of its decision, and the dossier records the transaction before it is sealed.
+- 566 tests pin the ledger, the pages and the docs to each other. Proves a controlled process: a figure that stops matching the chain fails the build.
+
+Three witnesses outside the operator (each one proves custody and authentication of the head, and a time we do not control; none is an eIDAS qualified time stamp):
+- Bitcoin (OpenTimestamps): head #722 stamped in block 973987. Proof: https://github.com/AndriyAmaro/verdict-desk/blob/main/ledger/timestamps/722.json.ots
+- Sigstore transparency log: head #728 signed by a GitHub workflow, log index 3614510020. Entry: https://search.sigstore.dev/?logIndex=3614510020
+- Ethereum Sepolia (GitHub Actions, the CRE workflow's checks outside the CRE runtime): dossier #728 anchored, hash equal to the ledger's. Transaction: https://sepolia.etherscan.io/tx/0xff7a0bd3aa413d94a49279045e9d81b24b186f7b06a5abe4f9ffdb96458f0291
+
+JUDGE PATH IN 60 SECONDS (three clicks, nothing to install):
+1. Verify the chain in your browser: https://andriyamaro.github.io/verdict-desk/
+2. Edit a dossier and watch the chain break (button on the same page): https://andriyamaro.github.io/verdict-desk/#tamper
+3. Check a witness outside our site: https://andriyamaro.github.io/verdict-desk/witnesses.html

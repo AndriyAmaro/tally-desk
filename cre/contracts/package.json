@@ -1,0 +1,11 @@
+{
+  "name": "verdict-desk-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Dependencies of the generated CRE bindings in contracts/evm/ts/generated.",
+  "dependencies": {
+    "@chainlink/cre-sdk": "^1.23.0",
+    "viem": "2.34.0"
+  }
+}

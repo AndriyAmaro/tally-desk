@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · verify a record you were handed</title>
+<meta name="description" content="Paste a Verdict Desk dossier and check it here: the hash is recomputed in your browser, the chain link is checked against the published ledger, and the verdict is re-derived from the frozen evidence.">
+<meta property="og:title" content="Verdict Desk · verify a record you were handed">
+<meta property="og:description" content="Paste a Verdict Desk dossier and check it here: the hash is recomputed in your browser, the chain link is checked against the published ledger, and the verdict is re-derived from the frozen evidence.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0 auto;max-width:900px;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 6px}.mut{color:var(--mut)}
+code{font-size:12px;word-break:break-all}
+nav a{margin-right:14px}
+textarea{width:100%;box-sizing:border-box;min-height:190px;font:12px/1.45 ui-monospace,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px}
+button{font:inherit;padding:8px 16px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);cursor:pointer}
+button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+section{border:1px solid var(--line);border-radius:10px;padding:4px 16px 16px;margin:14px 0;background:var(--card)}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;font-size:12px;color:var(--mut)}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}.warn{color:var(--warn);font-weight:600}
+.big{font-size:22px;font-weight:700;margin:10px 0}
+.mono{font-family:ui-monospace,monospace;font-size:11px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+
+<h1>Verify a record you were handed</h1>
+<nav class="mut"><a href="index.html">Dashboard</a><a href="judge.html">Judge path</a><a href="ask.html">Ask the record</a><a href="lab.html">Lab</a><a href="exhibit/index.html">Exhibits</a><a href="scorecard.html">Scorecard</a><a href="narrative.html">Market voices</a><a href="witnesses.html">Witnesses</a><a href="evidence.html">Evidence</a><a href="learn.html">Learn</a></nav>
+<p class="mut">If a Verdict Desk record reaches you as a file (from a colleague, an email, a screenshot transcription), you should not have to trust whoever sent it, or this site. Paste it below and this page does three independent checks in your own browser.</p>
+
+<section>
+  <h2>1. Paste the record (one JSON object, a JSON array, or JSONL)</h2>
+  <textarea id="input" spellcheck="false" placeholder='{"seq": 80, "prev_hash": "...", "hash": "...", ...}'></textarea>
+  <div class="row">
+    <button id="go" class="primary" type="button">Verify</button>
+    <label class="mut">or open a file <input id="file" type="file" accept=".json,.jsonl,.txt"></label>
+    <button id="sample" type="button">Load a real record from the published ledger</button>
+  </div>
+  <p class="mut" id="status" role="status" aria-live="polite"></p>
+</section>
+
+<section id="out" hidden>
+  <h2>2. What this page checked</h2>
+  <div id="verdict" class="big"></div>
+  <div id="detail"></div>
+  <h2>3. Why each check matters</h2>
+  <ul class="mut">
+    <li><b>Integrity</b>: the SHA-256 over the record's canonical JSON (RFC 8785) is recomputed here. If it differs from the recorded hash, the file was edited after recording, and nothing below can rescue it.</li>
+    <li><b>Linkage</b>: the record names the hash before it. This page reads the published ledger and confirms the previous record exists with that hash, so the file is part of a chain rather than a standalone claim.</li>
+    <li><b>Re-derivation</b>: the arguments stored in the record are fed back through the same policy the ledger was produced with (<code>web/policy.js</code>). If today's rules produce a different action from the recorded one, the record no longer explains itself and you are told so.</li>
+  </ul>
+  <p class="mut">Nothing is uploaded. The page has no network access except reading the public ledger file from this site.</p>
+</section>
+
+<script src="canonical.js"></script>
+<script src="policy.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const V = window.VerdictDesk, P = window.VerdictPolicy;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // An evidence pack (the file the exhibits offer for download) wraps the record under `dossier`; check the record inside it.
+  function unwrapPack(r) { return r && r.format === "verdict-desk/evidence-pack/v1" && r.dossier ? r.dossier : r; }
+  function parse(text) { return parseRaw(text).map(unwrapPack); }
+  function parseRaw(text) {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      const arr = JSON.parse(trimmed);
+      return Array.isArray(arr) ? arr : [arr];
+    }
+    if (trimmed.startsWith("{")) {
+      // a single object (pretty-printed or not), or JSONL
+      try { return [JSON.parse(trimmed)]; } catch (e) { /* more than one object: JSONL */ }
+      const lines = trimmed.split("\n").filter((l) => l.trim().startsWith("{"));
+      return lines.map((l) => JSON.parse(l));
+    }
+    return trimmed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+  }
+
+  function family(action) {
+    if (!action) return "UNKNOWN";
+    if (action === "LONG" || action === "SHORT") return action;
+    if (String(action).startsWith("BLOCKED")) return "BLOCKED";
+    return "NO_POSITION";
+  }
+
+  async function ledgerIndex() {
+    try {
+      const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
+      if (!res.ok) return null;
+      const text = await res.text();
+      const map = new Map();
+      for (const line of text.split("\n")) {
+        if (!line.trim()) continue;
+        const d = JSON.parse(line);
+        map.set(d.seq, d);
+      }
+      return map;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function checkOne(d, index) {
+    const body = {};
+    Object.keys(d).forEach((k) => { if (k !== "hash") body[k] = d[k]; });
+    const recomputed = await V.webSha256(V.canonical(body));
+    const intact = recomputed === d.hash;
+
+    let linked = null, linkNote = "";
+    if (!index) linkNote = "the published ledger could not be read here, so linkage was not checked";
+    else if (d.prev_hash === V.GENESIS) { linked = d.seq === 1; linkNote = "record claims to be the genesis"; }
+    else {
+      const prev = index.get(d.seq - 1);
+      if (!prev) { linked = false; linkNote = "the ledger has no record " + (d.seq - 1); }
+      else { linked = prev.hash === d.prev_hash; linkNote = linked ? "previous record " + (d.seq - 1) + " carries that hash" : "previous record " + (d.seq - 1) + " carries a different hash"; }
+    }
+
+    const v = d.verdict || {}, f = d.features || {};
+    const bull = (d.bull || []).reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    const bear = (d.bear || []).reduce((s, a) => s + (Number(a.weight) || 0), 0);
+    const atrPct = (Number(f.atr_14) || 0) / (Number(f.last_close) || 1) * 100;
+    const fresh = (d.evidence || {}).freshness || {};
+    const age = Number(fresh.newest_candle_age_minutes);
+    const windowMinutes = Number(fresh.window_minutes) || P.MARKET_WINDOW_MINUTES;
+    let rederived = null;
+    if (Number.isFinite(age)) rederived = P.evaluate({ bull, bear, atrPct, ageMinutes: age, windowMinutes });
+    const rulesVersion = v.rules_version || "v1";
+    let agrees = null;
+    if (rederived) {
+      agrees = rulesVersion === "v3" ? rederived.state === v.action : family(rederived.state) === family(v.action);
+    }
+    return { d, intact, recomputed, linked, linkNote, rederived, agrees, rulesVersion, bull, bear, atrPct, age, windowMinutes };
+  }
+
+  async function run() {
+    $("status").textContent = "";
+    let records;
+    try { records = parse($("input").value); }
+    catch (e) { $("status").innerHTML = `<span class="bad">Could not parse that: ${esc(e.message)}</span>`; return; }
+    if (!records.length) { $("status").textContent = "Nothing to verify yet."; return; }
+
+    const index = await ledgerIndex();
+    const results = [];
+    for (const r of records) results.push(await checkOne(r, index));
+
+    const allGood = results.every((r) => r.intact && r.linked !== false && r.agrees !== false);
+    $("out").hidden = false;
+    $("verdict").innerHTML = allGood
+      ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, linked${
+          results.some((r) => r.rederived) ? ", and re-derived from the frozen evidence" : ""}</span>`
+      : `<span class="bad">NOT VERIFIED</span> <span class="mut" style="font-size:15px">at least one check failed, see below</span>`;
+
+    $("detail").innerHTML = results.map((r) => {
+      const d = r.d, v = d.verdict || {};
+      const mark = (b, good, bad) => b === null ? `<span class="mut">${esc(bad || "not checked")}</span>` : (b ? `<span class="ok">${esc(good)}</span>` : `<span class="bad">${esc(bad)}</span>`);
+      return `<table><tbody>
+        <tr><th style="width:190px">Record</th><td><b>#${esc(d.seq)}</b> ${esc((d.evidence || {}).symbol)} · ${esc(v.action)} · edge ${esc(v.edge)}</td></tr>
+        <tr><th>Integrity</th><td>${mark(r.intact, "intact: recomputed hash matches", "altered: recomputed hash differs")}
+          <div class="mono mut">recorded ${esc((d.hash || "").slice(0, 32))}…<br>recomputed ${esc((r.recomputed || "").slice(0, 32))}…</div></td></tr>
+        <tr><th>Linkage</th><td>${mark(r.linked, "linked", "broken link")} <span class="mut">${esc(r.linkNote)}</span></td></tr>
+        <tr><th>Re-derivation</th><td>${r.rederived
+            ? `${mark(r.agrees, "the rules reproduce the recorded action", "the rules now produce a different action")}
+               <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under</div>`
+            : `<span class="mut">not possible: this record has no freshness block, so the policy cannot be replayed on it</span>`}</td></tr>
+      </tbody></table>`;
+    }).join("");
+  }
+
+  // ?sample=1 runs the check on a real record immediately, so a link can prove the page works
+  // without asking the reader to paste anything first.
+  if (location.search.indexOf("sample") !== -1) {
+    setTimeout(() => $("sample").click(), 50);
+  }
+
+  $("go").addEventListener("click", run);
+  $("file").addEventListener("change", async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    $("input").value = await f.text();
+    run();
+  });
+  $("sample").addEventListener("click", async () => {
+    try {
+      const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
+      const text = await res.text();
+      const lines = text.split("\n").filter((l) => l.trim());
+      // um registro com camada de analista, para a re-derivacao ter o que comparar
+      const picks = [lines[lines.length - 1], lines[Math.floor(lines.length / 2)]];
+      $("input").value = picks.join("\n");
+      $("status").textContent = "Loaded from the published ledger. Edit anything and press Verify again to see the check fail.";
+      run();
+    } catch (e) { $("status").innerHTML = `<span class="bad">Could not read the ledger here (${esc(e.message)}). Paste a record instead.</span>`; }
+  });
+})();
+</script>
+</body></html>

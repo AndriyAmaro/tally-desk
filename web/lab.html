@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · cause and effect lab</title>
+<meta name="description" content="Every argument in a Verdict Desk dossier, what happens to the verdict if you remove it, and a playground that replays the policy rules in your browser.">
+<meta property="og:title" content="Verdict Desk · cause and effect lab">
+<meta property="og:description" content="Drop one argument from a real recorded decision and watch the verdict change. Then replay the policy yourself.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0 auto;max-width:960px;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 6px}h3{font-size:14px;margin:14px 0 4px}
+.mut{color:var(--mut)}code{font-size:12px;word-break:break-all}
+table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;font-size:14px}
+th{font-weight:600}
+nav a{margin-right:14px}
+.LONG,.ok{color:var(--ok);font-weight:600}.SHORT,.bad{color:var(--bad);font-weight:600}
+.WATCH_REVERSAL,.REDUCE_EXPOSURE{color:var(--warn);font-weight:600}
+section{border:1px solid var(--line);border-radius:10px;padding:4px 16px 16px;margin:14px 0;background:var(--card)}
+tr.flip{background:rgba(179,38,30,.14)}
+.box{border-left:3px solid var(--accent);padding:6px 12px;margin:10px 0;background:var(--bg)}
+.slider{display:grid;grid-template-columns:190px 1fr 64px;gap:10px;align-items:center;margin:8px 0}
+input[type=range]{width:100%}
+select,button{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{cursor:pointer}button:hover{border-color:var(--accent)}
+.big{font-size:26px;font-weight:700;margin:6px 0}
+.pill{display:inline-block;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:12px;margin-right:6px}
+.quote{font-style:italic;color:var(--mut)}
+/* narrow screens: a wide table scrolls inside itself instead of widening the page */
+table{display:block;max-width:100%;overflow-x:auto}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+
+<h1>Cause and effect lab</h1>
+<nav class="mut"><a href="index.html">Dashboard</a><a href="judge.html">Judge path</a><a href="ask.html">Ask the record</a><a href="lab.html"><b>Lab</b></a><a href="exhibit/index.html">Exhibits</a><a href="verify.html">Verify a record</a><a href="scorecard.html">Scorecard</a><a href="narrative.html">Market voices</a><a href="witnesses.html">Witnesses</a><a href="evidence.html">Evidence</a><a href="learn.html">Learn</a></nav>
+<p class="mut">Two questions this page answers with the real recorded ledger: <b>which single argument decided a verdict</b>, and <b>what rule would fire</b> for inputs you choose. Nothing here is simulated data: section one reads the published dossiers, section two replays the same policy that produced them.</p>
+
+<section>
+  <h2>1. Drop one argument from a real decision</h2>
+  <p class="mut">Every dossier already carries its own sensitivity analysis: for each argument, the edge and the action that would remain if that argument were removed. Pick a dossier and look for the red rows: those are the arguments the verdict literally depends on.</p>
+  <p><label>Dossier <select id="pick"></select></label> <button id="latest" type="button">Jump to latest</button></p>
+  <div id="verdict" class="big">Loading…</div>
+  <div id="facts" class="mut"></div>
+  <div id="sensitivity"></div>
+  <h3>What the agents said, and what the validator threw away</h3>
+  <div id="debate" class="mut">No LLM layer in this dossier.</div>
+  <h3>Narrative layer: who agreed, and which tokens never converged</h3>
+  <div id="narrative" class="mut">No narrative layer in this dossier.</div>
+</section>
+
+<section>
+  <h2>2. Policy playground: replay the rules yourself</h2>
+  <p class="mut">This mirrors <code>verdict_desk/agents_v2.py</code>: the entry threshold, the volatility rule, the freshness gate and the fail-closed behaviour. Move the sliders and the rule that fires is named, not hidden. It treats each side as a single argument of the weight you set, which is the same arithmetic the judge runs.</p>
+  <div class="slider"><label for="bull">Bull weight</label><input id="bull" type="range" min="0" max="4" step="0.1" value="2"><output id="bullv"></output></div>
+  <div class="slider"><label for="bear">Bear weight</label><input id="bear" type="range" min="0" max="4" step="0.1" value="1.6"><output id="bearv"></output></div>
+  <div class="slider"><label for="atr">Volatility (ATR, % of price)</label><input id="atr" type="range" min="0" max="6" step="0.1" value="1"><output id="atrv"></output></div>
+  <div class="slider"><label for="age">Price age (minutes)</label><input id="age" type="range" min="0" max="200" step="1" value="20"><output id="agev"></output></div>
+  <div id="play" class="big"></div>
+  <div id="why" class="box"></div>
+  <div id="rules"></div>
+</section>
+
+<p class="mut">Simulated decisions only: this project never places or signs an order. Rules v3 keeps the v2 sizing and adds named declined states.</p>
+
+<script src="policy.js"></script>
+<script>
+(async function () {
+  const P = window.VerdictPolicy;
+  const THRESHOLD = P.THRESHOLD, MARKET_WINDOW = P.MARKET_WINDOW_MINUTES;
+  let rows = [];
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ---- section 1: real dossiers -------------------------------------------------
+  function renderPick() {
+    const sel = $("pick");
+    sel.innerHTML = rows.map((d) => {
+      const v = d.verdict || {};
+      return `<option value="${d.seq}">#${d.seq} ${esc(d.evidence?.symbol)} ${esc(v.action)}${v.rules_version ? " (" + esc(v.rules_version) + ")" : ""}</option>`;
+    }).join("");
+    sel.value = String(rows[rows.length - 1].seq);
+    show(rows[rows.length - 1]);
+  }
+
+  function show(d) {
+    const v = d.verdict || {};
+    const s = d.sensitivity || {};
+    $("verdict").innerHTML = `<span class="${esc(v.action)}">${esc(v.action)}</span> <span class="mut" style="font-size:15px">${esc(d.evidence?.symbol)} · edge ${esc(v.edge)} · rules ${esc(v.rules_version || "v1")}</span>`;
+    const f = d.features || {};
+    const bits = [];
+    if (v.entry != null) bits.push(`entry ${v.entry}`, `stop ${v.stop}`, `target ${v.take_profit}`, `size ${v.size}`);
+    if (v.risk_pct != null) bits.push(`${v.risk_pct}% risk per position` + (v.system_max_risk_pct ? ` (system cap ${v.system_max_risk_pct}%)` : ""));
+    const fr = d.evidence?.freshness || {};
+    if (fr.newest_candle_age_minutes != null) bits.push(`price age ${fr.newest_candle_age_minutes} min`);
+    $("facts").textContent = bits.join(" · ") || "No position: the judge declined to open one.";
+    $("facts").innerHTML += ` <a href="exhibit/exhibit-${d.seq}.html">Open this decision as a printable exhibit →</a>`;
+
+    const drops = s.drop_one || [];
+    if (!drops.length) { $("sensitivity").innerHTML = `<p class="mut">This dossier predates the sensitivity analysis.</p>`; }
+    else {
+      const flips = drops.filter((x) => x.flips);
+      $("sensitivity").innerHTML = `
+        <p>${flips.length ? `<b>${flips.length} argument${flips.length > 1 ? "s" : ""} would change the verdict if removed.</b>` : "<b>The verdict survives the loss of any single argument.</b> It is the whole set that holds it."}</p>
+        <table><thead><tr><th>Side</th><th>Argument</th><th>Weight</th><th>Edge without it</th><th>Action without it</th><th>Decides the verdict?</th></tr></thead><tbody>
+        ${drops.map((x) => `<tr class="${x.flips ? "flip" : ""}"><td>${esc(x.side)}</td><td>${esc(x.claim)}</td><td>${esc(x.weight)}</td><td>${esc(x.edge_without)}</td><td class="${esc(x.action_without)}">${esc(x.action_without)}</td><td>${x.flips ? "<b>yes</b>" : "no"}</td></tr>`).join("")}
+        </tbody></table>
+        <p class="mut">To flip the current verdict the bull side still needs ${esc(s.needs_for_long)} more, or the bear side ${esc(s.needs_for_short)}.</p>`;
+    }
+
+    const llm = d.llm;
+    if (!llm) { $("debate").textContent = "No LLM layer in this dossier."; }
+    else {
+      const side = (name) => {
+        const block = llm[name] || {};
+        const acc = block.accepted || [], rej = block.rejected || [];
+        return `<h3>${name} analyst: ${acc.length} claims kept, ${rej.length} discarded by the citation validator</h3>
+          <ul>${acc.map((c) => `<li>${esc(c.claim)} <span class="quote">“${esc(c.evidence_quote || c.quote || "")}”</span> <code>${esc(c.evidence_ref)}</code></li>`).join("") || "<li class='mut'>nothing kept</li>"}</ul>
+          ${rej.length ? `<p class="mut">Discarded (no valid citation): ${rej.map((r) => esc(r.claim || r.reason)).join("; ")}</p>` : ""}`;
+      };
+      $("debate").innerHTML = side("bull") + side("bear");
+    }
+
+    const n = d.evidence?.narrative;
+    if (!n) { $("narrative").textContent = "No narrative layer in this dossier."; }
+    else {
+      const conv = n.convergence || [];
+      const rej = n.rejected_candidates || [];
+      $("narrative").innerHTML = `
+        <p>${n.voices ? n.voices.length : 0} headlines from ${new Set((n.voices || []).map((v) => v.name)).size} voices · ${(n.extractions || []).length} extractions kept · ${(n.rejected || []).length} rejected</p>
+        ${conv.length ? `<table><thead><tr><th>Token</th><th>Bias</th><th>Voices agreeing</th><th>Top conviction</th><th>Top urgency</th></tr></thead><tbody>
+          ${conv.map((c) => `<tr><td><b>${esc(c.token)}</b></td><td>${esc(c.bias)}</td><td>${esc((c.voices || []).join(", "))}</td><td>${esc(c.max_conviction)}</td><td>${esc(c.max_urgency)}</td></tr>`).join("")}
+        </tbody></table>` : `<p class="mut">No convergence in this run: no token was mentioned by two or more voices with the same stance.</p>`}
+        ${rej.length ? `<p class="mut"><b>Tokens that did not become a narrative:</b> ${rej.map((r) => `<code>${esc(r.token)}</code> ${esc(r.reason)}`).join(" · ")}</p>` : ""}`;
+    }
+  }
+
+  // ---- section 2: playground ---------------------------------------------------
+  function play() {
+    const bull = +$("bull").value, bear = +$("bear").value, atr = +$("atr").value, age = +$("age").value;
+    $("bullv").textContent = bull.toFixed(1);
+    $("bearv").textContent = bear.toFixed(1);
+    $("atrv").textContent = atr.toFixed(1) + "%";
+    $("agev").textContent = age + " min";
+
+    const result = P.evaluate({ bull, bear, atrPct: atr, ageMinutes: age });
+    const act = result.state;
+    $("play").innerHTML = `<span class="${esc(act)}">${esc(act)}</span> <span class="mut" style="font-size:15px">edge ${result.edge}</span>`;
+
+    const meaning = {
+      BLOCKED_STALE: "The judge refuses to size a position on a stale price and records the refusal instead of deciding.",
+      LONG: "A sized practice position, with the stop and target derived from ATR.",
+      SHORT: "A sized practice position, with the stop and target derived from ATR.",
+      REDUCE_EXPOSURE: "Two strong sides plus high volatility: nothing new opens, and existing exposure should shrink.",
+      WATCH_REVERSAL: "Declined, and named: one argument is worth enough to flip the decision, so the dossier says which.",
+      FLAT: "Nothing close to the band. Declined, and the dossier says so.",
+    };
+    $("why").innerHTML = `<b>${esc(act)}</b> fired: ${esc(result.rule)}. ${esc(meaning[act] || "")}`;
+
+    $("rules").innerHTML = `<table><thead><tr><th>State</th><th>Rule that fires it</th><th>What it does</th></tr></thead><tbody>
+      ${P.STATES.map(([n, r, a]) => `<tr class="${n === act ? "flip" : ""}"><td class="${esc(n)}">${esc(n)}${n === act ? " ←" : ""}</td><td>${esc(r)}</td><td>${esc(a)}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="mut">Thresholds, mirrors and windows come from <code>web/policy.js</code>, which <code>tests/test_policy_parity.py</code> compares against the Python judge on a grid of inputs.</p>`;
+  }
+
+  ["bull", "bear", "atr", "age"].forEach((id) => $(id).addEventListener("input", play));
+  $("latest").addEventListener("click", () => { $("pick").value = String(rows[rows.length - 1].seq); show(rows[rows.length - 1]); });
+  $("pick").addEventListener("change", () => {
+    const d = rows.find((x) => String(x.seq) === $("pick").value);
+    if (d) show(d);
+  });
+
+  try {
+    const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const text = await res.text();
+    rows = text.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    renderPick();
+  } catch (err) {
+    $("verdict").textContent = "Could not load the ledger here.";
+    $("sensitivity").innerHTML = `<p class="mut">Open this page from the deployed dashboard, or run <code>python3 -m http.server</code> in the repository root. (${esc(err.message)})</p>`;
+  }
+  play();
+})();
+</script>
+</body></html>

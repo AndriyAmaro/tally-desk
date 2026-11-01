@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · a use case for a lawyer</title>
+<meta name="description" content="A client asks why an autonomous agent acted. Six steps show how a lawyer proves what the agent saw and argued at the time, from one exhibit, one downloadable pack and three witnesses outside the operator.">
+<meta property="og:title" content="Verdict Desk · a use case for a lawyer">
+<meta property="og:description" content="What the agent knew, when it knew it, and why it acted: proven from one exhibit, one pack and three outside witnesses.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,sans-serif;margin:0 auto;max-width:860px;padding:16px}
+h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:26px 0 6px}
+.mut{color:var(--mut)}code{font-size:12px;word-break:break-all}
+nav a{margin-right:14px}
+.case{border:1px solid var(--line);border-radius:12px;padding:10px 16px;margin:14px 0;background:var(--card)}
+ol.steps{padding-left:22px}ol.steps li{margin:12px 0}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.scroll{overflow-x:auto}
+.btn{display:inline-block;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;margin:4px 6px 4px 0}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+
+<nav class="mut"><a href="index.html">Dashboard</a><a href="judge.html">Judge path</a><b>Use case</b><a href="exhibit/index.html">Exhibits</a><a href="verify.html">Verify a record</a><a href="witnesses.html">Witnesses</a><a href="evidence.html">Evidence</a></nav>
+
+<h1>A use case: "why did your agent do that, and what did it know?"</h1>
+<p class="mut">This page walks through one real decision of the live ledger the way a lawyer would. It is not legal advice, and whether a record is admitted is for the court; the page shows what the record lets you establish and what it does not.</p>
+
+<div class="case" id="case">
+  <b>The situation.</b> A client says the agent should not have opened a <span id="ex-action">short</span> on <span id="ex-symbol">BTCUSDT</span>, and asks what it knew when it did. Everything the operator can show on its own, such as a log or a database, is something the operator could have edited afterwards. The example below is dossier <b>#<span id="ex-seq">212</span></b>, recorded <span id="ex-when">…</span>, the one anchored on the Ethereum Sepolia contract.
+</div>
+
+<h2>Six steps, no installation</h2>
+<ol class="steps">
+  <li><b>Open the exhibit.</b> <a id="ex-exhibit" href="exhibit/index.html">The decision exhibit</a> is a printable document generated from one line of the public ledger. Its seal says whether the record still matches its fingerprint, recomputed when the page is built and again by your browser on the verifier.</li>
+  <li><b>Read what the agent saw.</b> Section 1 lists every item the agent had (candles, funding, headlines, public voices) with its source and the time it was collected. An item that failed to load is recorded as a gap, not left out silently.</li>
+  <li><b>Read why it acted.</b> The bull and bear arguments each cite the evidence item they rest on. The exhibit marks the single argument that decided the verdict and shows what would have flipped it. Claims the validator refused (for example a number the cited evidence does not contain) are listed with the reason.</li>
+  <li><b>Take the pack.</b> The exhibit offers an <i>evidence pack</i>, one JSON file with the record, the recomputed hash, the replayed verdict and the links to the records either side. <a id="ex-pack" href="exhibit/index.html">Download the pack</a>, then <a href="verify.html">paste it into the verifier</a> to recompute the hash in your browser, or follow the numbered steps in the file without our software.</li>
+  <li><b>Ask three witnesses outside the operator.</b> <a href="witnesses.html">The witnesses page</a> asks Bitcoin (through two block explorers), the public Sigstore transparency log and the Sepolia contract whether the head of the chain is the one they saw, at a time the operator does not control.</li>
+  <li><b>Draft the foundation declaration.</b> <a href="evidence.html">The evidence page</a> drafts a declaration from the real dossier, after re-checking the chain in your browser, for a qualified person to review and sign.</li>
+</ol>
+
+<div>
+  <a class="btn" id="b-exhibit" href="exhibit/index.html">Open the exhibits</a>
+  <a class="btn" href="verify.html">Verify a record</a>
+  <a class="btn" href="witnesses.html">Check the witnesses</a>
+</div>
+
+<h2>What this lets you show, and what it does not</h2>
+<div class="scroll"><table>
+  <thead><tr><th>You can show</th><th>You cannot show</th></tr></thead>
+  <tbody>
+    <tr><td>The record has not been edited since it was written: any change breaks every later hash.</td><td>That the record was <i>right</i>, or that a source told the truth. The chain proves integrity after recording.</td></tr>
+    <tr><td>What the agent had in front of it, with the source and time of each item, and which items were missing.</td><td>Who wrote the record. Authorship at collection time is not what the chain proves.</td></tr>
+    <tr><td>That the head of the chain existed no later than a Bitcoin block and a Sigstore log entry, neither controlled by the operator.</td><td>A qualified electronic time stamp under eIDAS. Ours is supporting evidence, and its weight is for the court.</td></tr>
+    <tr><td>That the verdict follows from the frozen evidence: the replay re-derives it.</td><td>That the analysts' wording is sound. Their claims are checked for citation, not for merit.</td></tr>
+  </tbody>
+</table></div>
+
+<p class="mut">Everything simulated stays simulated: no real-money order is placed, and the practice trades sent to Sepolia testnet use test tokens, and the decisions are not investment advice. <a href="judge.html">Back to the judge path</a>.</p>
+
+<script>
+(async function () {
+  var SEQ = 212;
+  try {
+    var text = await (await fetch('ledger/ledger.jsonl', { cache: 'no-store' })).text();
+    var row = text.split('\n').filter(Boolean).map(function (l) { return JSON.parse(l); }).find(function (r) { return r.seq === SEQ; });
+    if (!row) return;
+    document.getElementById('ex-seq').textContent = row.seq;
+    document.getElementById('ex-symbol').textContent = row.evidence.symbol;
+    document.getElementById('ex-action').textContent = row.verdict.action.toLowerCase().replace('_', ' ');
+    document.getElementById('ex-when').textContent = String(row.evidence.collected_at).slice(0, 16).replace('T', ' ') + ' UTC';
+    // the exhibit and the pack exist only for the newest dossiers and the anchored one, so link them only if they answer
+    var ex = 'exhibit/exhibit-' + SEQ + '.html';
+    if ((await fetch(ex, { method: 'HEAD' })).ok) {
+      document.getElementById('ex-exhibit').href = ex;
+      document.getElementById('b-exhibit').href = ex;
+      document.getElementById('b-exhibit').textContent = 'Open exhibit #' + SEQ;
+    }
+    if ((await fetch('pack/' + SEQ + '.json', { method: 'HEAD' })).ok) document.getElementById('ex-pack').href = 'pack/' + SEQ + '.json';
+  } catch (e) { /* the static text above still reads correctly without the live values */ }
+})();
+</script>
+</body></html>

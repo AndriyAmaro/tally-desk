@@ -1,0 +1,27 @@
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: ea47e6d3061ccfa35155b7f70246722918e74d1f4ce50c66d1d477d7974735ec
+  Config hash: 19c17c41acf11ae429f4faafe9a68a8ad4e568a2e8585749661213e3e3c0d28e
+2026-10-21T14:48:03Z [SIMULATION] Simulator Initialized
+
+2026-10-21T14:48:03Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-21T14:48:04Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json
+2026-10-21T14:48:04Z [USER LOG] Data Feed 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 84378.12678601 (updatedAt 1792602684)
+2026-10-21T14:48:13Z [USER LOG] Anchored seq 80 head 04e260dc39cdecb967ef23513aebd7aee260d2101e2507c7704c94dfb0532283 at tx 0x7caa1fbcce191f9fc4f0d9f2d47627b6bd6ab6fa52cb29af69d4f0a8d8e04be8
+
+✓ Workflow Simulation Result:
+"{\"seq\":80,\"head\":\"04e260dc39cdecb967ef23513aebd7aee260d2101e2507c7704c94dfb0532283\",\"symbol\":\"SOLUSDT\",\"price\":\"84378.12678601\",\"txHash\":\"0x7caa1fbcce191f9fc4f0d9f2d47627b6bd6ab6fa52cb29af69d4f0a8d8e04be8\"}"
+
+2026-10-21T14:48:13Z [SIMULATION] Execution finished signal received
+2026-10-21T14:48:13Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯

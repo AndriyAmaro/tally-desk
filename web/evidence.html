@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verdict Desk · evidence</title>
+<meta name="description" content="What each technical layer of a Verdict Desk record gives a lawyer, and what it does not: authentication by hash, time by Bitcoin, and a declaration for a qualified person filled in from a real dossier.">
+<meta property="og:title" content="Verdict Desk: what the record can and cannot do for a lawyer">
+<meta property="og:description" content="Layer by layer: what is established, what is not, and a foundation declaration generated from a real dossier, with its hash recomputed in your browser.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf;--warn:#a35f00}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe;--warn:#e0a94a}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0 auto;max-width:960px;padding:16px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:22px 0 6px}
+.mut{color:var(--mut)}code,pre{font-size:12px}code{word-break:break-all}
+nav a{margin-right:14px}
+section{border:1px solid var(--line);border-radius:12px;padding:4px 16px 16px;margin:14px 0;background:var(--card)}
+table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}.warn{color:var(--warn);font-weight:600}
+.notice{border:2px solid var(--warn);border-radius:10px;padding:8px 14px;margin:12px 0;background:var(--bg)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;line-height:1.5}
+button,select,input{font:inherit;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button{border-color:var(--accent);color:var(--accent);cursor:pointer}
+.scroll{overflow-x:auto}
+</style>
+<link rel="stylesheet" href="theme.css">
+</head><body>
+
+<h1>Evidence: what the record can and cannot do for a lawyer</h1>
+<nav class="mut"><a href="index.html">Dashboard</a><a href="judge.html">Judge path</a><a href="ask.html">Ask the record</a><a href="lab.html">Lab</a><a href="exhibit/index.html">Exhibits</a><a href="scorecard.html">Scorecard</a><a href="verify.html">Verify a record</a><a href="narrative.html">Market voices</a><a href="witnesses.html">Witnesses</a><b>Evidence</b><a href="learn.html">Learn</a></nav>
+
+<div class="notice"><b>Not legal advice.</b> Whether a record is admitted, and how much weight it carries, is for the court and depends on the jurisdiction. This page only states, layer by layer, what the technology establishes and what it leaves open, so that a lawyer can decide what to ask a qualified person to certify. Counsel should review any declaration before it is signed.</div>
+
+<section>
+  <h2>Layer by layer</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Layer</th><th>What it establishes</th><th>How a lawyer might use it</th><th>What it does not establish</th></tr></thead>
+    <tbody>
+      <tr><td><b>Frozen evidence packet</b><br><span class="mut">source, time, hash per item</span></td>
+        <td>What the agent was shown at that moment, and from where. A source that failed is recorded as a gap, never filled in.</td>
+        <td>Chain of custody for the inputs: the exhibit places every claim beside the exact evidence text it cites.</td>
+        <td>That the source was telling the truth. A literal headline can be wrong.</td></tr>
+      <tr><td><b>Hash chain</b><br><span class="mut">RFC 8785 canonical JSON, SHA-256, each record commits to the previous one</span></td>
+        <td>That a record was not changed after it was written, and its place in the order. Editing one flags that record; re-hashing it breaks the next link.</td>
+        <td>Authentication of an electronic record: evidence that the item is what its proponent says it is (in US federal practice, the standard of Rule 901(a)).</td>
+        <td>Who wrote it, or that the operator did not rewrite the entire chain. That is what the layers below are for.</td></tr>
+      <tr><td><b>Replay</b><br><span class="mut"><code>python3 -m verdict_desk replay</code></span></td>
+        <td>That the recorded verdict is what the stated rules give from the frozen evidence: the process produces the same result when run again.</td>
+        <td>Support for a description of the process as one that "produces an accurate result" (the language of Rule 902(13)). The qualified person must describe and vouch for the process.</td>
+        <td>That the rules are wise, or that the decision was right. The analysts' text is frozen, not regenerated.</td></tr>
+      <tr><td><b>Hash-verified copy</b><br><span class="mut">the exhibit recomputes its hash when rendered</span></td>
+        <td>That a copy handed to you is identical, bit for bit, to the record in the chain.</td>
+        <td>The identification-by-hash that Rule 902(14) describes for data copied from a file or device, together with a certification by a qualified person.</td>
+        <td>That nobody certified it: the rule requires a certification, and notice to the opponent. The generator below drafts one.</td></tr>
+      <tr><td><b>Bitcoin, through OpenTimestamps</b><br><span class="mut">every hour; <a href="witnesses.html">checked in your browser</a></span></td>
+        <td>That the head of the chain, and so every earlier record it commits to, existed no later than the block that contains the stamp. Neither we nor a block explorer can change that.</td>
+        <td>Strong supporting evidence of the time by which the record existed, and a defence against "you rewrote it later".</td>
+        <td>It is <b>not a qualified electronic time stamp</b> under eIDAS. Article 41(2) gives its presumption of accuracy of date, time and integrity only to qualified time stamps issued by a qualified trust service provider; Article 41(1) says other electronic time stamps cannot be denied effect solely because they are electronic or not qualified, which leaves their weight to the court.</td></tr>
+      <tr><td><b>Sigstore transparency log</b><br><span class="mut">every hour, no key of ours; <a href="witnesses.html">checked in your browser</a></span></td>
+        <td>That the head was signed by this repository's GitHub workflow, and that a public log run by the Sigstore project recorded the signature at a time we do not control. The log cannot be back-dated by us.</td>
+        <td>A second, independent clock with a named signer, usable next to the Bitcoin stamp, and checkable by anyone with <code>cosign verify-blob</code>.</td>
+        <td>Not a qualified time stamp either. It shows <i>which workflow</i> signed, not who wrote the record; whoever controls the repository controls the workflow, so its worth is the log's time, not the signer's independence. The page checks the digest and the signer's name; the certificate chain and the log's inclusion proof need the <code>cosign</code> command.</td></tr>
+      <tr><td><b>Ethereum Sepolia anchor</b><br><span class="mut">through a Chainlink CRE workflow</span></td>
+        <td>A second, independent record of a head, in a contract that only accepts increasing sequence numbers.</td>
+        <td>Redundancy for the Bitcoin stamp.</td>
+        <td>A testnet is not a durable public record, and the anchor is not hourly. Treat it as a demonstration of the mechanism.</td></tr>
+      <tr><td><b>Git history</b></td>
+        <td>Commit times held by a third-party host, and copies in every earlier clone.</td>
+        <td>A rewrite would show against any earlier clone.</td>
+        <td>The commit times are those of the operator's own account: the weakest witness.</td></tr>
+    </tbody></table></div>
+  <p class="mut">A worked example, step by step, from one real decision: <a href="usecase.html">the use case page</a>.</p>
+  <p class="mut">Rules referred to: <a href="https://www.law.cornell.edu/rules/fre/rule_902">US Federal Rules of Evidence, Rule 902(13) and (14)</a> (certified records generated by an electronic process; certified data copied from a file, identified by hash); <a href="https://eur-lex.europa.eu/eli/reg/2014/910/oj">Regulation (EU) No 910/2014, Article 41</a> (electronic time stamps); <a href="https://www.rfc-editor.org/rfc/rfc8785">RFC 8785</a> (canonical JSON); <a href="https://opentimestamps.org">OpenTimestamps</a>. Other jurisdictions differ.</p>
+</section>
+
+<section>
+  <h2>A foundation declaration, drafted from a real dossier</h2>
+  <p class="mut">A hash does not certify itself: the rules above ask for a <i>qualified person</i> to say what they did and saw. Pick a dossier and this page drafts that declaration from the ledger it just downloaded, after <b>re-checking the whole chain and this dossier's hash in your own browser</b>. The signer still has to be a real person who actually ran the checks.</p>
+  <p><label>Dossier <select id="pick"></select></label> <button id="copy" type="button">Copy the draft</button> <span class="mut" id="copied"></span></p>
+  <div id="checks"><span class="mut">checking the ledger…</span></div>
+  <pre id="draft"></pre>
+  <p class="mut">What the signer still must do: run the commands themselves (not take this page's word for them), describe the process in their own words, be reachable to answer questions on it, and have counsel confirm the wording for the court in question.</p>
+</section>
+
+<section>
+  <h2>What the record does not prove</h2>
+  <ul class="mut">
+    <li>That a decision was right, or that anyone should have acted on it. Every position is simulated: no real-money order is ever placed, and the practice trades sent to Sepolia from dossier 375 use test tokens.</li>
+    <li>That a source said something true, or was not manipulated.</li>
+    <li>Who operated the system at collection time. Integrity after recording is the claim.</li>
+    <li>That a court will admit it, or how much weight it will carry.</li>
+  </ul>
+</section>
+
+<script src="canonical.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const utc = (iso) => String(iso).slice(0, 16).replace("T", " ") + " UTC";
+  const where = location.href.replace(/[^/]*$/, "") + "ledger/ledger.jsonl";
+
+  Promise.all([fetch("ledger/ledger.jsonl", { cache: "no-store" }).then((r) => r.text()), fetch("witnesses.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : { heads: [] }).catch(() => ({ heads: [] }))]).then(async ([text, index]) => {
+    const check = await VerdictDesk.verifyLedger(text, VerdictDesk.webSha256);
+    const rows = check.rows;
+    const intact = check.problems.length === 0;
+    const sel = $("pick");
+    sel.innerHTML = rows.slice().reverse().slice(0, 400).map((r) => `<option value="${r.dossier.seq}">#${r.dossier.seq} · ${esc(r.dossier.evidence.symbol)} · ${esc(utc(r.dossier.evidence.collected_at))}</option>`).join("");
+    const heads = (index.heads || []).slice().sort((a, b) => a.seq - b.seq);
+
+    function render() {
+      const seq = Number(sel.value);
+      const row = rows.find((r) => r.dossier.seq === seq);
+      const d = row.dossier;
+      const head = rows[rows.length - 1].dossier;
+      const stamped = heads.find((h) => h.seq >= seq);
+      $("checks").innerHTML =
+        `<p class="${intact ? "ok" : "bad"}">${intact ? "✓" : "✗"} Whole chain re-checked here: ${rows.length} dossiers, ${intact ? "every link and every hash intact" : esc(check.problems.join("; "))}.</p>` +
+        `<p class="${row.intact ? "ok" : "bad"}">${row.intact ? "✓" : "✗"} Dossier #${seq}: the hash recomputed in this browser ${row.intact ? "equals" : "DOES NOT equal"} the one stored.</p>` +
+        `<p class="${stamped ? "ok" : "warn"}">${stamped ? `✓ Head #${stamped.seq} was stamped with OpenTimestamps and every dossier up to it, including #${seq}, is committed by it. Whether that stamp is already confirmed in a Bitcoin block (it takes a few hours) is shown, proof by proof, on <a href="witnesses.html">the witnesses page</a>.` : "No stamped head covers this dossier yet (the newest stamps are pending)."}</p>`;
+
+      const proofLine = stamped
+        ? `5. The head of the ledger at dossier #${stamped.seq} (hash ${stamped.hash}) was stamped with OpenTimestamps; the saved head is ledger/timestamps/${stamped.seq}.json and its proof is ledger/timestamps/${stamped.seq}.json.ots. I [checked / did not check] the proof [with the OpenTimestamps client / at ${location.href.replace(/[^/]*$/, "")}witnesses.html]. Because every dossier commits to the one before it, that stamp also covers dossier #${seq}.`
+        : `5. [No stamped head covers dossier #${seq} yet. Add the stamp once it is confirmed, or omit this paragraph.]`;
+      $("draft").textContent =
+`DECLARATION OF A QUALIFIED PERSON
+(Draft generated from the public ledger. Not legal advice. For counsel to review before signature.)
+
+I, [FULL NAME], state:
+
+1. I am [ROLE AND EMPLOYER] and I am familiar with how Verdict Desk records are generated and kept, from [HOW YOU KNOW: for example, I operate it / I reviewed its source code and ran its checks].
+
+2. The record attached as Exhibit [NUMBER] is dossier #${seq} for ${d.evidence.symbol}, collected on ${utc(d.evidence.collected_at)} and recorded under rules ${(d.verdict && d.verdict.rules_version) || "v1"}. The SHA-256 hash stored for it in the ledger is ${d.hash}. It commits to the previous record, whose hash is ${d.prev_hash}.
+
+3. On [DATE] I downloaded the public ledger from ${where} and ran "python3 -m verdict_desk verify". The result was: ${intact ? "chain intact" : "PROBLEMS REPORTED: " + check.problems.join("; ")}, ${rows.length} dossiers, head #${head.seq} with hash ${head.hash}. I recomputed the hash of dossier #${seq} independently and it ${row.intact ? "matched" : "DID NOT MATCH"} the stored one (recomputed: ${row.recomputed}).
+
+4. The record is produced by an automated process, described at [LINK TO THE README]: it collects public market data and freezes it with its source and time, records the arguments for and against, and applies a deterministic rule. I ran "python3 -m verdict_desk replay ${seq}" on the frozen evidence and the recorded verdict was [REPRODUCED / NOT REPRODUCED]. The record states, in its own words, what it does not prove.
+
+${proofLine}
+
+6. [ANYTHING ELSE YOU PERSONALLY KNOW OR DID, AND NOTHING ELSE.]
+
+I declare under penalty of perjury under the laws of [JURISDICTION] that the foregoing is true and correct.
+
+Executed on [DATE] at [PLACE].
+
+[SIGNATURE]`;
+    }
+    sel.addEventListener("input", render);
+    $("copy").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("draft").textContent); $("copied").textContent = "copied"; } catch (e) { $("copied").textContent = "select the text and copy it by hand"; }
+    });
+    render();
+  }).catch((e) => { $("checks").innerHTML = `<span class="bad">Could not load the ledger here: ${esc(e.message || e)}. Open this page from the deployed site.</span>`; });
+})();
+</script>
+</body></html>

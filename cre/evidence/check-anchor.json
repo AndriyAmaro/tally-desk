@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "network": "ethereum-testnet-sepolia",
+  "contract": "0x50443D51Db71A61E131B147B1d36aF21d48CDdF7",
+  "ledger": {
+    "source": "/home/andri-amaro/Dev/verdict-desk-cre/ledger/ledger.jsonl",
+    "dossiers": 80,
+    "chainIntact": true,
+    "problems": []
+  },
+  "anchored": {
+    "seq": 80,
+    "headHash": "04e260dc39cdecb967ef23513aebd7aee260d2101e2507c7704c94dfb0532283",
+    "anchoredAt": "2026-10-21T17:53:24.000Z"
+  },
+  "dossierHashInLedger": "04e260dc39cdecb967ef23513aebd7aee260d2101e2507c7704c94dfb0532283",
+  "isAnchored": true,
+  "dataFeed": {
+    "price": 84378.12678601,
+    "answer": "8437812678601",
+    "decimals": 8,
+    "updatedAt": "2026-10-21T17:11:24.000Z"
+  },
+  "anchoringTx": "0x53e5a96312ff3f200f7cb1c1abc0b96313272b5fc59c4bf85a136f6a26c2694d",
+  "explorer": {
+    "contract": "https://sepolia.etherscan.io/address/0x50443D51Db71A61E131B147B1d36aF21d48CDdF7",
+    "tx": "https://sepolia.etherscan.io/tx/0x53e5a96312ff3f200f7cb1c1abc0b96313272b5fc59c4bf85a136f6a26c2694d"
+  }
+}

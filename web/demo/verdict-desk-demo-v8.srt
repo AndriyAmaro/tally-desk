@@ -1,0 +1,119 @@
+1
+00:00:00,740 --> 00:00:02,630
+When an AI agent decides,
+
+2
+00:00:02,600 --> 00:00:06,330
+the only record of why is a log its operator controls.
+
+3
+00:00:06,300 --> 00:00:10,660
+Verdict Desk turns each decision into evidence a lawyer can file.
+
+4
+00:00:10,790 --> 00:00:13,120
+Check one: the verdict is re-derived,
+
+5
+00:00:13,090 --> 00:00:14,480
+not just re-hashed.
+
+6
+00:00:14,450 --> 00:00:16,780
+The judge rules again from the frozen evidence,
+
+7
+00:00:16,750 --> 00:00:19,250
+and every verdict comes out the same.
+
+8
+00:00:19,360 --> 00:00:22,310
+Check two: every number an AI analyst states must
+
+9
+00:00:22,280 --> 00:00:24,190
+be in the evidence it cites.
+
+10
+00:00:24,160 --> 00:00:25,050
+When it is not,
+
+11
+00:00:25,020 --> 00:00:27,750
+the claim is refused and kept with the reason.
+
+12
+00:00:27,720 --> 00:00:29,540
+So far, hundreds.
+
+13
+00:00:29,860 --> 00:00:32,670
+Check three: witnesses we do not control.
+
+14
+00:00:32,640 --> 00:00:34,630
+The head is stamped in Bitcoin,
+
+15
+00:00:34,600 --> 00:00:36,730
+signed in the public Sigstore log,
+
+16
+00:00:36,700 --> 00:00:39,400
+and anchored on Ethereum Sepolia.
+
+17
+00:00:39,380 --> 00:00:41,500
+Your browser checks each one.
+
+18
+00:00:41,610 --> 00:00:45,420
+The Chainlink Runtime Environment is the independent auditor.
+
+19
+00:00:45,390 --> 00:00:48,140
+Before it anchors, it replays the verdict itself and
+
+20
+00:00:48,110 --> 00:00:50,020
+refuses a forged head.
+
+21
+00:00:49,990 --> 00:00:53,190
+Three thousand of three thousand edits were refused.
+
+22
+00:00:53,530 --> 00:00:57,740
+Check four: we attack our own verifier and publish the score.
+
+23
+00:00:57,710 --> 00:01:00,620
+Thousands of attacks, and none got through.
+
+24
+00:01:00,590 --> 00:01:01,600
+Break the chain yourself,
+
+25
+00:01:01,570 --> 00:01:03,170
+right in the browser.
+
+26
+00:01:03,390 --> 00:01:06,200
+Check five: a public record that keeps the losing
+
+27
+00:01:06,170 --> 00:01:07,840
+trades and the gaps.
+
+28
+00:01:07,810 --> 00:01:09,020
+Verdict Desk.
+
+29
+00:01:08,990 --> 00:01:10,420
+Check it yourself.
+
+30
+00:01:10,390 --> 00:01:11,910
+Nothing to install.

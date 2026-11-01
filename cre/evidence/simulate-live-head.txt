@@ -1,0 +1,27 @@
+# CRE simulation against the live published head
+
+Run on 2026-10-22 with CRE CLI 1.38.0, triggered by the cron capability, in staging-settings
+against Ethereum Sepolia. Nothing was broadcast: the write path is exercised, the transaction
+is reported as `0x` because no report was sent.
+
+What it proves, line by line:
+
+  * the workflow's HTTP capability fetched `ledger/head.json` from the public repository, and
+    `consensusIdenticalAggregation` requires every node to see the same bytes before the value
+    is used;
+  * the EVM capability read the BTC/USD Chainlink Data Feed on Sepolia;
+  * the report was encoded against the deployed `LedgerAnchor` ABI and the write call was made.
+
+The sequence number in the output is the record published at that hour, so this file can be
+checked against `ledger/ledger.jsonl`: take seq 113 and compare its hash with the line below.
+
+```
+  Binary hash: 8d1a1b3c985c74dae10f404762bf7d8212927771d29d9c537ad6c6c0c1d686d6
+  Config hash: e7d47de260671f5a63134146aacab74ea190f38179282ab08ce02c83badd0db6
+2026-10-22T18:55:12Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json
+2026-10-22T18:55:12Z [USER LOG] Data Feed 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 81317.07 (updatedAt 1792703484)
+2026-10-22T18:55:13Z [USER LOG] Anchored seq 113 head 55af45a17bacc657054c325ad258d64c87bab04f02d6502ee04554203f93f844 at tx 0x
+✓ Workflow Simulation Result:
+"{\"seq\":113,\"head\":\"55af45a17bacc657054c325ad258d64c87bab04f02d6502ee04554203f93f844\",\"symbol\":\"SOLUSDT\",\"price\":\"81317.07\",\"txHash\":\"0x\"}"
+│ Simulation complete! Ready to deploy your workflow?  │
+```

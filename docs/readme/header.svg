@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="230" viewBox="0 0 860 230" font-family="'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<defs><radialGradient id="g0" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#a78bfa" stop-opacity="0.55"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></radialGradient><radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#60a5fa" stop-opacity="0.55"/><stop offset="1" stop-color="#60a5fa" stop-opacity="0"/></radialGradient><radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#7c3aed" stop-opacity="0.55"/><stop offset="1" stop-color="#7c3aed" stop-opacity="0"/></radialGradient><clipPath id="panel"><rect x="1" y="1" width="858" height="228" rx="18"/></clipPath></defs>
+<rect x="1" y="1" width="858" height="228" rx="18" fill="#0b0d13"/>
+<g clip-path="url(#panel)"><ellipse cx="160" cy="235" rx="260" ry="109" fill="url(#g0)"/><ellipse cx="470" cy="245" rx="240" ry="101" fill="url(#g1)"/><ellipse cx="760" cy="235" rx="220" ry="92" fill="url(#g2)"/></g>
+<rect x="1" y="1" width="858" height="228" rx="18" fill="none" stroke="#232838" stroke-width="1.5"/>
+<defs><linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#60a5fa"/></linearGradient></defs>
+<circle cx="104" cy="106" r="52" fill="#121726" stroke="url(#ring)" stroke-width="4"/>
+<g transform="translate(0 10)"><g stroke="#f4f5f8" stroke-width="3" stroke-linecap="round" fill="none">
+<line x1="104" y1="64" x2="104" y2="126"/><line x1="90" y1="128" x2="118" y2="128"/><line x1="76" y1="74" x2="132" y2="74"/>
+<line x1="76" y1="74" x2="66" y2="98"/><line x1="76" y1="74" x2="86" y2="98"/><line x1="132" y1="74" x2="122" y2="98"/><line x1="132" y1="74" x2="142" y2="98"/>
+</g>
+<path d="M63 98 h26 a13 9 0 0 1 -26 0z" fill="#fbbf24"/><path d="M119 98 h26 a13 9 0 0 1 -26 0z" fill="#2dd4bf"/>
+<circle cx="104" cy="62" r="4" fill="#f4f5f8"/></g>
+<text x="186" y="76" fill="#f4f5f8" font-size="40" font-weight="700" letter-spacing="-0.5">Verdict Desk</text>
+<text x="186" y="104" fill="#a3a9b8" font-size="16">An autonomous agent makes a market decision.</text>
+<text x="186" y="126" fill="#a3a9b8" font-size="16">Verdict Desk turns it into <tspan fill="#f4f5f8" font-weight="600">evidence a lawyer can file</tspan>.</text>
+<rect x="186.0" y="146" width="138.5" height="24" rx="7" fill="#151a26" stroke="#2c3346"/><text x="255.3" y="162" fill="#c7cbe0" font-size="12" text-anchor="middle">Autonomous agents</text><rect x="332.5" y="146" width="105.5" height="24" rx="7" fill="#151a26" stroke="#2c3346"/><text x="385.3" y="162" fill="#c7cbe0" font-size="12" text-anchor="middle">Chainlink CRE</text><rect x="446.0" y="146" width="110.1" height="24" rx="7" fill="#151a26" stroke="#2c3346"/><text x="501.1" y="162" fill="#c7cbe0" font-size="12" text-anchor="middle">Sepolia testnet</text><rect x="564.1" y="146" width="135.4" height="24" rx="7" fill="#151a26" stroke="#2c3346"/><text x="631.8" y="162" fill="#c7cbe0" font-size="12" text-anchor="middle">Bitcoin timestamps</text><rect x="707.5" y="146" width="92.0" height="24" rx="7" fill="#151a26" stroke="#2c3346"/><text x="753.5" y="162" fill="#c7cbe0" font-size="12" text-anchor="middle">Sigstore log</text>
+<text x="186" y="202" fill="#6b7385" font-size="11" letter-spacing="1.2">BLI LEGAL TECH HACKATHON 2  ·  AUTONOMOUS AGENTS + CRE  ·  PRACTICE TRADES ONLY</text>
+</svg>

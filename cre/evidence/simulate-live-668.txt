@@ -1,0 +1,33 @@
+Initializing...
+Loading settings...
+! Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 0a4d2cf9f4016362f317a7dddbfc0c572323c5a321289353b3c389a446768841
+  Config hash: ffce3a6e6ee3f56ce424cb0687e106e4fc86d25d2c3dcd359bd0400492ce7bfe
+2026-10-30T18:23:26Z [SIMULATION] Simulator Initialized
+
+2026-10-30T18:23:26Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-30T18:23:27Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-30T18:23:28Z [USER LOG] Replayed dossier #668 under rules v6: SHORT edge -3.75, the same as recorded; anchoring it
+2026-10-30T18:23:29Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 76865.29628101 (updatedAt 1793391636)
+2026-10-30T18:23:29Z [USER LOG] Cross-chain check: BTC / USD on Sepolia 76865.29628101, BTC / USD on ethereum-mainnet 76842.40368524, gap 2 bps (limit 500)
+2026-10-30T18:23:30Z [USER LOG] Anchored seq 668 head 946ced99d0edf0eedab3bd42fe43b04c4e831c45dbcc8efafe570ef8bb2ef7a6 at tx 0x
+
+✓ Workflow Simulation Result:
+"{\"seq\":668,\"head\":\"946ced99d0edf0eedab3bd42fe43b04c4e831c45dbcc8efafe570ef8bb2ef7a6\",\"symbol\":\"SOLUSDT\",\"replayed\":{\"rules\":\"v6\",\"action\":\"SHORT\",\"edge\":-3.75},\"feed\":\"BTC / USD\",\"price\":\"76865.29628101\",\"crossChain\":{\"sepolia\":\"76865.29628101\",\"mainnet\":\"76842.40368524\",\"deviationBps\":2},\"txHash\":\"0x\"}"
+
+2026-10-30T18:23:30Z [SIMULATION] Execution finished signal received
+2026-10-30T18:23:30Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
+
+⚠️  Update available! You’re running 1.38.0, but 1.39.0 is the latest.
+Run `cre update` or visit https://github.com/smartcontractkit/cre-cli/releases to upgrade.

@@ -1,0 +1,8 @@
+# CRE workflow settings. Target names match project.yaml.
+staging-settings:
+  user-workflow:
+    workflow-name: "vd-anchor-staging"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.staging.json"
+    secrets-path: ""

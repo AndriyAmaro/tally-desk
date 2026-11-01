@@ -1,0 +1,26 @@
+Initializing...
+Loading settings...
+! Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 0a4d2cf9f4016362f317a7dddbfc0c572323c5a321289353b3c389a446768841
+  Config hash: ffce3a6e6ee3f56ce424cb0687e106e4fc86d25d2c3dcd359bd0400492ce7bfe
+2026-10-26T13:12:40Z [SIMULATION] Simulator Initialized
+2026-10-26T13:12:40Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-26T13:12:40Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-26T13:12:41Z [USER LOG] Replayed dossier #356 under rules v6: SHORT edge -2.61, the same as recorded; anchoring it
+2026-10-26T13:12:42Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 80578.55 (updatedAt 1793028084)
+2026-10-26T13:12:42Z [USER LOG] Cross-chain check: BTC / USD on Sepolia 80578.55, BTC / USD on ethereum-mainnet 80414.13, gap 20 bps (limit 500)
+2026-10-26T13:12:42Z [USER LOG] Anchored seq 356 head 4e432a6301a362e5d634fca8b1d209edd3e44d4a4b1b0e333f494433a37818ac at tx 0x
+✓ Workflow Simulation Result:
+"{\"seq\":356,\"head\":\"4e432a6301a362e5d634fca8b1d209edd3e44d4a4b1b0e333f494433a37818ac\",\"symbol\":\"SOLUSDT\",\"replayed\":{\"rules\":\"v6\",\"action\":\"SHORT\",\"edge\":-2.61},\"feed\":\"BTC / USD\",\"price\":\"80578.55\",\"crossChain\":{\"sepolia\":\"80578.55\",\"mainnet\":\"80414.13\",\"deviationBps\":20},\"txHash\":\"0x\"}"
+2026-10-26T13:12:42Z [SIMULATION] Execution finished signal received
+2026-10-26T13:12:42Z [SIMULATION] Skipping WorkflowEngineV2
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯

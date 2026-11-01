@@ -1,0 +1,33 @@
+3/4 broadcast the CRE report (real transaction on Sepolia)
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 0a4d2cf9f4016362f317a7dddbfc0c572323c5a321289353b3c389a446768841
+  Config hash: ffce3a6e6ee3f56ce424cb0687e106e4fc86d25d2c3dcd359bd0400492ce7bfe
+2026-10-26T14:36:44Z [SIMULATION] Simulator Initialized
+2026-10-26T14:36:44Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-26T14:36:44Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-26T14:36:45Z [USER LOG] Replayed dossier #365 under rules v6: SHORT edge -3.11, the same as recorded; anchoring it
+2026-10-26T14:36:45Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 80109.39261935 (updatedAt 1793031708)
+2026-10-26T14:36:46Z [USER LOG] Cross-chain check: BTC / USD on Sepolia 80109.39261935, BTC / USD on ethereum-mainnet 80425.51555289, gap 39 bps (limit 500)
+2026-10-26T14:36:49Z [USER LOG] Anchored seq 365 head 156b44cbebd63db516ed69c22ad725eecdb79c636a2c5326637f1f9667c7c3fa at tx 0x9c40cf9f8d47f677b8a1dc81327b19d7f6983938d530f290431f4c0a4ee1ba76
+✓ Workflow Simulation Result:
+"{\"seq\":365,\"head\":\"156b44cbebd63db516ed69c22ad725eecdb79c636a2c5326637f1f9667c7c3fa\",\"symbol\":\"SOLUSDT\",\"replayed\":{\"rules\":\"v6\",\"action\":\"SHORT\",\"edge\":-3.11},\"feed\":\"BTC / USD\",\"price\":\"80109.39261935\",\"crossChain\":{\"sepolia\":\"80109.39261935\",\"mainnet\":\"80425.51555289\",\"deviationBps\":39},\"txHash\":\"0x9c40cf9f8d47f677b8a1dc81327b19d7f6983938d530f290431f4c0a4ee1ba76\"}"
+2026-10-26T14:36:49Z [SIMULATION] Execution finished signal received
+2026-10-26T14:36:49Z [SIMULATION] Skipping WorkflowEngineV2
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
+4/4 check the contract against the public ledger
+ledger /home/andri-amaro/.local/share/verdict-desk-anchor/repo/ledger/ledger.jsonl: 365 dossiers, chain intact (every hash recomputed here)
+contract 0x50443D51Db71A61E131B147B1d36aF21d48CDdF7 on Sepolia: latest anchored seq 365, head hash 156b44cbebd63db516ed69c22ad725eecdb79c636a2c5326637f1f9667c7c3fa
+  Data Feed price recorded with it: 80109.39261935 (feed updated 2026-10-26T16:21:48.000Z), anchored at 2026-10-26T17:36:48.000Z
+  dossier 365 in this ledger has hash 156b44cbebd63db516ed69c22ad725eecdb79c636a2c5326637f1f9667c7c3fa
+  isAnchored(365, hash) on-chain: TRUE: the anchored head is exactly this dossier
+  anchoring transaction: https://sepolia.etherscan.io/tx/0x9c40cf9f8d47f677b8a1dc81327b19d7f6983938d530f290431f4c0a4ee1ba76

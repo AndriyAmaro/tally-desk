@@ -1,0 +1,6 @@
+ledger /home/andri-amaro/Dev/audit-verdict-desk/verdict-desk/ledger/ledger.jsonl: 278 dossiers, chain intact (every hash recomputed here)
+contract 0x50443D51Db71A61E131B147B1d36aF21d48CDdF7 on Sepolia: latest anchored seq 278, head hash b397e67b5971285980917ac812852bcb742bc11ce0a048926312eda02683f140
+  Data Feed price recorded with it: 80317.57090961 (feed updated 2026-10-25T21:43:24.000Z), anchored at 2026-10-25T22:10:00.000Z
+  dossier 278 in this ledger has hash b397e67b5971285980917ac812852bcb742bc11ce0a048926312eda02683f140
+  isAnchored(278, hash) on-chain: TRUE: the anchored head is exactly this dossier
+  anchoring transaction: https://sepolia.etherscan.io/tx/0x899547433d03e0ed59a7ed2c9429aafabed7a31627a2f27c34ce965bdb7dddf1

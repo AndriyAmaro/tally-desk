@@ -1,0 +1,32 @@
+3/4 broadcast the CRE report (real transaction on Sepolia)
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 2e8a6e41624b8085aed412819e288fb98372953d3a44d9ae9d3f46f6bd81a031
+  Config hash: aad577722270f9d3e744844f3f4f1300f94ff979dff9ed5414d5b8beec20cd13
+2026-10-25T23:11:40Z [SIMULATION] Simulator Initialized
+2026-10-25T23:11:40Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-25T23:11:40Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-25T23:11:40Z [USER LOG] Replayed dossier #296 under rules v6: SHORT edge -4.25, the same as recorded; anchoring it
+2026-10-25T23:11:41Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 79433.69291994 (updatedAt 1792979160)
+2026-10-25T23:11:49Z [USER LOG] Anchored seq 296 head bc75c17b5121123286d3651d2292766390706440798d256eb19b560b3662461a at tx 0x27a2ce3c0cf38722ef05959ec4638318bd93a33fe84d08fb465527ec228dfbdf
+✓ Workflow Simulation Result:
+"{\"seq\":296,\"head\":\"bc75c17b5121123286d3651d2292766390706440798d256eb19b560b3662461a\",\"symbol\":\"SOLUSDT\",\"replayed\":{\"rules\":\"v6\",\"action\":\"SHORT\",\"edge\":-4.25},\"feed\":\"BTC / USD\",\"price\":\"79433.69291994\",\"txHash\":\"0x27a2ce3c0cf38722ef05959ec4638318bd93a33fe84d08fb465527ec228dfbdf\"}"
+2026-10-25T23:11:49Z [SIMULATION] Execution finished signal received
+2026-10-25T23:11:49Z [SIMULATION] Skipping WorkflowEngineV2
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
+4/4 check the contract against the public ledger
+ledger /home/andri-amaro/.local/share/verdict-desk-anchor/repo/ledger/ledger.jsonl: 296 dossiers, chain intact (every hash recomputed here)
+contract 0x50443D51Db71A61E131B147B1d36aF21d48CDdF7 on Sepolia: latest anchored seq 296, head hash bc75c17b5121123286d3651d2292766390706440798d256eb19b560b3662461a
+  Data Feed price recorded with it: 79433.69291994 (feed updated 2026-10-26T01:46:00.000Z), anchored at 2026-10-26T02:11:48.000Z
+  dossier 296 in this ledger has hash bc75c17b5121123286d3651d2292766390706440798d256eb19b560b3662461a
+  isAnchored(296, hash) on-chain: TRUE: the anchored head is exactly this dossier
+  anchoring transaction: https://sepolia.etherscan.io/tx/0x27a2ce3c0cf38722ef05959ec4638318bd93a33fe84d08fb465527ec228dfbdf

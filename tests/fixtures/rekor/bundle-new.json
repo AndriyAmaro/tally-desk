@@ -1,0 +1,11 @@
+{
+ "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+ "verificationMaterial": {
+  "tlogEntries": [
+   {
+    "logIndex": "424242",
+    "integratedTime": "1792900000"
+   }
+  ]
+ }
+}

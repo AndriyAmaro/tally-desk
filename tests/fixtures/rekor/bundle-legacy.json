@@ -1,0 +1,13 @@
+{
+ "base64Signature": "MEUCIQ==",
+ "cert": "x",
+ "rekorBundle": {
+  "SignedEntryTimestamp": "abc",
+  "Payload": {
+   "body": "x",
+   "integratedTime": 1792900000,
+   "logIndex": 424242,
+   "logID": "c0d23d6a"
+  }
+ }
+}

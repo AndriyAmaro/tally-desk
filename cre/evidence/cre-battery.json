@@ -1,0 +1,65 @@
+{
+ "seq": 356,
+ "seed": "4e432a6301a362e5d634fca8b1d209edd3e44d4a4b1b0e333f494433a37818ac",
+ "tried": 3000,
+ "refusedUnderPublishedHead": 3000,
+ "decisionEditsRefused": 2760,
+ "decisionEditsPassed": 0,
+ "inertEdits": 240,
+ "byKind": {
+  "candle": {
+   "tried": 334,
+   "refused": 94,
+   "inert": 240,
+   "passed": 0
+  },
+  "funding": {
+   "tried": 334,
+   "refused": 334,
+   "inert": 0,
+   "passed": 0
+  },
+  "news": {
+   "tried": 334,
+   "refused": 334,
+   "inert": 0,
+   "passed": 0
+  },
+  "feature": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  },
+  "verdict": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  },
+  "score": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  },
+  "position": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  },
+  "judge": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  },
+  "drop-candle": {
+   "tried": 333,
+   "refused": 333,
+   "inert": 0,
+   "passed": 0
+  }
+ }
+}

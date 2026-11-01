@@ -1,0 +1,13 @@
+{
+ "name": "verdict-desk-ledger-anchor",
+ "private": true,
+ "license": "MIT",
+ "description": "Compiles LedgerAnchor.sol with solc-js (no Foundry or Hardhat needed).",
+ "scripts": {
+  "compile": "node compile.js src/LedgerAnchor.sol src/abi/LedgerAnchor.abi build/LedgerAnchor.bin",
+  "compile:practice": "node compile.js src/PracticeDesk.sol src/abi/PracticeDesk.abi build/PracticeDesk.bin"
+ },
+ "dependencies": {
+  "solc": "0.8.28"
+ }
+}

@@ -1,0 +1,31 @@
+Initializing...
+Loading settings...
+Checking RPC connectivity...
+Compiling workflow...
+✓ Workflow compiled
+✓ Simulation limits enabled
+  HTTP: req=120kb resp=250kb timeout=10s | ConfHTTP: req=125kb resp=500kb timeout=1m30s | Consensus obs=25kb | ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 | WASM binary=100mb compressed=20mb
+  Binary hash: 322d876a7c176fd8822f030ea5ef34538dfb2e85a3ab997833f25fea78c75ff6
+  Config hash: 7896766dea12a8651f5523fed612454e93ab9c24f6cb6d0b5f3ccdb174600ad9
+2026-10-25T19:09:48Z [SIMULATION] Simulator Initialized
+
+2026-10-25T19:09:48Z [SIMULATION] Running trigger trigger=cron-trigger@1.0.0
+2026-10-25T19:09:48Z [USER LOG] Anchoring ledger head from https://raw.githubusercontent.com/AndriyAmaro/verdict-desk/main/ledger/head.json and https://andriyamaro.github.io/verdict-desk/ledger/head.json
+2026-10-25T19:09:49Z [USER LOG] Data Feed BTC / USD 0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43: 80317.57090961 (updatedAt 1792964604)
+2026-10-25T19:10:01Z [USER LOG] Anchored seq 278 head b397e67b5971285980917ac812852bcb742bc11ce0a048926312eda02683f140 at tx 0x899547433d03e0ed59a7ed2c9429aafabed7a31627a2f27c34ce965bdb7dddf1
+
+✓ Workflow Simulation Result:
+"{\"seq\":278,\"head\":\"b397e67b5971285980917ac812852bcb742bc11ce0a048926312eda02683f140\",\"symbol\":\"SOLUSDT\",\"feed\":\"BTC / USD\",\"price\":\"80317.57090961\",\"txHash\":\"0x899547433d03e0ed59a7ed2c9429aafabed7a31627a2f27c34ce965bdb7dddf1\"}"
+
+2026-10-25T19:10:01Z [SIMULATION] Execution finished signal received
+2026-10-25T19:10:01Z [SIMULATION] Skipping WorkflowEngineV2
+
+╭──────────────────────────────────────────────────────╮
+│ Simulation complete! Ready to deploy your workflow?  │
+│                                                      │
+│ Run cre account access to request deployment access. │
+╰──────────────────────────────────────────────────────╯
+
+⚠️  Update available! You’re running 1.38.0, but 1.39.0 is the latest.
+Run `cre update` or visit https://github.com/smartcontractkit/cre-cli/releases to upgrade.
+
