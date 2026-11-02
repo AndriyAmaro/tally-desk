@@ -265,6 +265,52 @@ class NarratorBatchTest(unittest.TestCase):
         self.assertLess(narrative.OTARI_MAX_TOKENS, narrative.LLM_MAX_TOKENS)
 
 
+
+class AuditFallbackRowTest(unittest.TestCase):
+    def audit_row(self, edit=None):
+        from tests.test_otari_report import LEDGER
+        from verdict_desk import otari_report
+        ledger = json.loads(json.dumps(LEDGER))
+        if edit:
+            edit(ledger)
+        return {r["n"]: r for r in otari_report.audit(ledger, [])}[2], ledger
+
+    def test_real_fallbacks_of_the_cycles_own_calls_come_first_and_the_canary_stays_as_the_deliberate_test(self):
+        row, ledger = self.audit_row()
+        from verdict_desk import otari_report
+        real = [c["receipt"] for d in otari_report.era(ledger) for c in otari_report.calls_of(d) if c["label"] != "canary" and c["receipt"].get("fallback") and not c["receipt"].get("refusal")]
+        self.assertGreaterEqual(len(real), 10, "the narrator batches of dossiers 800 and 801 fell back to the second provider")
+        self.assertEqual(row["status"], "PASS")
+        self.assertEqual(row["source"], "sealed")
+        self.assertIn(f"{len(real)} real calls", row["note"])
+        self.assertIn("deliberate test", row["note"])
+        canary_id = next(d["llm"]["otari"]["canary"]["receipt"]["request_id"] for d in reversed(otari_report.era(ledger)) if (d["llm"]["otari"].get("canary") or {}).get("passed"))
+        self.assertEqual(row["proof"][0] in {r["request_id"] for r in real}, True, "the first proof is a real call")
+        self.assertIn(canary_id, row["proof"], "the canary is cited too")
+
+    def test_with_no_real_fallback_the_canary_carries_the_row_and_says_it_is_the_deliberate_test(self):
+        def edit(ledger):
+            from verdict_desk import otari_report
+            for d in otari_report.era(ledger):
+                for c in otari_report.calls_of(d):
+                    if c["label"] != "canary":
+                        c["receipt"]["fallback"] = False
+        row, _ = self.audit_row(edit)
+        self.assertEqual((row["status"], row["source"]), ("PASS", "sealed"))
+        self.assertIn("no real call fell back yet", row["note"])
+        self.assertNotIn("real calls were", row["note"])
+
+    def test_a_failed_call_or_a_call_without_an_otari_request_id_is_no_proof_of_a_fallback(self):
+        def edit(ledger):
+            from verdict_desk import otari_report
+            for d in otari_report.era(ledger):
+                for c in otari_report.calls_of(d):
+                    if c["label"] != "canary" and c["receipt"].get("fallback"):
+                        c["receipt"]["request_id_source"] = "client"
+        row, _ = self.audit_row(edit)
+        self.assertIn("no real call fell back yet", row["note"])
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class VerifyPageTest(unittest.TestCase):
     def test_the_browser_verifier_reads_the_ledger_from_either_layout_and_agrees_with_itself(self):

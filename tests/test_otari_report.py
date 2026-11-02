@@ -84,6 +84,8 @@ class AuditTest(unittest.TestCase):
         d["llm"]["otari"].pop("canary", None)
         d["llm"]["otari"].pop("headroom", None)
         d["llm"]["judge"]["route_rule"].pop("gates", None)
+        for c in rep.calls_of(d):
+            c["receipt"]["fallback"] = False  # real fallbacks of the cycle's own calls are sealed proof too: take them out as well
         rows = {r["n"]: r for r in rep.audit([d], EVIDENCE)}
         self.assertEqual([rows[n]["source"] for n in (2, 3, 4)], ["drill", "drill", "drill"])
         self.assertTrue(all(rows[n]["note"].startswith("drill only (not sealed") for n in (2, 3, 4)))

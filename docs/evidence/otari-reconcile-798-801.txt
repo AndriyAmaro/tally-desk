@@ -1,0 +1,25 @@
+Reconciliation of the receipts of dossiers 798 to 801 with Otari's own usage records.
+Command: python3 -m verdict_desk otari-audit --reconcile --last 4   (only GET /usage/requests/{id}, which costs nothing; run on 2026-11-02 with the service key used locally)
+How to read it: a request id is "not found" when Otari's usage log has no row for it under the key that asks. Dossiers 798 to 800 were made with the
+local key and reconcile fully. Dossier 801 was made by the scheduled CI job with a different service key (its request ids answer 404 under the local key),
+so its 20 ids can only be reconciled with the CI key. Receipts of a call that never reached Otari (client side refusals) carry no Otari id and are not compared.
+----------------------------------------------------------------------
+PASS       1  Several open-weight models in distinct roles [sealed]  dossier  801  proof: d6992578-b27b-4014-b0d9-8f0be467809a, b349e7c6-d31d-4061-8c78-d855b3036e0c, 7d0e2d2d-7ea9-4843-b114-d61b42bd3e5a, 1b9a20ee-ef5d-4d0a-b64a-4733b42df220
+           bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia.nemotron-super-3-120b, judge deepseek-ai/DeepSeek-V4-Flash-0731, checker google/gemma-3-27b-it
+PASS       2  Routing and fallback                 [sealed]  dossier  801  proof: 347df8a1-834a-46c6-b0fc-1f8df503ff5e, e20438c7-8d1b-4cea-b3f6-09ba3a4cc545, 83f87ee9-687a-405a-83d9-1ad471e5ffe4  drill: 1dd7daa2-c2ea-4c8f-81b7-aec04e383a71
+           15 real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count 2), in dossiers 800, 801; newest: a narrator call sent as alibaba/qwen3-235b-a22b-instruct-2507 was answered on its second attempt by bedrock:qwen.qwen3-235b-a22b-2507-v1:0. Besides, the failover canary of dossier 801 is the deliberate test of the same route: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true). All sealed in the ledger
+PASS       3  Budgets and spend limits             [sealed]  dossier  800  proof: 43f2a31e-68b6-433a-97f8-3c779c0ebb60  drill: d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7
+           budget-aware routing: Otari's spend for the judge's end user (USD 0.001370 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed)
+PASS       4  Budget per user                      [sealed]  dossier  800  proof: 347df8a1-834a-46c6-b0fc-1f8df503ff5e, e20438c7-8d1b-4cea-b3f6-09ba3a4cc545, ec5598b7-a31f-40c8-83c1-7bdf442637a2, a54cdac6-c534-468a-a206-45274298931e
+           10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts
+NOT PROVEN 5  Guardrails                           [none]    dossier  801  proof: 7d0e2d2d-7ea9-4843-b114-d61b42bd3e5a, 1daefb36-6e97-4c3e-95c0-406a8e864147
+           attached to the vd-judge policy, but Otari reported valid null on 3 calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted
+PASS       6  Web search and fetch                 [sealed]  dossier  801  proof: a0e9146e-f52a-4c1b-b82c-fe6e6c27f9ed, 482f6f74-9843-4626-8d5a-79fe92b3f0c0
+           one search and one page fetch through Otari's tools; 3 sources and an excerpt frozen (excerpt_verified False)
+PASS       7  Code execution                       [sealed]  dossier  801  proof: e35a135b-b4d9-433e-91a9-4dcaa4c79b37
+           the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent
+PASS       8  MCP                                  [sealed]  dossier  801  proof: 933eb032-9f4b-4a88-8445-8d0714d64007
+           prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok)
+8 resources: 7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN
+reconciliation with Otari's usage records: 54 request ids compared, 20 not found (not settled, or not this key's)
+  no divergence: status, tokens, cost and usage rows agree (Otari's usage record does not carry the model, so the model is not compared)

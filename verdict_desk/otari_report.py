@@ -104,19 +104,32 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
             break
     if not done:
         row(1, False, [], None, "no dossier has four roles answered by four distinct models")
-    # 2 routing and fallback: the failover canary of a cycle (sealed), else the drill (not sealed)
+    # 2 routing and fallback: fallbacks of real traffic (sealed receipts of the cycle's own calls) first, and the failover canary of the
+    # cycle, the deliberate test of the same route, beside them; the drill (not sealed) only when nothing is sealed
     canary = next(((d["seq"], d["llm"]["otari"]["canary"]) for d in newest if (d["llm"]["otari"].get("canary") or {}).get("passed")), None)
     fb = next((e for e in reversed(evidence) if e.get("drill") == "fallback" and e.get("pass")), None)
-    if canary:
+    real = [(d["seq"], c["label"], c["receipt"]) for d in newest for c in calls_of(d) if c["label"] != "canary" and c["receipt"].get("fallback") and not _failed(c["receipt"]) and _rid(c["receipt"])]
+    drill_ids = [fb["receipt"]["request_id"]] if fb else ()
+    if real and canary:
+        seq, label, r = real[0]
+        seqs = sorted({s for s, _, _ in real})
+        cr = canary[1]["receipt"]
+        row(2, True, [_rid(x) for _, _, x in real[:2]] + [_rid(cr)], seq,
+            f"{len(real)} real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count {r.get('attempt_count')}), in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs))}; newest: a {label} call sent as {r.get('sent_model')} was answered on its second attempt by {r.get('served_by')}. "
+            f"Besides, the failover canary of dossier {canary[0]} is the deliberate test of the same route: policy {canary[1].get('policy')} served by {cr.get('served_by')} after {cr.get('attempt_count')} attempts (Otari-Fallback true). All sealed in the ledger",
+            drill_ids=drill_ids)
+    elif canary:
         r = canary[1]["receipt"]
-        row(2, True, [_rid(r)], canary[0], f"the failover canary of the cycle: policy {canary[1].get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true), sealed in the dossier",
-            drill_ids=[fb["receipt"]["request_id"]] if fb else ())
+        row(2, True, [_rid(r)], canary[0], f"the failover canary of the cycle (the deliberate test; no real call fell back yet): policy {canary[1].get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true), sealed in the dossier",
+            drill_ids=drill_ids)
+    elif real:
+        seq, label, r = real[0]
+        row(2, True, [_rid(r)], seq, f"{len(real)} real calls were answered by a backup route (Otari-Fallback true); newest: a {label} call sent as {r.get('sent_model')} served by {r.get('served_by')}, sealed in the dossier", drill_ids=drill_ids)
     elif fb:
         r = fb["receipt"]
         row(2, True, [], None, f"drill only (not sealed in the ledger): policy {fb.get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true)", source="drill", drill_ids=[r["request_id"]])
     else:
-        hit = next(((d["seq"], c["receipt"]) for d in newest for c in calls_of(d) if c["receipt"].get("fallback")), None)
-        row(2, bool(hit), [_rid(hit[1])] if hit else [], hit[0] if hit else None, "a receipt with Otari-Fallback true" if hit else "no fallback seen")
+        row(2, False, [], None, "no fallback seen")
     # 3 budgets and spend limits: Otari's spend state sealed with the verdict and used by the router (sealed); the 403 refusal itself is a drill
     bd = next((e for e in reversed(evidence) if e.get("drill") == "budget" and e.get("pass")), None)
     capped = next((d["seq"] for d in newest if (d["llm"]["otari"].get("cycle") or {}).get("cap_usd")), None)
