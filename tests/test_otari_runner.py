@@ -63,7 +63,7 @@ class World:
             if sub == "push":
                 return self.cp(rc=1 if self.fail_push else 0, err="rejected" if self.fail_push else "")
             return self.cp()
-        if "decide-v6" in args:
+        if "decide-v7" in args:
             if self.timeout_decide:
                 raise subprocess.TimeoutExpired(args, timeout)
             if self.fail_decide:
@@ -109,7 +109,7 @@ class RunnerTest(unittest.TestCase):
         r = self.make()
         self.assertEqual(r.tick(), "ok")
         steps = self.commands()
-        order = ["git rev-parse --abbrev-ref HEAD", "git status --porcelain", "-m verdict_desk decide-v6", "-m verdict_desk verify", "-m verdict_desk replay", "ots stamp"]
+        order = ["git rev-parse --abbrev-ref HEAD", "git status --porcelain", "-m verdict_desk decide-v7", "-m verdict_desk verify", "-m verdict_desk replay", "ots stamp"]
         positions = [next(i for i, s in enumerate(steps) if s.startswith(o)) for o in order]
         self.assertEqual(positions, sorted(positions))
         add = next(c for c in self.world.calls if c[:3] == ["git", "add", "--"])
@@ -189,12 +189,12 @@ class RunnerTest(unittest.TestCase):
         r = self.make()
         self.assertEqual(r.tick(), "ok")
         self.assertEqual(r.tick(), "waiting")
-        self.assertEqual(len([c for c in self.world.calls if "decide-v6" in c]), 1)
+        self.assertEqual(len([c for c in self.world.calls if "decide-v7" in c]), 1)
         symbols = ["BTCUSDT"]
         for _ in range(3):
             self.clock.advance(R.INTERVAL_S)
             self.assertEqual(r.tick(), "ok")
-            symbols.append(next(c for c in reversed(self.world.calls) if "decide-v6" in c)[4])
+            symbols.append(next(c for c in reversed(self.world.calls) if "decide-v7" in c)[4])
         self.assertEqual(symbols, ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BTCUSDT"])
 
     def test_a_second_failure_in_a_row_stops_it_and_a_success_in_between_resets_the_count(self):
@@ -257,13 +257,13 @@ class RunnerTest(unittest.TestCase):
     def test_the_wrong_branch_or_a_dirty_tree_stop_before_any_cycle(self):
         r = self.make(branch="main")
         self.assertIn("not otari", r.tick())
-        self.assertFalse(any("decide-v6" in c for c in self.world.calls))
+        self.assertFalse(any("decide-v7" in c for c in self.world.calls))
         self.root = Path(tempfile.mkdtemp())
         self.key = self.root / "key"
         self.key.write_text(KEY)
         r = self.make(dirty=" M README.md\n")
         self.assertIn("not clean", r.tick())
-        self.assertFalse(any("decide-v6" in c for c in self.world.calls))
+        self.assertFalse(any("decide-v7" in c for c in self.world.calls))
 
     def test_a_key_in_a_changed_file_discards_the_cycle_and_stops_before_any_commit(self):
         r = self.make(key_in_readme=True)
@@ -290,7 +290,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(r.tick(), "deferred")
         nxt = datetime.datetime.fromisoformat(r.load()["next_run"])
         self.assertEqual((nxt.day, nxt.hour, nxt.minute), (3, 0, 5))
-        self.assertFalse(any("decide-v6" in c for c in self.world.calls))
+        self.assertFalse(any("decide-v7" in c for c in self.world.calls))
         self.clock.t = nxt
         self.assertEqual(r.tick(), "ok")
 
@@ -317,7 +317,7 @@ class RunnerTest(unittest.TestCase):
         r.save(state)
         result = r.tick()
         self.assertTrue(result.startswith("stopped") and "total cap" in result, result)
-        self.assertEqual([c for c in self.world.calls if "decide-v6" in c], [])
+        self.assertEqual([c for c in self.world.calls if "decide-v7" in c], [])
         state["total_usd"] = "1.99"
         state["stopped"] = None
         r.save(state)

@@ -1014,13 +1014,15 @@ class FlowEnv(Env):
         elif "judge in a market debate" in system:
             content = '{"lean": "bull", "conviction": "low", "relied_on": ["B1"], "reason": "rally"}'
         elif "citation checker" in system:
-            content = '[{"label": "B1", "supported": true, "note": "ok"}]'
+            content = self.CHECKER_ANSWER
         else:
             content = "[]"
         cost = "0.010100" if extra else "0.000100"
         return FakeResponse({**BODY, **extra, "usage": {**BODY["usage"], "cost_usd": cost}, "choices": [{"message": {"content": content}, "finish_reason": "stop"}]}, headers)
 
-    def run_flow(self, extra_env=None):
+    CHECKER_ANSWER = '[{"label": "B1", "supported": true, "note": "ok"}]'
+
+    def run_flow(self, extra_env=None, rules_version="v6"):
         opts = types.SimpleNamespace(ledger=self.ledger, symbols=["BTCUSDT"], interval="1h", no_news=True, default_feeds=False, feed=["Voice=https://example.com/feed"], config=None, risk_pct=None)
         voices = [{"name": "Voice", "title": "Bitcoin rally hits record", "link": ""}]
         with mock.patch.dict(os.environ, extra_env or {}), mock.patch.object(urllib.request, "urlopen", self.reply), \
@@ -1029,7 +1031,7 @@ class FlowEnv(Env):
                 mock.patch("verdict_desk.practice.chain_executor", lambda: None):
             out = io.StringIO()
             with mock.patch("sys.stdout", out):
-                code = cli._decide_flow(opts, "v6")
+                code = cli._decide_flow(opts, rules_version)
         return code, out.getvalue(), dossier.read_ledger(self.ledger)
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A light runner of regular decision cycles, to build the history of the Otari era. No model of its own: it runs the app.
 
-Every three hours, one cycle: `decide-v6` on one symbol (BTCUSDT, ETHUSDT, SOLUSDT in turn), then verify, replay, an OpenTimestamps stamp of
+Every three hours, one cycle: `decide-v7` on one symbol (BTCUSDT, ETHUSDT, SOLUSDT in turn), then verify, replay, an OpenTimestamps stamp of
 the new head (and a request to the calendars to upgrade the newest earlier proofs to Bitcoin attestations), a refresh of the README blocks, a scan for secrets, a commit and a push of the new dossier to `origin otari`. It keeps inside
 the budgets the dashboard enforces (USD 0.10 a day per end user, USD 1.50 a day for the organization) with a margin of its own, counts what
 it spends from the receipts, never spends more than USD 2.00 in all, and stops by itself (a line in the log says why) when:
@@ -185,9 +185,9 @@ class Runner:
         symbol = SYMBOLS[state["cycles"] % len(SYMBOLS)]
         before = len(self.ledger())
         env = {**os.environ, "OTARI_API_KEY": key, "VERDICT_DESK_APPEND_PUBLIC": "1"}
-        out = self.sh([sys.executable, "-m", "verdict_desk", "decide-v6", symbol, "--config", "config/voices.json"], env=env, timeout=900)
+        out = self.sh([sys.executable, "-m", "verdict_desk", "decide-v7", symbol, "--config", "config/voices.json"], env=env, timeout=900)
         if out.returncode != 0:
-            raise Failure(f"decide-v6 {symbol} {'timed out' if out.returncode == 124 else 'exited ' + str(out.returncode)}: {(out.stderr or out.stdout or '')[-200:].strip()}")
+            raise Failure(f"decide-v7 {symbol} {'timed out' if out.returncode == 124 else 'exited ' + str(out.returncode)}: {(out.stderr or out.stdout or '')[-200:].strip()}")
         ledger = self.ledger()
         if len(ledger) != before + 1:
             raise Failure(f"the ledger went from {before} to {len(ledger)} dossiers, not by one")
@@ -345,7 +345,7 @@ class Runner:
             lines.append("budget gate: " + (self.budget_gate(state, day) or "open"))
         except Stop as stop:
             lines.append(f"budget gate: STOP, {stop}")
-        lines.append("would run: decide-v6, verify, replay, ots stamp, README refresh, secret scan, commit, push origin otari")
+        lines.append("would run: decide-v7, verify, replay, ots stamp, README refresh, secret scan, commit, push origin otari")
         return "\n".join(lines)
 
 

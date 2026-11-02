@@ -31,6 +31,8 @@ def _mods(rules_version: str = "v1") -> dict:
             from . import agents_v5 as agents, citations, features_v2 as features, llm
         elif rules_version == "v6":
             from . import agents_v6 as agents, citations, features_v2 as features, llm
+        elif rules_version == "v7":
+            from . import agents_v7 as agents, citations, features_v2 as features, llm
         else:
             raise ValueError(f"unknown rules_version: {rules_version!r}")
         _MODULES[rules_version] = {"agents": agents, "features": features, "citations": citations, "llm": llm}
@@ -100,7 +102,7 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
 
 
 def _checker_layer(m: dict, layer: dict, items: dict) -> dict:
-    """Otari runs: a fourth model re-reads each validated claim against its citations. Advisory only, never in the verdict."""
+    """Otari runs: a fourth model re-reads each validated claim against its citations. Advisory under rules v1 to v6; under rules v7 a claim it marks unsupported voids a judge ruling that relies on it (agents_v2.checker_gate)."""
     cit = m["citations"]
     labels = cit.claim_labels((layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or [])
     if not labels:
@@ -129,7 +131,7 @@ def _served(m: dict, block: dict) -> None:
 
 
 def _judge_layer(m: dict, layer: dict, items: dict, ask=None, route: dict | None = None) -> dict:
-    """Regras v6: o juiz LLM le so as afirmacoes aceitas; o veredito bruto e a checagem ficam congelados."""
+    """Regras v6 e v7: o juiz LLM le so as afirmacoes aceitas; o veredito bruto e a checagem ficam congelados."""
     cit = m["citations"]
     bull_ok = (layer.get("bull") or {}).get("accepted") or []
     bear_ok = (layer.get("bear") or {}).get("accepted") or []

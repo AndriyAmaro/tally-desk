@@ -56,6 +56,10 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 
 Every call of every Otari-era dossier, grouped by the model that answered. The fallbacks in this table have two sources. Real traffic: calls that Otari re-routed to a second provider when the first did not answer (receipts with `Otari-Fallback: true` and attempt count 2; so far only narrator batches: 8 in dossier 800 and 7 in dossier 801, sent as the plain catalog id `alibaba/qwen3-235b-a22b-instruct-2507`, with no routing policy of ours, and served by bedrock where earlier cycles were served by deepinfra, so this is Otari's own provider failover and not the `vd-judge` policy). The deliberate test: the failover canary, one small call per cycle through a policy built to fail over, which shows the backup route working even when no real call needs it.
 
+## The checker has a consequence (rules v7)
+
+Four models take part in every decision: a bull and a bear analyst, a judge, and a **citation checker** that re-reads each validated claim against the evidence it cites. Through dossier 801 (rules v6) the checker was advisory. From rules v7 its marks are part of the verdict: if the judge's lean rests on a claim the checker marked unsupported, that lean carries no weight (the judge only breaks ties, so this can send a close call back to no position and never opens one). The marks are frozen in the dossier, the rule is written in the verdict's `policy`, the outcome is sealed as `verdict.checker_gate`, and the replay recomputes it, so editing a mark fails the replay. A missing or failed checker changes nothing. Dossiers recorded by the scheduled job after this change use `decide-v7`; dossiers 792 to 801 stay v6 and still replay to the same verdicts.
+
 ## Budgets: what Otari enforces, and what the app adds
 
 Three different things, kept apart on purpose:

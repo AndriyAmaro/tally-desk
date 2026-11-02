@@ -86,6 +86,19 @@ test("a counted judge vote says its weight and that it can never open a position
   assert.ok(ask.check(a).ok);
 });
 
+test("under rules v7 a ruling voided by the citation checker says which claims the checker flagged and that it added nothing", () => {
+  const d = JSON.parse(JSON.stringify(JUDGED));
+  d.verdict.rules_version = "v7";
+  d.verdict.checker_gate = { flagged: ["B1"], judge_relied_on_flagged: ["B1"], judge_voided: true };
+  const text = textOf(ask.answer(d, "judge"));
+  assert.match(text, /relied on B1, which the citation checker marked as not supported/);
+  assert.match(text, /carries no weight, so it added nothing/);
+  const kept = JSON.parse(JSON.stringify(JUDGED));
+  kept.verdict.rules_version = "v7";
+  kept.verdict.checker_gate = { flagged: [], judge_relied_on_flagged: [], judge_voided: false };
+  assert.match(textOf(ask.answer(kept, "judge")), /Under rules v7 that adds/);
+});
+
 test("a voided judge ruling says why and that it added nothing", () => {
   const a = ask.answer(VOIDED, "judge");
   assert.match(textOf(a), /voided/);

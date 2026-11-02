@@ -270,7 +270,7 @@
     const v = d.verdict || {};
     const j = d.llm && d.llm.judge;
     if (!j) {
-      if (v.rules_version === "v6") {
+      if (v.rules_version === "v6" || v.rules_version === "v7") {
         b.say("This record has no AI judge ruling: the AI layer was off or failed for it, so the fixed rules decided alone.",
           [b.cite("verdict.rules_version", "rules", String(v.rules_version))]);
       } else {
@@ -290,9 +290,15 @@
     }
     const relied = r.relied_on || [];
     const base = [b.cite("llm.judge.ruling.relied_on", "claims it relied on", relied), ...who];
+    const gate = v.checker_gate;
+    if (gate && gate.judge_voided) {
+      b.say(`The AI judge leaned ${r.lean}, but it relied on ${gate.judge_relied_on_flagged.join(", ")}, which the citation checker marked as not supported by the evidence it cites. Under rules ${v.rules_version} such a ruling carries no weight, so it added nothing.`,
+        [...base, b.cite("verdict.checker_gate", "what the checker flagged and what it did to the ruling", gate), b.cite("verdict.rules_version", "rules", String(v.rules_version))]);
+      return;
+    }
     if (j.accepted && j.weight > 0) {
       const refs = [...base, b.cite("llm.judge.weight", "weight of the vote", j.weight)];
-      let line = `The AI judge read only the claims that passed and leaned ${r.lean} with ${r.conviction} conviction, relying on ${relied.join(", ")}. Under rules v6 that adds ${j.weight} to the ${r.lean} side`;
+      let line = `The AI judge read only the claims that passed and leaned ${r.lean} with ${r.conviction} conviction, relying on ${relied.join(", ")}. Under rules ${v.rules_version} that adds ${j.weight} to the ${r.lean} side`;
       if (cap !== null && has(v.threshold)) {
         refs.push(b.cite("verdict.policy.llm_judge_weights", "judge weight table", weights), b.cite("verdict.threshold", "entry band", v.threshold), b.cite("verdict.rules_version", "rules", String(v.rules_version)));
         line += `; its vote is capped at ${cap}, below the entry band of ${v.threshold}, so it can never open a position on its own`;

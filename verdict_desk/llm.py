@@ -1183,7 +1183,8 @@ def use_checker(ask=None) -> bool:
 
 def check_claims(labels: dict[str, dict], evidence_items: dict[str, str], ask=chat) -> dict:
     """Asks the checker model, one call, whether each claim that passed the validator is really supported by the
-    evidence it cites. The answer is advisory: it never changes the verdict, so the replay does not depend on it."""
+    evidence it cites. Under rules v1 to v6 the answer is advisory: it never changes the verdict. Under rules v7 a claim it marks
+    unsupported voids the weight of a judge ruling that relies on it (agents_v2.checker_gate); the marks are frozen in the dossier, so the replay recomputes that."""
     ask = _for_role(ask, "checker")
     system = (
         "You are a citation checker. For each labelled claim you are shown the evidence items it cites. "

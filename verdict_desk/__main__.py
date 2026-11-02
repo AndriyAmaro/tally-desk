@@ -98,8 +98,8 @@ def _rules_from_opts(opts, rules_version: str):
     if rules_version == "v1":
         print("refused: --risk-pct requires rules v2 or v3", file=sys.stderr)
         raise SystemExit(2)
-    from . import agents_v2, agents_v3, agents_v4, agents_v5, agents_v6
-    mod = {"v6": agents_v6, "v5": agents_v5, "v4": agents_v4, "v3": agents_v3}.get(rules_version, agents_v2)
+    from . import agents_v2, agents_v3, agents_v4, agents_v5, agents_v6, agents_v7
+    mod = {"v7": agents_v7, "v6": agents_v6, "v5": agents_v5, "v4": agents_v4, "v3": agents_v3}.get(rules_version, agents_v2)
     try:
         return mod.with_risk_pct(mod.DEFAULT, pct)
     except ValueError as err:
@@ -133,7 +133,7 @@ def _decide_flow(opts, rules_version: str) -> int:
         block = narrative.build(voices, ask, llm.model_name() if ask else "")
         if config is not None:
             block["config"] = {**config["record"], "gaps": gaps}
-        if rules_version in ("v5", "v6"):
+        if rules_version in ("v5", "v6", "v7"):
             # A nota de cada voz sai do ledger ANTERIOR a este ciclo e e congelada no dossier.
             block["trust"] = trust.record_for(dossier.read_ledger(opts.ledger), {v["name"] for v in voices})
         print(f"narrative ({block['method']}): {len(voices)} headlines from {len({v['name'] for v in voices})} voices, {len(block['convergence'])} convergences"
@@ -188,6 +188,10 @@ def cmd_decide_v5(opts) -> int:
 
 def cmd_decide_v6(opts) -> int:
     return _decide_flow(opts, "v6")
+
+
+def cmd_decide_v7(opts) -> int:
+    return _decide_flow(opts, "v7")
 
 
 def cmd_otari_drill(opts) -> int:
@@ -902,6 +906,15 @@ def main() -> int:
     p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
     p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
     p.set_defaults(func=cmd_decide_v6)
+    p = sub.add_parser("decide-v7", help="decide with rules v7: v6 + the citation checker has a consequence: a judge ruling that relies on a claim the checker marked unsupported carries no weight")
+    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
+    p.add_argument("--interval", default="1h")
+    p.add_argument("--no-news", action="store_true")
+    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
+    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
+    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
+    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
+    p.set_defaults(func=cmd_decide_v7)
     p = sub.add_parser("trust", help="per-voice track record: hit rate against chance, measured from the ledger alone")
     p.add_argument("--out", metavar="FILE", help="write the full table as JSON instead of printing it")
     p.set_defaults(func=cmd_trust)

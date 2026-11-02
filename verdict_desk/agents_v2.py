@@ -40,6 +40,10 @@ class Rules(NamedTuple):
     # A inclinacao vira um argumento com peso de tabela (teto 1.0, abaixo da faixa de entrada), entao o
     # LLM desempata mas nunca abre posicao sozinho. O peso e recalculado do veredito congelado no replay.
     llm_judge: bool = False
+    # v7: the citation checker (a fourth model that re-reads every validated claim against the evidence it cites) gets a consequence. A judge
+    # ruling that relies on a claim the checker marked unsupported carries no weight. The checker's marks are frozen in the dossier, so the
+    # replay recomputes the consequence from them; a dossier without a checker block (or whose checker failed) is judged as under v6.
+    checker_gate: bool = False
 
 
 V2 = Rules()
@@ -47,6 +51,7 @@ V3 = Rules(version="v3", rich_states=True)
 V4 = Rules(version="v4", rich_states=True, narrative_signal=True)
 V5 = Rules(version="v5", rich_states=True, narrative_signal=True, trust_weighted=True)
 V6 = Rules(version="v6", rich_states=True, narrative_signal=True, trust_weighted=True, llm_judge=True)
+V7 = Rules(version="v7", rich_states=True, narrative_signal=True, trust_weighted=True, llm_judge=True, checker_gate=True)
 DEFAULT = V2
 
 
@@ -94,7 +99,27 @@ def convergence_args(narrative, symbol, trust_weighted: bool = False) -> tuple[l
     return bull_args, bear_args
 
 
-def llm_judge_args(layer) -> tuple[list[dict], list[dict]]:
+def checker_gate(layer) -> dict:
+    """Rules v7: what the citation checker's marks do to the judge's ruling, recomputed from the frozen dossier only.
+
+    `flagged` are the labels of VALIDATED claims that the checker marked unsupported (a mark on a label that is not a validated claim is
+    ignored); `judge_relied_on_flagged` are those the judge's accepted ruling rests on. When there is any, the judge's lean carries no weight
+    (`judge_voided`). A missing, skipped or failed checker flags nothing, so it changes nothing."""
+    from . import citations
+
+    layer = layer if isinstance(layer, dict) else {}
+    checker = layer.get("checker") if isinstance(layer.get("checker"), dict) else {}
+    labels = citations.claim_labels((layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or [])
+    flagged = sorted({c["label"] for c in checker.get("checks") or [] if isinstance(c, dict) and c.get("supported") is False and c.get("label") in labels})
+    judge = layer.get("judge") if isinstance(layer.get("judge"), dict) else {}
+    ruling = judge.get("ruling")
+    accepted = bool(ruling) and citations.validate_ruling(ruling, (layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or [],
+                                                         layer.get("evidence_index") or {})["accepted"]
+    relied = sorted(set(ruling.get("relied_on") or []) & set(flagged)) if accepted and isinstance(ruling, dict) else []
+    return {"flagged": flagged, "judge_relied_on_flagged": relied, "judge_voided": bool(relied)}
+
+
+def llm_judge_args(layer, void: bool = False) -> tuple[list[dict], list[dict]]:
     """Veredito do juiz LLM -> no maximo um argumento, so se ele se apoia em afirmacoes validadas.
 
     O peso sai de `citations.validate_ruling` sobre o que o dossier congelou (afirmacoes aceitas,
@@ -109,7 +134,7 @@ def llm_judge_args(layer) -> tuple[list[dict], list[dict]]:
     bull_ok = (layer.get("bull") or {}).get("accepted") or []
     bear_ok = (layer.get("bear") or {}).get("accepted") or []
     check = citations.validate_ruling(ruling, bull_ok, bear_ok, layer.get("evidence_index") or {})
-    if not check["accepted"] or check["weight"] <= 0:
+    if not check["accepted"] or check["weight"] <= 0 or void:
         return [], []
     relied = list(ruling["relied_on"])
     arg = {"claim": f"LLM judge leans {ruling['lean']} ({ruling['conviction']} conviction) on validated claims {', '.join(relied)}",
@@ -310,6 +335,8 @@ def policy(rules: Rules) -> dict:
     }
     if rules.llm_judge:  # so a v6 grava a tabela: os vereditos v2 a v5 ficam identicos ao que sempre foram
         out["llm_judge_weights"] = dict(citations.JUDGE_WEIGHT)
+    if rules.checker_gate:  # so a v7: a regra que o checker passa a ter, escrita no proprio veredito
+        out["checker_gate"] = "a judge ruling that relies on a claim the citation checker marked unsupported carries no weight"
     return out
 
 
@@ -386,13 +413,18 @@ def decide(f: dict, rules: Rules = V2, narrative: dict | None = None, symbol: st
         cb, cs = convergence_args(narrative, symbol, rules.trust_weighted)
         bull_args.extend(cb)
         bear_args.extend(cs)
+    gate = None
     if rules.llm_judge:
-        jb, js = llm_judge_args(llm)
+        gate = checker_gate(llm) if rules.checker_gate else None
+        jb, js = llm_judge_args(llm, void=bool(gate and gate["judge_voided"]))
         bull_args.extend(jb)
         bear_args.extend(js)
+    verdict = judge(f, bull_args, bear_args, rules=rules)
+    if gate is not None:
+        verdict["checker_gate"] = gate  # sealed with the verdict: which claims the checker flagged and whether it voided the judge's lean
     return {
         "bull": bull_args,
         "bear": bear_args,
-        "verdict": judge(f, bull_args, bear_args, rules=rules),
+        "verdict": verdict,
         "sensitivity": sensitivity(bull_args, bear_args, rules),
     }

@@ -274,7 +274,7 @@ def render(dossier: dict, chain: dict | None = None, anchor: dict | None = None,
             status = (f"counts {judge.get('weight')}" if judge.get("accepted") and judge.get("weight")
                       else "balanced, adds nothing" if judge.get("accepted") else "voided, adds nothing")
             who = _who(judge)
-            rows.append(f"<h3>AI judge (rules v6) · {_e(status)}{_e(who)}</h3>")
+            rows.append(f"<h3>AI judge (rules {_e((dossier.get('verdict') or {}).get('rules_version') or 'v6')}) · {_e(status)}{_e(who)}</h3>")
             rows.append("<p class=\"small\">The judge reads only the claims kept above. Its lean counts only if it rests on at least "
                         "one kept claim of that side and every number in its reason is in that evidence; the weight comes from a fixed "
                         "table capped below the entry band, so it can tip a close call but never open a position alone.</p>")
