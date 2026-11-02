@@ -9,7 +9,7 @@ Per decision cycle: ONE search (about USD 0.01) and ONE page fetch, both through
   dated ones first. A source whose date is known (published date, or a /YYYY/MM/DD/ in its URL) and older than three days is dropped;
   one with no date at all is kept and marked `undated`, never presented as fresh.
 - The first item is then read with Otari's `otari_web_fetch` tool. The page text is not in the reply's tool-call entry (only the URL
-  and status are), so the excerpt is the model's verbatim relay of the page's opening text; it is sealed with its sha256 and labelled as
+  and status are), so the excerpt is the model's verbatim relay of ONE passage of the page (the one that says the most about the coin's price or market news, else the opening); it is sealed with its sha256 and labelled as
   a relay. It is then checked against our own GET of the same page: runs of six consecutive words of the excerpt (those that are not just
   the title) must be found in the page text, in at least 80 percent of the runs. The check seals what it found (`excerpt_check`: runs counted,
   runs found, the fraction, the sha256 and size of the page we got) and `excerpt_verified` is true, false, or null when the page could not be read
@@ -37,8 +37,9 @@ MATCH_FRACTION = 0.8
 MIN_RUNS = 5
 _URL_DATE = re.compile(r"/(20\d\d)/(0[1-9]|1[0-2])/(0[1-9]|[12]\d|3[01])(?:/|$)")
 SEARCH_SYSTEM = "You are a news scout. Run the web search tool once, then reply with the single word: done."
-FETCH_SYSTEM = ("You read one web page with the web fetch tool and reply with JSON only: {\"excerpt\": the first 400 characters of the page's "
-                "main text, copied verbatim, no summary}.")
+FETCH_SYSTEM = ("You read one web page with the web fetch tool and reply with JSON only: {\"excerpt\": one passage of at most 400 characters of the page's "
+                "main text, copied verbatim, no summary. Choose the passage that says the most about the coin's price or market news right now (a price, "
+                "a move, an event, a date); if the page has no such passage, copy its first 400 characters}.")
 _INDEX_PATH = re.compile(r"/(tag|tags|category|categories|topic|topics|author|authors|page|search|archive|archives)(/|$)", re.I)
 
 
@@ -166,7 +167,7 @@ def fetch_page(item: dict, ask=None, opener=None) -> dict:
         return {**page, "error": "the reply carried no excerpt"}
     excerpt = re.sub(r"\s+", " ", excerpt)[:EXCERPT_CHARS]
     page.update({"excerpt": excerpt, "excerpt_sha256": hashlib.sha256(excerpt.encode("utf-8")).hexdigest(),
-                 "excerpt_source": "verbatim relay by the model of the page text Otari's fetch tool returned",
+                 "excerpt_source": "verbatim relay by the model of a passage of the page text Otari's fetch tool returned",
                  })
     check = excerpt_check(item["url"], excerpt, item.get("title", ""), opener)
     page.update({"excerpt_check": check, "excerpt_verified": check["verified"]})

@@ -172,17 +172,23 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     else:
         row(5, False, [_rid(r) for _, r in seen[:2]], seen[0][0] if seen else None,
             f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted")
-    # 6 web search and fetch
-    done = False
+    # 6 web search and fetch: the newest dossier with a completed search and fetch; among those, the newest where the analysts really
+    # cited what was found (the page excerpt first, then a source title), so the proof shows the evidence used and not only fetched
+    cands = []
     for d in newest:
         web = (d.get("evidence") or {}).get("web") or {}
         page = web.get("page") or {}
         searched = any(t.get("type") == "web_search" and t.get("status") == "completed" for t in (web.get("receipt") or {}).get("tool_calls") or [])
         if searched and page.get("otari_reported_fetch") and page.get("excerpt"):
-            row(6, True, [_rid(web["receipt"]), _rid(page["receipt"])], d["seq"], f"one search and one page fetch through Otari's tools; {len(web.get('items') or [])} sources and an excerpt frozen (excerpt_verified {page.get('excerpt_verified')})")
-            done = True
-            break
-    if not done:
+            use = (d["llm"].get("otari") or {}).get("evidence_use") or {}
+            cands.append((int(use.get("web_excerpts_cited") or 0) > 0, int(use.get("web_items_cited") or 0) > 0, d, web, page, use))
+    if cands:
+        _, _, d, web, page, use = max(cands, key=lambda c: (c[0], c[1]))  # max keeps the first (newest) of equals
+        cited = int(use.get("web_items_cited") or 0) + int(use.get("web_excerpts_cited") or 0)
+        usage = (f"the analysts cited {use.get('web_items_cited', 0)} of {use.get('web_items', 0)} source titles and {use.get('web_excerpts_cited', 0)} of {use.get('web_excerpts', 0)} page excerpts in the claims the judge weighed" if cited
+                 else "in this dossier the analysts cited none of what was found (no dossier with a cited web item yet)")
+        row(6, True, [_rid(web["receipt"]), _rid(page["receipt"])], d["seq"], f"one search and one page fetch through Otari's tools; {len(web.get('items') or [])} sources and an excerpt frozen (excerpt_verified {page.get('excerpt_verified')}); {usage}")
+    else:
         row(6, False, [], None, "no dossier with a completed search and a fetch")
     # 7 code execution
     done = False

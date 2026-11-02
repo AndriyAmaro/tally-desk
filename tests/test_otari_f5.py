@@ -311,6 +311,56 @@ class AuditFallbackRowTest(unittest.TestCase):
         self.assertIn("no real call fell back yet", row["note"])
 
 
+
+class WebEvidenceUseTest(unittest.TestCase):
+    @staticmethod
+    def ledger():
+        from tests.test_otari_report import LEDGER
+        return json.loads(json.dumps(LEDGER))
+
+    def row6(self, ledger):
+        from verdict_desk import otari_report
+        return {r["n"]: r for r in otari_report.audit(ledger, [])}[6]
+
+    def test_the_web_proof_cites_the_newest_dossier_where_the_analysts_cited_what_was_found(self):
+        ledger = self.ledger()
+        row = self.row6(ledger)
+        cited = [d["seq"] for d in ledger if ((d.get("llm") or {}).get("otari") or {}).get("evidence_use", {}).get("web_items_cited")]
+        self.assertEqual(row["dossier"], max(cited), "the newest dossier that shows a cited web item, not just the newest fetch")
+        self.assertRegex(row["note"], r"the analysts cited \d+ of \d+ source titles")
+
+    def test_a_cited_excerpt_beats_a_cited_title_and_the_audit_picks_it_up_by_itself(self):
+        ledger = self.ledger()
+        target = ledger[-1]
+        target["llm"]["otari"]["evidence_use"] = {"web_items": 3, "web_items_cited": 0, "web_excerpts": 1, "web_excerpts_cited": 0, "mcp_items": 1, "mcp_items_cited": 0}
+        self.assertNotEqual(self.row6(ledger)["dossier"], target["seq"], "newest, but nothing cited")
+        older = ledger[-3]
+        older["llm"]["otari"]["evidence_use"].update(web_excerpts=1, web_excerpts_cited=1)
+        older["evidence"]["web"]["page"].update(otari_reported_fetch=True, excerpt="x" * 40)
+        row = self.row6(ledger)
+        self.assertEqual(row["dossier"], older["seq"])
+        self.assertIn("1 of 1 page excerpts", row["note"])
+
+    def test_when_nothing_was_ever_cited_the_row_says_so_instead_of_implying_use(self):
+        ledger = self.ledger()
+        for d in ledger:
+            use = ((d.get("llm") or {}).get("otari") or {}).get("evidence_use")
+            if use:
+                use.update(web_items_cited=0, web_excerpts_cited=0)
+        row = self.row6(ledger)
+        self.assertEqual(row["status"], "PASS")
+        self.assertIn("cited none of what was found", row["note"])
+
+    def test_the_fetch_asks_for_the_passage_about_price_or_news_and_the_analyst_note_names_the_excerpt_as_an_item_of_its_own(self):
+        from verdict_desk import otari_web
+        self.assertIn("price or market news", otari_web.FETCH_SYSTEM)
+        self.assertIn("verbatim", otari_web.FETCH_SYSTEM)
+        self.assertIn("Web page excerpt", llm.NEWS_NOTE)
+        self.assertIn("never cite an item only to have cited it", llm.NEWS_NOTE, "the note still asks for judgment, not for citations")
+        web = {"items": [], "page": {"domain": "d.example", "excerpt": "Bitcoin traded at 69,000 on Monday.", "date_status": "undated"}}
+        self.assertEqual([t.split(" ")[0:3] for t in otari_web.index_texts(web)], [["Web", "page", "excerpt"]])
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class VerifyPageTest(unittest.TestCase):
     def test_the_browser_verifier_reads_the_ledger_from_either_layout_and_agrees_with_itself(self):
