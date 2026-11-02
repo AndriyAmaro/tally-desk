@@ -41,6 +41,25 @@
     return { rows: rows, problems: problems };
   }
 
-  var api = { GENESIS: GENESIS, canonical: canonical, verifyLedger: verifyLedger, webSha256: webSha256 };
+  /* Where a static host may serve the ledger from a page of web/: beside the page (GitHub Pages as the deploy builds it, web/ at the
+   * root with ledger/ next to it) or one level up (the repository root served as is, the page at /web/). Relative paths only. */
+  var LEDGER_PATHS = ["ledger/ledger.jsonl", "../ledger/ledger.jsonl"];
+
+  /* fetchLedgerText(fetchFn) -> Promise<{text, path} | null>: the first place that answers with something shaped like a ledger. A host that
+   * answers 200 with an HTML page for a missing file does not count. */
+  async function fetchLedgerText(fetchFn, paths) {
+    var list = paths || LEDGER_PATHS;
+    for (var i = 0; i < list.length; i++) {
+      try {
+        var res = await fetchFn(list[i], { cache: "no-store" });
+        if (!res || !res.ok) continue;
+        var text = await res.text();
+        if (/^\s*\{/.test(text)) return { text: text, path: list[i] };
+      } catch (e) { /* try the next place */ }
+    }
+    return null;
+  }
+
+  var api = { GENESIS: GENESIS, canonical: canonical, verifyLedger: verifyLedger, webSha256: webSha256, LEDGER_PATHS: LEDGER_PATHS, fetchLedgerText: fetchLedgerText };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.VerdictDesk = api;
 })(typeof self !== "undefined" ? self : this);

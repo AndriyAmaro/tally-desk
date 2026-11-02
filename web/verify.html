@@ -85,11 +85,10 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
 
   async function ledgerIndex() {
     try {
-      const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
-      if (!res.ok) return null;
-      const text = await res.text();
+      const got = await V.fetchLedgerText(fetch);  // beside the page, or one level up when the repository root is served
+      if (!got) return null;
       const map = new Map();
-      for (const line of text.split("\n")) {
+      for (const line of got.text.split("\n")) {
         if (!line.trim()) continue;
         const d = JSON.parse(line);
         map.set(d.seq, d);
@@ -134,20 +133,21 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
     for (const r of records) results.push(await checkOne(r, index));
 
     const allGood = results.every((r) => r.intact && r.linked !== false && r.agrees !== false);
+    const allLinked = results.every((r) => r.linked === true);  // null means the ledger could not be read: not "linked", and not "broken" either
     $("out").hidden = false;
     $("verdict").innerHTML = allGood
-      ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, linked${
+      ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, ${allLinked ? "linked" : "linkage not checked (the published ledger could not be read here)"}${
           results.some((r) => r.rederived) ? ", and re-derived from the frozen evidence" : ""}</span>`
       : `<span class="bad">NOT VERIFIED</span> <span class="mut" style="font-size:15px">at least one check failed, see below</span>`;
 
     $("detail").innerHTML = results.map((r) => {
       const d = r.d, v = d.verdict || {};
-      const mark = (b, good, bad) => b === null ? `<span class="mut">${esc(bad || "not checked")}</span>` : (b ? `<span class="ok">${esc(good)}</span>` : `<span class="bad">${esc(bad)}</span>`);
+      const mark = (b, good, bad, unknown) => b === null ? `<span class="mut">${esc(unknown || "not checked")}</span>` : (b ? `<span class="ok">${esc(good)}</span>` : `<span class="bad">${esc(bad)}</span>`);
       return `<table><tbody>
         <tr><th style="width:190px">Record</th><td><b>#${esc(d.seq)}</b> ${esc((d.evidence || {}).symbol)} · ${esc(v.action)} · edge ${esc(v.edge)}</td></tr>
         <tr><th>Integrity</th><td>${mark(r.intact, "intact: recomputed hash matches", "altered: recomputed hash differs")}
           <div class="mono mut">recorded ${esc((d.hash || "").slice(0, 32))}…<br>recomputed ${esc((r.recomputed || "").slice(0, 32))}…</div></td></tr>
-        <tr><th>Linkage</th><td>${mark(r.linked, "linked", "broken link")} <span class="mut">${esc(r.linkNote)}</span></td></tr>
+        <tr><th>Linkage</th><td>${mark(r.linked, "linked", "broken link", "not checked")} <span class="mut">${esc(r.linkNote)}</span></td></tr>
         <tr><th>Re-derivation</th><td>${r.rederived
             ? `${mark(r.agrees, "the rules reproduce the recorded action", "the rules now produce a different action")}
                <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under${
@@ -172,9 +172,9 @@ th{font-weight:600;font-size:12px;color:var(--mut)}
   });
   $("sample").addEventListener("click", async () => {
     try {
-      const res = await fetch("ledger/ledger.jsonl", { cache: "no-store" });
-      const text = await res.text();
-      const lines = text.split("\n").filter((l) => l.trim());
+      const got = await V.fetchLedgerText(fetch);
+      if (!got) throw new Error("no ledger file next to this page or one level up");
+      const lines = got.text.split("\n").filter((l) => l.trim());
       // um registro com camada de analista, para a re-derivacao ter o que comparar
       const picks = [lines[lines.length - 1], lines[Math.floor(lines.length / 2)]];
       $("input").value = picks.join("\n");

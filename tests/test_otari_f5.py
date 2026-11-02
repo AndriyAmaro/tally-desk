@@ -4,6 +4,8 @@ idempotency key, the audit cites real evidence. No network."""
 import io
 import json
 import os
+import shutil
+import subprocess
 import unittest
 import urllib.error
 import urllib.request
@@ -12,6 +14,10 @@ from unittest import mock
 from tests.test_otari import FakeResponse, message, plain_config
 from tests.test_otari_canary import ENV, headroom
 from verdict_desk import llm
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+NODE = shutil.which("node")
 
 ROW = {"external_id": "vd-judge", "budget_id": "bud", "blocked": False, "spend": 0.002, "reserved": 0.0, "next_budget_reset_at": "2026-11-03T00:00:00+00:00"}
 
@@ -173,6 +179,13 @@ class AuditBudgetRowsTest(unittest.TestCase):
         self.assertIn("1 not created yet", row["note"])
         self.assertIn("1 lookups failed", row["note"])
         self.assertEqual(row["status"], "PASS")
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class VerifyPageTest(unittest.TestCase):
+    def test_the_browser_verifier_reads_the_ledger_from_either_layout_and_agrees_with_itself(self):
+        out = subprocess.run([NODE, "--test", str(ROOT / "tests" / "verify_page.test.js")], capture_output=True, text=True, timeout=180)
+        self.assertEqual(out.returncode, 0, out.stdout[-3000:] + out.stderr[-1000:])
 
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
