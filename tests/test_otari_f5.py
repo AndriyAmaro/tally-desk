@@ -363,6 +363,15 @@ class WebEvidenceUseTest(unittest.TestCase):
         self.assertEqual([t.split(" ")[0:3] for t in otari_web.index_texts(web)], [["Web", "page", "excerpt"]])
 
 
+
+class ReplayTest(unittest.TestCase):
+    def test_every_dossier_of_the_otari_era_still_replays_to_its_recorded_verdict(self):
+        out = subprocess.run(["python3", "-m", "verdict_desk", "replay"], cwd=ROOT, capture_output=True, text=True, timeout=300)
+        self.assertEqual(out.returncode, 0, out.stdout[-800:] + out.stderr[-500:])
+        for seq in range(792, 802):
+            self.assertRegex(out.stdout, rf"#{seq} replay MATCHES")
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class VerifyPageTest(unittest.TestCase):
     def test_the_browser_verifier_reads_the_ledger_from_either_layout_and_agrees_with_itself(self):
