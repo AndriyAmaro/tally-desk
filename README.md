@@ -21,14 +21,14 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 <!-- otari:proofs:start -->
 | # | Resource | Status | Where the proof lives | Dossier | Request id(s) | Code |
 |---|---|---|---|---|---|---|
-| 1 | Several open-weight models in distinct roles | **PASS** | sealed receipts in the ledger: bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia.nemotron-super-3-120b, judge deepseek-ai/DeepSeek-V4-Pro, checker google/gemma-3-27b-it | 798 | `756b0ed2-372e-4197-b26c-4e2cb0e04782`<br>`e2c47aef-da4a-4b1c-9a93-4f1ede5e85b3`<br>`869aef07-1122-43f5-97b0-6066a6fbc7a5`<br>`aade70e5-b83f-4e0b-b2ca-dc8e72a067c4` | `config/otari.json`, `llm.py` |
-| 2 | Routing and fallback | **PASS** | sealed receipts in the ledger: the failover canary of the cycle: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true), sealed in the dossier | 798 | `eb06188f-a600-4991-9bd4-0dee3fe0c6fc`<br>`1dd7daa2-c2ea-4c8f-81b7-aec04e383a71` (drill, not sealed) | `otari_canary.py` |
-| 3 | Budgets and spend limits | **PASS** | sealed receipts in the ledger: budget-aware routing: Otari's spend for the judge's end user (USD 0.007204 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed) | 798 | `869aef07-1122-43f5-97b0-6066a6fbc7a5`<br>`d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7` (drill, not sealed) | `llm.read_headroom`, `llm.route_decision` |
-| 4 | Budget per user | **PASS** | sealed receipts in the ledger: 10 of 10 end users read back from Otari sit on the vd-analyst budget (sealed in the dossier); Otari echoed the budget on the receipts | 798 | `877c58d8-9795-4d3d-96f8-9746cdc1d7f8`<br>`a17504c1-3493-4024-9229-7a2fce03db35`<br>`3df8b84f-e8fb-4b88-914c-a4e4ee22cdfe`<br>`ccaa8d96-22a1-4843-8565-63a844fb15a4` | `llm._end_user`, `llm.read_headroom` |
+| 1 | Several open-weight models in distinct roles | **PASS** | sealed receipts in the ledger: bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia.nemotron-super-3-120b, judge deepseek-ai/DeepSeek-V4-Pro, checker google/gemma-3-27b-it | 799 | `5a9937d2-3ecf-4c2c-8acd-694002c4507e`<br>`f9f0caec-af45-48ab-9c08-d7f80f6aea65`<br>`35ecceeb-e990-43ba-a6a6-9baebd241390`<br>`8e1e9455-a52d-4ce0-8c83-18189c0bde2c` | `config/otari.json`, `llm.py` |
+| 2 | Routing and fallback | **PASS** | sealed receipts in the ledger: the failover canary of the cycle: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true), sealed in the dossier | 799 | `53c1e757-ebcf-4f60-8466-70d2b89a85eb`<br>`1dd7daa2-c2ea-4c8f-81b7-aec04e383a71` (drill, not sealed) | `otari_canary.py` |
+| 3 | Budgets and spend limits | **PASS** | sealed receipts in the ledger: budget-aware routing: Otari's spend for the judge's end user (USD 0.008490 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed) | 799 | `35ecceeb-e990-43ba-a6a6-9baebd241390`<br>`d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7` (drill, not sealed) | `llm.read_headroom`, `llm.route_decision` |
+| 4 | Budget per user | **PASS** | sealed receipts in the ledger: 10 of 10 end users read back from Otari sit on the vd-analyst budget (sealed in the dossier); Otari echoed the budget on the receipts | 799 | `8541a3bb-d190-4f11-97ea-dd76054c6e42`<br>`4764d2e9-7fc2-4c28-b073-42ee13d532ee`<br>`dbd1f339-3ec0-42f8-9534-2347a0625df0`<br>`00360bfa-35a6-4801-a59f-6375c91fbbf2` | `llm._end_user`, `llm.read_headroom` |
 | 5 | Guardrails | **NOT PROVEN** | attached to the vd-judge policy, but Otari reported valid null on 2 calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted | 795 | `1daefb36-6e97-4c3e-95c0-406a8e864147`<br>`380d22b8-daed-4f86-9885-44b7ae29e2b8` | `llm.parse_receipt` |
-| 6 | Web search and fetch | **PASS** | sealed receipts in the ledger: one search and one page fetch through Otari's tools; 3 sources and an excerpt frozen (excerpt_verified True) | 797 | `34dbf360-564c-4d5c-b585-5498330ea25c`<br>`1d49318d-3042-4c42-affd-7a930adc53cd` | `otari_web.py` |
-| 7 | Code execution | **PASS** | sealed receipts in the ledger: the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent | 798 | `a1608954-6d12-4e79-9e43-41d450a9ca28` | `sandbox_rederive.py` |
-| 8 | MCP | **PASS** | sealed receipts in the ledger: prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok) | 798 | `7ce20c47-8932-4b74-afc5-ccc4ec2423f0` | `otari_mcp.py` |
+| 6 | Web search and fetch | **PASS** | sealed receipts in the ledger: one search and one page fetch through Otari's tools; 3 sources and an excerpt frozen (excerpt_verified True) | 799 | `ebed7252-3c2e-4bb4-b324-1b5eb1096df9`<br>`0961fb87-8d42-4159-8764-84b4e054c1d6` | `otari_web.py` |
+| 7 | Code execution | **PASS** | sealed receipts in the ledger: the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent | 799 | `ef0d9b66-a849-42d5-90dd-3405eedcc10e` | `sandbox_rederive.py` |
+| 8 | MCP | **PASS** | sealed receipts in the ledger: prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok) | 799 | `c347fe73-6b83-4095-9f1f-004ce4440f5f` | `otari_mcp.py` |
 
 **8 resources: 7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN.**
 <!-- otari:proofs:end -->
@@ -40,13 +40,13 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 <!-- otari:board:start -->
 | Model (provider:model) | Calls | OK | Refusals / failures | p50 ms | p95 ms | Fallbacks | Accepted claims | USD per claim |
 |---|---|---|---|---|---|---|---|---|
-| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 60 | 60 | - | 22285 | 29780 | 0 | - | - |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 24 | 24 | - | 2351 | 11182 | 1 | - | - |
-| `bedrock:nvidia.nemotron-super-3-120b` | 7 | 7 | - | 2244 | 2802 | 0 | 28 | 0.000182 |
-| `deepinfra:openai/gpt-oss-120b` | 7 | 7 | - | 19580 | 24705 | 0 | 28 | 0.000080 |
-| `nebius:google/gemma-3-27b-it` | 7 | 7 | - | 4684 | 11622 | 0 | - | - |
+| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 69 | 69 | - | 22285 | 29780 | 0 | - | - |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 29 | 29 | - | 4233 | 11182 | 2 | - | - |
+| `bedrock:nvidia.nemotron-super-3-120b` | 8 | 8 | - | 1959 | 2802 | 0 | 32 | 0.000184 |
+| `deepinfra:openai/gpt-oss-120b` | 8 | 8 | - | 19580 | 24990 | 0 | 32 | 0.000080 |
+| `nebius:google/gemma-3-27b-it` | 8 | 8 | - | 4684 | 11622 | 0 | - | - |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 4 | 4 | - | 1339 | 2448 | 0 | - | - |
 | `(no answer) alibaba/qwen3-235b-a22b-instruct-2507` | 3 | 0 | 409 x3 | - | - | 0 | - | - |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 3 | 3 | - | 1665 | 2448 | 0 | - | - |
 <!-- otari:board:end -->
 
 Every call of every Otari-era dossier, grouped by the model that answered. The fallbacks in this table come from the failover canary: one small call per cycle through a policy built to fail over; the production roles only fall back when Otari has to.
