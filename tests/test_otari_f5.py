@@ -284,6 +284,8 @@ class AuditFallbackRowTest(unittest.TestCase):
         self.assertEqual(row["source"], "sealed")
         self.assertIn(f"{len(real)} real calls", row["note"])
         self.assertIn("deliberate test", row["note"])
+        self.assertIn("not the vd-judge policy", row["note"], "the narrator's fallbacks carry no policy: say which failover it was")
+        self.assertTrue(all(r.get("policy") is None and r["role"] == "narrator" for r in real), "the real fallbacks of the ledger are narrator calls on a plain catalog id")
         canary_id = next(d["llm"]["otari"]["canary"]["receipt"]["request_id"] for d in reversed(otari_report.era(ledger)) if (d["llm"]["otari"].get("canary") or {}).get("passed"))
         self.assertEqual(row["proof"][0] in {r["request_id"] for r in real}, True, "the first proof is a real call")
         self.assertIn(canary_id, row["proof"], "the canary is cited too")

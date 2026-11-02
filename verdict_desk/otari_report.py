@@ -115,7 +115,7 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
         seqs = sorted({s for s, _, _ in real})
         cr = canary[1]["receipt"]
         row(2, True, [_rid(x) for _, _, x in real[:2]] + [_rid(cr)], seq,
-            f"{len(real)} real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count {r.get('attempt_count')}), in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs))}; newest: a {label} call sent as {r.get('sent_model')} was answered on its second attempt by {r.get('served_by')}. "
+            f"{len(real)} real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count {r.get('attempt_count')}), in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs))}; newest: a {label} call sent as {r.get('sent_model')} ({'routing policy ' + str(r.get('policy')) if r.get('policy') else 'the plain catalog id, no routing policy of ours, so this is Otari\'s own provider failover and not the vd-judge policy'}) was answered on its second attempt by {r.get('served_by')}. "
             f"Besides, the failover canary of dossier {canary[0]} is the deliberate test of the same route: policy {canary[1].get('policy')} served by {cr.get('served_by')} after {cr.get('attempt_count')} attempts (Otari-Fallback true). All sealed in the ledger",
             drill_ids=drill_ids)
     elif canary:
