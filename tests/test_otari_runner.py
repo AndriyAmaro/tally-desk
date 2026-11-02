@@ -117,7 +117,7 @@ class RunnerTest(unittest.TestCase):
         self.assertNotIn("logs", " ".join(add))
         commit = next(c for c in self.world.calls if "commit" in c)
         self.assertIn("user.name=AndriyAmaro", commit)
-        self.assertIn("user.email=andriytattoo1992@gmail.com", commit)
+        self.assertIn("user.email=177476258+AndriyAmaro@users.noreply.github.com", commit)
         self.assertNotIn("Co-Authored-By", commit[-1], "a data commit of the app, not of a model")
         self.assertNotIn("Claude", commit[-1])
         self.assertTrue(commit[-1].startswith("otari: era dossier 1 (BTCUSDT), recorded by the runner"))
@@ -354,6 +354,35 @@ class TreeHasNoKeyShapeTest(unittest.TestCase):
     def test_the_runners_own_tree_scan_does_not_match_the_runner_or_any_file_of_the_repository(self):
         out = subprocess.run(["git", "grep", "--untracked", "-n", R.KEY_PREFIX], cwd=str(R.ROOT if hasattr(R, "ROOT") else Path(__file__).resolve().parents[1]), capture_output=True, text=True)
         self.assertEqual((out.returncode, out.stdout), (1, ""), "otherwise every real cycle would stop itself on its own source")
+
+
+class UpgradeProofsTest(RunnerTest):
+    def test_the_newest_earlier_proofs_are_asked_again_oldest_first_and_never_the_one_just_stamped(self):
+        r = self.make()
+        folder = self.root / "ledger" / "timestamps"
+        for seq in range(1, 21):
+            (folder / f"{seq}.json.ots").write_bytes(b"x")
+        (folder / "20.json.ots.bak").write_bytes(b"x")
+        r.upgrade_proofs("ots", 20)
+        asked = [c[-1] for c in self.world.calls if c[:2] == ["ots", "upgrade"]]
+        self.assertEqual(asked, [f"ledger/timestamps/{seq}.json.ots" for seq in range(8, 20)])
+        self.assertEqual(len(asked), R.Runner.UPGRADE_LAST)
+
+    def test_a_calendar_that_is_down_is_logged_and_does_not_stop_the_cycle(self):
+        r = self.make()
+        (self.root / "ledger" / "timestamps" / "1.json.ots").write_bytes(b"x")
+        failing = lambda args, **kw: subprocess.CompletedProcess(args, 1, "", "calendar down")
+        r.run = failing
+        r.upgrade_proofs("ots", 2)
+        self.assertIn("upgrade of 1.json.ots failed", (self.root / "logs" / "otari-runner.log").read_text())
+
+    def test_a_tick_upgrades_after_it_stamps(self):
+        (self.root / "ledger" / "timestamps").mkdir(parents=True, exist_ok=True)
+        r = self.make()
+        (self.root / "ledger" / "timestamps" / "0.json.ots").write_bytes(b"x")
+        self.assertEqual(r.tick(), "ok")
+        names = self.commands()
+        self.assertLess(names.index("ots stamp"), names.index("ots upgrade"))
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 

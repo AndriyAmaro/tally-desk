@@ -379,4 +379,29 @@ class VerifyPageTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stdout[-3000:] + out.stderr[-1000:])
 
 
+
+class TimestampHelperTest(unittest.TestCase):
+    """The age check of the archived OpenTimestamps proofs forgives a proof that is old and still pending in the tree only when the public
+    calendars really hold its Bitcoin attestation; anything else keeps the strict path."""
+
+    def run_with(self, upgrade_rc, info_text="", error=None):
+        from tests import test_timestamp as t
+
+        def fake(args, **kw):
+            if error:
+                raise error
+            return subprocess.CompletedProcess(args, upgrade_rc if args[1] == "upgrade" else 0, info_text if args[1] == "info" else "", "")
+        with mock.patch.object(t.subprocess, "run", fake), mock.patch.object(t.shutil, "copyfile"):
+            return t.TimestampTest.calendars_can_upgrade(Path("/nonexistent/794.json.ots"))
+
+    def test_a_bitcoin_attestation_from_the_calendars_makes_an_old_pending_proof_sound(self):
+        self.assertTrue(self.run_with(0, "verify BitcoinBlockHeaderAttestation(974212)"))
+
+    def test_a_proof_the_calendars_cannot_complete_or_a_host_that_cannot_reach_them_stays_strict(self):
+        self.assertFalse(self.run_with(1, "verify PendingAttestation('https://x')"))
+        self.assertFalse(self.run_with(0, "verify PendingAttestation('https://x')"))
+        self.assertFalse(self.run_with(0, error=subprocess.TimeoutExpired("ots", 90)))
+        self.assertFalse(self.run_with(0, error=OSError("no network")))
+
+
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

@@ -2,7 +2,7 @@
 """A light runner of regular decision cycles, to build the history of the Otari era. No model of its own: it runs the app.
 
 Every three hours, one cycle: `decide-v6` on one symbol (BTCUSDT, ETHUSDT, SOLUSDT in turn), then verify, replay, an OpenTimestamps stamp of
-the new head, a refresh of the README blocks, a scan for secrets, a commit and a push of the new dossier to `origin otari`. It keeps inside
+the new head (and a request to the calendars to upgrade the newest earlier proofs to Bitcoin attestations), a refresh of the README blocks, a scan for secrets, a commit and a push of the new dossier to `origin otari`. It keeps inside
 the budgets the dashboard enforces (USD 0.10 a day per end user, USD 1.50 a day for the organization) with a margin of its own, counts what
 it spends from the receipts, never spends more than USD 2.00 in all, and stops by itself (a line in the log says why) when:
 
@@ -44,7 +44,7 @@ USER_DAY_BUDGET_USD = Decimal("0.10")  # the dashboard's budget per end user per
 DEFAULT_USER_CYCLE_USD = Decimal("0.0125")  # until a cycle of its own has been seen
 SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT")
 MAX_FAILURES = 2
-AUTHOR = ("AndriyAmaro", "andriytattoo1992@gmail.com")
+AUTHOR = ("AndriyAmaro", "177476258+AndriyAmaro@users.noreply.github.com")
 # Built in two pieces so that this very file never contains the prefix: the scan below is a git grep over the whole tree.
 KEY_PREFIX = "otk" + "_"
 FAILED_CYCLE_ESTIMATE_USD = Decimal("0.08")  # a cycle that failed before any dossier says what it spent: counted at its two caps together (0.02 core + 0.06 tools)
@@ -211,6 +211,7 @@ class Runner:
                     done = self.sh([ots, "stamp", f"ledger/timestamps/{dossier['seq']}.json"])
                     if done.returncode != 0:  # a stamp is a witness, not the dossier: its absence is logged, not fatal
                         self.log(f"the OpenTimestamps stamp of {dossier['seq']} failed (kept going; the dossier is intact): {(done.stderr or '')[-120:].strip()}")
+                    self.upgrade_proofs(ots, dossier["seq"])
                 else:
                     self.log("the ots client is not installed: the head of this dossier is not stamped")
             refresh = self.sh([sys.executable, "scripts/refresh_otari_readme.py"])
@@ -229,6 +230,19 @@ class Runner:
         except (Failure, Stop) as err:
             err.entry = entry  # a cycle that is discarded after its dossier was written has still spent that money
             raise
+
+    UPGRADE_LAST = 12  # how many of the newest earlier proofs are asked again each cycle
+
+    def upgrade_proofs(self, ots: str, current: int) -> None:
+        """A fresh OpenTimestamps proof only holds calendar promises; a few hours later the calendars can answer with the Bitcoin block.
+        Asks again for the newest earlier proofs (a free GET to the public calendars) so the committed proofs turn into Bitcoin attestations.
+        Never fatal: a calendar that is down is logged and the next cycle asks again."""
+        folder = self.root / "ledger" / "timestamps"
+        earlier = sorted((p for p in folder.glob("*.json.ots") if p.name.split(".")[0].isdigit() and int(p.name.split(".")[0]) < current), key=lambda p: int(p.name.split(".")[0]))
+        for proof in earlier[-self.UPGRADE_LAST:]:
+            done = self.sh([ots, "upgrade", f"ledger/timestamps/{proof.name}"], timeout=90)
+            if done.returncode != 0:
+                self.log(f"the OpenTimestamps upgrade of {proof.name} failed (kept going): {(done.stderr or done.stdout or '')[-100:].strip()}")
 
     def scan_for_secrets(self, key: str) -> None:
         changed = [p for p in self.sh(["git", "diff", "--name-only"]).stdout.split() if p] + [p for p in self.sh(["git", "ls-files", "--others", "--exclude-standard"]).stdout.split() if p]

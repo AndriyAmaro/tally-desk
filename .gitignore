@@ -17,3 +17,4 @@ cre/anchor/.cre_build_tmp.js
 # Local editor/agent state, never part of the project
 .claude/
 logs/
+*.ots.bak
