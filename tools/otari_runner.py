@@ -17,7 +17,7 @@ it spends from the receipts, never spends more than USD 2.00 in all, and stops b
     python3 tools/otari_runner.py              # the loop, in the foreground (run it with nohup or tmux)
     python3 tools/otari_runner.py --status     # state and the reason it stopped, if it did
 
-The key is read from /root/.config/otari/key and handed only to the child process of the cycle; it is never logged and never written.
+The key is read from /root/.config/otari/key (or the file OTARI_KEY_FILE names) and handed only to the child process of the cycle; it is never logged and never written.
 """
 
 import argparse
@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-KEY_FILE = Path("/root/.config/otari/key")
+KEY_FILE = Path(os.environ.get("OTARI_KEY_FILE") or "/root/.config/otari/key")  # a CI job points this at a file it writes from its secret store
 INTERVAL_S = 3 * 3600
 RETRY_S = 30 * 60  # after one failure the next try comes sooner; a second failure in a row stops the runner
 MAX_CYCLES_PER_DAY = 8
