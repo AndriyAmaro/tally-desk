@@ -417,27 +417,70 @@ def usage_for(request_id: str | None, timeout: int = 20, tries: int = 4) -> dict
     return None
 
 
-def end_user_info(external_id: str, timeout: int = 20) -> dict | None:
-    """GET /end-users?external_id=...: what a service key reads about one end user (budget id, spend, tokens, requests, reset)."""
+END_USER_FIELDS = ("external_id", "budget_id", "blocked", "spend", "reserved", "current_tokens", "current_requests", "budget_started_at", "next_budget_reset_at")
+_lookup = threading.local()  # what the last end-user lookup of this thread was: found, absent (an answer without the user) or error (no usable answer)
+
+
+def end_user_lookup(external_id: str, timeout: int = 20, tries: int = 2) -> dict:
+    """GET /end-users?external_id=...: what a service key reads about one end user (budget id, spend, tokens, requests, reset).
+
+    The answer says which of three things happened, because they mean different things for a budget proof:
+    `found` (HTTP 200 with the user's row), `absent` (HTTP 200 with no row: this key has not created that end user yet, so nothing is
+    spent on it) and `error` (an HTTP error, a timeout or an unreadable body: the spend state is NOT known). A 429 or a 5xx and a
+    transport failure are asked once more after the wait the server names (at most 10 s). The status of the last try is kept."""
+    out = {"lookup": "error", "status": None, "attempts": 0, "error": None, "row": None}
     if not otari_active():
-        return None
+        out["error"] = "no_key"
+        return out
     cfg = otari_config()
     key = _otari_key()
     auth = cfg["auth_header"]
     headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key, "User-Agent": OTARI_USER_AGENT}
-    try:
-        request = urllib.request.Request(f"{otari_base(cfg)}/end-users?external_id={urllib.parse.quote(external_id, safe='')}", headers=headers)
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as err:
-        err.close()
-        return None
-    except (OSError, ValueError):
-        return None
-    rows = data if isinstance(data, list) else [data]
-    row = next((r for r in rows if isinstance(r, dict) and r.get("external_id") == external_id), None)
-    keep = ("external_id", "budget_id", "blocked", "spend", "reserved", "current_tokens", "current_requests", "budget_started_at", "next_budget_reset_at")
-    return {k: row.get(k) for k in keep} if row else None
+    url = f"{otari_base(cfg)}/end-users?external_id={urllib.parse.quote(external_id, safe='')}"
+    for attempt in range(tries):
+        out["attempts"] = attempt + 1
+        wait = 2.0
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
+                out["status"] = getattr(response, "status", None) or 200
+                data = json.loads(response.read().decode("utf-8"))
+            rows = data if isinstance(data, list) else [data]
+            row = next((r for r in rows if isinstance(r, dict) and r.get("external_id") == external_id), None)
+            out["error"] = None
+            if row:
+                out.update(lookup="found", row={k: row.get(k) for k in END_USER_FIELDS})
+            else:
+                out["lookup"] = "absent"
+            return out
+        except urllib.error.HTTPError as err:
+            err.close()
+            out["status"], out["error"] = err.code, f"HTTP {err.code}"
+            if err.code not in RETRY_STATUS:
+                return out
+            delay = _retry_delay(err, 0)
+            wait = 2.0 if delay is None else min(delay, 10.0)
+        except ValueError:
+            out["error"] = "unreadable_body"
+            return out
+        except OSError as err:  # no HTTP answer at all
+            out["status"], out["error"] = None, "timeout" if isinstance(getattr(err, "reason", err), TimeoutError) else "connection"
+        if attempt < tries - 1:
+            _pause(wait)
+    return out
+
+
+def end_user_info(external_id: str, timeout: int = 20) -> dict | None:
+    """The row `end_user_lookup` found for one end user, or None (absent or failed). How the lookup went is left for `take_lookup()`."""
+    got = end_user_lookup(external_id, timeout=timeout)
+    _lookup.last = {k: got[k] for k in ("lookup", "status", "attempts", "error")}
+    return got["row"]
+
+
+def take_lookup() -> dict | None:
+    """How the last `end_user_info` of this thread went, read once (None if it did not run on this thread)."""
+    got = getattr(_lookup, "last", None)
+    _lookup.last = None
+    return got
 
 
 def served_receipt() -> dict | None:
@@ -959,18 +1002,23 @@ HEADROOM_SCHEMA = "otari-headroom/1"
 
 def headroom_ok(h: dict | None) -> tuple[bool, str]:
     """Whether the judge's end user has room for the hard route, from the sealed numbers only (so a replay gets the same answer).
-    Room means: Otari's own spend plus what it holds in reserve is under `max_fraction` of the day limit."""
+    Room means: Otari's own spend plus what it holds in reserve is under `max_fraction` of the day limit. An end user that Otari
+    answered "no such user" for (`lookup` absent, HTTP 200) has spent nothing on this key; a lookup that failed proves nothing."""
     users = (h or {}).get("users") or {}
     mine = users.get((h or {}).get("judge_user")) or {}
+    absent = not mine.get("found") and mine.get("lookup") == "absent"
     try:
-        limit, used = decimal.Decimal(str(h["limit_usd"])), decimal.Decimal(str(mine["used_usd"]))
-        top = decimal.Decimal(str(h["max_fraction"]))
+        limit, top = decimal.Decimal(str(h["limit_usd"])), decimal.Decimal(str(h["max_fraction"]))
+        used = decimal.Decimal(0) if absent else decimal.Decimal(str(mine["used_usd"]))
     except (KeyError, TypeError, decimal.InvalidOperation):
-        return False, "Otari's spend state for the judge's end user was not readable, so the standard route is kept"
+        why = f" (the lookup failed: {mine.get('error') or 'HTTP ' + str(mine.get('status'))})" if mine.get("lookup") == "error" else ""
+        return False, f"Otari's spend state for the judge's end user was not readable{why}, so the standard route is kept"
     if mine.get("blocked"):
         return False, "Otari reports the judge's end user as blocked, so the standard route is kept"
     if limit <= 0:
         return False, "no day limit is configured, so the standard route is kept"
+    if absent:
+        return True, f"Otari has no record of the judge's end user on this key yet (lookup answered HTTP {mine.get('status')} with no row), so nothing is spent of its USD {limit} day: room for the hard route"
     fraction = used / limit
     if fraction >= top:
         return False, f"the judge's end user has used USD {used} of its USD {limit} day ({fraction:.0%}, the hard route needs under {top:.0%}), so the standard route is kept"
@@ -979,33 +1027,43 @@ def headroom_ok(h: dict | None) -> tuple[bool, str]:
 
 def read_headroom(info=None, cfg: dict | None = None) -> dict:
     """What Otari says each end user has spent today (GET /end-users, free), sealed with the verdict that drew on it. The limit is the
-    dashboard budget's day limit, taken from the config because the service key cannot read the budget itself."""
+    dashboard budget's day limit, taken from the config because the service key cannot read the budget itself. Each user also keeps how
+    its lookup went (`lookup` found, absent or error, the HTTP `status`, the tries), so a failed read is never mistaken for a missing user."""
     from concurrent.futures import ThreadPoolExecutor
     info = info or end_user_info
     cfg = cfg or otari_config()
     names = [f"{cfg.get('end_user_prefix') or ''}{role}" for role in cfg["roles"]]
     if cfg.get("canary_user"):
         names.append(cfg["canary_user"])
+
+    def ask(name):
+        take_lookup()  # forget what an earlier call on this worker thread left
+        row = info(name)
+        return row, take_lookup()
     with ThreadPoolExecutor(max_workers=min(8, len(names))) as pool:
-        rows = list(pool.map(lambda n: info(n), names))
+        rows = list(pool.map(ask, names))
     limit = decimal.Decimal(str(cfg.get("end_user_limit_usd") or "0"))
     users = {}
-    for name, row in zip(names, rows):
+    for name, (row, how) in zip(names, rows):
+        trace = {k: how[k] for k in ("lookup", "status", "attempts", "error") if how and how.get(k) is not None}
         if not row:
-            users[name] = {"found": False}
+            users[name] = {"found": False, **trace}
             continue
         try:
             used = decimal.Decimal(str(row.get("spend") or 0)) + decimal.Decimal(str(row.get("reserved") or 0))
         except decimal.InvalidOperation:
-            users[name] = {"found": False}
+            users[name] = {"found": False, **trace}
             continue
         users[name] = {"found": True, "budget_id": row.get("budget_id"), "blocked": bool(row.get("blocked")), "spend_usd": str(row.get("spend")),
                        "reserved_usd": str(row.get("reserved")), "used_usd": f"{used:.6f}",
-                       "fraction": f"{(used / limit):.4f}" if limit > 0 else None, "next_reset": row.get("next_budget_reset_at")}
+                       "fraction": f"{(used / limit):.4f}" if limit > 0 else None, "next_reset": row.get("next_budget_reset_at"), **trace}
+    reads = [u.get("lookup") for u in users.values()]
     out = {"schema": HEADROOM_SCHEMA, "source": "GET /end-users (free)", "limit_usd": format(limit, "f"),
            "limit_source": "config end_user_limit_usd, the day limit of the dashboard budget vd-analyst (the service key cannot read the budget)",
            "max_fraction": cfg.get("headroom_max_fraction", 0.8), "expected_budget_id": cfg.get("end_user_budget"),
-           "judge_user": _end_user("judge", cfg) or f"{cfg.get('end_user_prefix') or ''}judge", "users": users}
+           "judge_user": _end_user("judge", cfg) or f"{cfg.get('end_user_prefix') or ''}judge",
+           "read": {"asked": len(users), "found": sum(1 for u in users.values() if u["found"]), "absent": reads.count("absent"), "failed": sum(1 for u in users.values() if not u["found"]) - reads.count("absent")},
+           "users": users}
     out["judge_ok"], out["reason"] = headroom_ok(out)
     return out
 

@@ -1,0 +1,178 @@
+"""Fixes from the independent review: a failed budget read is told apart from a missing end user, the narrator waits out an in-flight
+idempotency key, the audit cites real evidence. No network."""
+
+import io
+import json
+import os
+import unittest
+import urllib.error
+import urllib.request
+from unittest import mock
+
+from tests.test_otari import FakeResponse, message, plain_config
+from tests.test_otari_canary import ENV, headroom
+from verdict_desk import llm
+
+ROW = {"external_id": "vd-judge", "budget_id": "bud", "blocked": False, "spend": 0.002, "reserved": 0.0, "next_budget_reset_at": "2026-11-03T00:00:00+00:00"}
+
+
+class Env(unittest.TestCase):
+    def setUp(self):
+        for patch in (mock.patch.dict(os.environ, ENV), mock.patch.object(llm, "MIN_INTERVAL", 0.0), mock.patch.object(llm, "_next_start", 0.0), mock.patch.object(llm, "_pause"), plain_config()):
+            patch.start()
+            self.addCleanup(patch.stop)
+        llm.reset_cycle()
+
+
+def http_error(code, headers=None, body=b"{}"):
+    return urllib.error.HTTPError("https://otari.example/api/v1/end-users", code, "x", message(headers or {}), io.BytesIO(body))
+
+
+class EndUserLookupTest(Env):
+    def lookup(self, *answers):
+        queue = list(answers)
+
+        def urlopen(request, timeout=None):
+            answer = queue.pop(0)
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            return llm.end_user_lookup("vd-judge"), len(answers) - len(queue)
+
+    def test_an_answer_without_the_user_is_absent_and_an_answer_with_it_is_found(self):
+        got, calls = self.lookup(FakeResponse([], {}))
+        self.assertEqual((got["lookup"], got["status"], got["row"], calls), ("absent", 200, None, 1))
+        got, _ = self.lookup(FakeResponse([ROW], {}))
+        self.assertEqual((got["lookup"], got["status"], got["row"]["budget_id"]), ("found", 200, "bud"))
+
+    def test_an_http_error_is_an_error_with_its_status_never_a_missing_user(self):
+        for code in (401, 403, 404):
+            got, calls = self.lookup(http_error(code))
+            self.assertEqual((got["lookup"], got["status"], got["error"], calls), ("error", code, f"HTTP {code}", 1), "no retry for a status a retry cannot change")
+
+    def test_a_429_is_asked_once_more_after_the_wait_the_server_names_and_the_second_answer_counts(self):
+        got, calls = self.lookup(http_error(429, {"Retry-After": "3"}), FakeResponse([ROW], {}))
+        self.assertEqual((got["lookup"], got["attempts"], calls), ("found", 2, 2))
+        self.assertEqual([c.args[0] for c in llm._pause.call_args_list], [3.0])
+
+    def test_a_429_that_stays_a_429_is_an_error_with_the_status_and_both_tries(self):
+        got, calls = self.lookup(http_error(429, {"Retry-After": "99"}), http_error(429))
+        self.assertEqual((got["lookup"], got["status"], got["attempts"], calls), ("error", 429, 2, 2))
+        self.assertLessEqual(llm._pause.call_args_list[0].args[0], 10.0, "never holds the cycle for the full Retry-After")
+
+    def test_a_timeout_and_an_unreadable_body_are_errors_too(self):
+        got, _ = self.lookup(urllib.error.URLError(TimeoutError()), urllib.error.URLError(TimeoutError()))
+        self.assertEqual((got["lookup"], got["error"], got["status"]), ("error", "timeout", None))
+
+        class Garbage(FakeResponse):
+            def read(self):
+                return b"<html>"
+        got, _ = self.lookup(Garbage([], {}))
+        self.assertEqual((got["lookup"], got["error"]), ("error", "unreadable_body"))
+
+    def test_end_user_info_still_returns_the_row_or_none_and_leaves_how_it_went(self):
+        with mock.patch.object(urllib.request, "urlopen", lambda r, timeout=None: FakeResponse([ROW], {})):
+            self.assertEqual(llm.end_user_info("vd-judge")["budget_id"], "bud")
+        self.assertEqual(llm.take_lookup()["lookup"], "found")
+        self.assertIsNone(llm.take_lookup(), "read once")
+        with mock.patch.object(urllib.request, "urlopen", lambda r, timeout=None: FakeResponse([], {})):
+            self.assertIsNone(llm.end_user_info("vd-judge"))
+        self.assertEqual(llm.take_lookup()["lookup"], "absent")
+
+
+class HeadroomReadTest(Env):
+    CFG = {"end_user_prefix": "vd-", "end_user_limit_usd": "0.10", "headroom_max_fraction": 0.8, "end_user_budget": "bud", "canary_user": "vd-canary", "send_user": True}
+
+    def read(self, answers):
+        """answers: name -> HTTP error code, or a row, or None for an answer with no row."""
+        def urlopen(request, timeout=None):
+            name = request.full_url.rsplit("=", 1)[1]
+            got = answers.get(name)
+            if isinstance(got, int):
+                raise http_error(got)
+            return FakeResponse([got] if got else [], {})
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            return llm.read_headroom(cfg={**llm.otari_config(), **self.CFG})
+
+    def rows(self, **over):
+        rows = {f"vd-{r}": {"external_id": f"vd-{r}", "budget_id": "bud", "spend": 0.001, "reserved": 0.0} for r in llm.otari_config()["roles"]}
+        rows["vd-canary"] = {"external_id": "vd-canary", "budget_id": "bud", "spend": 0.002, "reserved": 0.0}
+        rows.update(over)
+        return rows
+
+    def test_a_judge_that_this_key_has_not_created_yet_has_room_and_the_read_says_why(self):
+        h = self.read(self.rows(**{"vd-judge": None, "vd-sandbox": None}))
+        mine = h["users"]["vd-judge"]
+        self.assertEqual((mine["found"], mine["lookup"], mine["status"]), (False, "absent", 200))
+        self.assertTrue(h["judge_ok"], h["reason"])
+        self.assertIn("no record of the judge's end user", h["reason"])
+        self.assertEqual(h["read"], {"asked": 10, "found": 8, "absent": 2, "failed": 0})
+
+    def test_a_judge_lookup_that_failed_keeps_the_standard_route_and_names_the_status(self):
+        h = self.read(self.rows(**{"vd-judge": 403}))
+        self.assertEqual((h["users"]["vd-judge"]["lookup"], h["users"]["vd-judge"]["status"]), ("error", 403))
+        self.assertFalse(h["judge_ok"])
+        self.assertIn("HTTP 403", h["reason"])
+        self.assertEqual(h["read"], {"asked": 10, "found": 9, "absent": 0, "failed": 1})
+
+    def test_the_sealed_numbers_alone_give_the_same_answer_on_replay(self):
+        for judge, expected in (({"found": False, "lookup": "absent", "status": 200}, True), ({"found": False, "lookup": "error", "status": 429}, False), ({"found": False}, False)):
+            h = {"limit_usd": "0.10", "max_fraction": 0.8, "judge_user": "vd-judge", "users": {"vd-judge": judge}}
+            self.assertEqual(llm.headroom_ok(h)[0], expected, judge)
+        self.assertTrue(llm.headroom_ok(headroom("0.01"))[0])
+
+
+class AuditBudgetRowsTest(unittest.TestCase):
+    """Rows 3 and 4 cite a read that worked, and say how many end users were found out of the ones asked."""
+
+    @staticmethod
+    def ledger():
+        from tests.test_otari_report import LEDGER
+        return json.loads(json.dumps(LEDGER))
+
+    def break_judge(self, d, lookup=None):
+        h = d["llm"]["otari"]["headroom"]
+        h["users"][h["judge_user"]] = {"found": False, **({"lookup": lookup, "status": 200 if lookup == "absent" else 429} if lookup else {})}
+        h["judge_ok"] = False
+
+    def rows(self, ledger):
+        from verdict_desk import otari_report
+        return {r["n"]: r for r in otari_report.audit(ledger, [])}
+
+    def test_a_newest_dossier_whose_judge_read_failed_is_not_cited_for_the_budget(self):
+        ledger = self.ledger()
+        self.break_judge(ledger[-1], "error")
+        rows = self.rows(ledger)
+        self.assertEqual(rows[3]["dossier"], ledger[-2]["seq"])
+        self.assertNotIn("None", rows[3]["note"])
+        self.assertRegex(rows[3]["note"], r"USD 0\.\d+ of USD 0\.10")
+
+    def test_an_absent_judge_is_not_a_read_of_its_spend_either(self):
+        ledger = self.ledger()
+        self.break_judge(ledger[-1], "absent")
+        self.assertEqual(self.rows(ledger)[3]["dossier"], ledger[-2]["seq"])
+
+    def test_row_four_prints_found_out_of_asked_and_prefers_the_newest_complete_read(self):
+        ledger = self.ledger()
+        for name in ("vd-sandbox", "vd-mcp"):
+            ledger[-1]["llm"]["otari"]["headroom"]["users"][name] = {"found": False, "lookup": "absent", "status": 200}
+        rows = self.rows(ledger)
+        self.assertEqual(rows[4]["dossier"], ledger[-2]["seq"])
+        self.assertIn("10 of 10 asked were found", rows[4]["note"])
+
+    def test_when_no_read_is_complete_row_four_names_the_gap_instead_of_hiding_it(self):
+        ledger = self.ledger()
+        for d in ledger:
+            h = ((d.get("llm") or {}).get("otari") or {}).get("headroom")
+            if h:
+                h["users"]["vd-sandbox"] = {"found": False, "lookup": "absent", "status": 200}
+                h["users"]["vd-mcp"] = {"found": False, "lookup": "error", "status": 429}
+        row = self.rows(ledger)[4]
+        self.assertIn("8 of 10 asked were found", row["note"])
+        self.assertIn("1 not created yet", row["note"])
+        self.assertIn("1 lookups failed", row["note"])
+        self.assertEqual(row["status"], "PASS")
+
+
+from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

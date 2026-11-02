@@ -66,6 +66,22 @@ def read_evidence(path: Path | None = None) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def _judge_read(d: dict) -> bool:
+    """Whether the dossier's headroom holds a successful read of the judge's end user (a row with its spend), not an absent user or a failed lookup."""
+    h = (d["llm"].get("otari") or {}).get("headroom") or {}
+    mine = (h.get("users") or {}).get(h.get("judge_user")) or {}
+    return bool(mine.get("found")) and mine.get("used_usd") is not None
+
+
+def _read_counts(h: dict) -> tuple[int, int, int, int]:
+    """(asked, found, absent, failed) of one sealed headroom read. Dossiers sealed before the lookup was traced have no `lookup`: a user not found there counts as failed."""
+    users = (h.get("users") or {}).values()
+    asked = len(users)
+    found = sum(1 for u in users if u.get("found"))
+    absent = sum(1 for u in users if not u.get("found") and u.get("lookup") == "absent")
+    return asked, found, absent, asked - found - absent
+
+
 def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     """The eight resources: PASS or NOT PROVEN, where the proof comes from (`source`: sealed receipts in the ledger, or a drill that lives
     in docs/evidence and is not sealed), the request ids that prove it, the dossier it was found in, and a note."""
@@ -104,7 +120,8 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     # 3 budgets and spend limits: Otari's spend state sealed with the verdict and used by the router (sealed); the 403 refusal itself is a drill
     bd = next((e for e in reversed(evidence) if e.get("drill") == "budget" and e.get("pass")), None)
     capped = next((d["seq"] for d in newest if (d["llm"]["otari"].get("cycle") or {}).get("cap_usd")), None)
-    gated = next(((d["seq"], d) for d in newest if ((d["llm"].get("judge") or {}).get("route_rule") or {}).get("gates", {}).get("headroom")), None)
+    # the newest dossier whose router really read the judge's spend: a lookup that failed or found no user proves nothing about a budget
+    gated = next(((d["seq"], d) for d in newest if ((d["llm"].get("judge") or {}).get("route_rule") or {}).get("gates", {}).get("headroom") and _judge_read(d)), None)
     drill_ids = [bd["big_call"]["receipt"].get("request_id")] if bd else []
     if gated:
         d = gated[1]
@@ -121,12 +138,15 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     # 4 budget per user: the end users read back from Otari, sealed with the verdict (else the drill)
     users = next((e for e in reversed(evidence) if e.get("drill") == "end-users" and e.get("pass")), None)
     echo = next(((d["seq"], [_rid(c["receipt"]) for c in calls_of(d) if c["receipt"].get("end_user_budget")][:4]) for d in newest if any(c["receipt"].get("end_user_budget") for c in calls_of(d))), None)
-    seal = next(((d["seq"], d["llm"]["otari"]["headroom"]) for d in newest if (d["llm"]["otari"].get("headroom") or {}).get("users")), None)
+    sealed = [(d["seq"], d["llm"]["otari"]["headroom"]) for d in newest if (d["llm"]["otari"].get("headroom") or {}).get("users")]
+    seal = next((x for x in sealed if _read_counts(x[1])[1] == _read_counts(x[1])[0]), None) or max(sealed, key=lambda x: _read_counts(x[1])[1], default=None)  # newest complete read, else the fullest
     if seal and echo:
         found = {n: u for n, u in seal[1]["users"].items() if u.get("found")}
         on = [n for n, u in found.items() if u.get("budget_id") == seal[1].get("expected_budget_id")]
+        asked, got, absent, failed = _read_counts(seal[1])
+        gaps = "" if got == asked else f"; {absent} not created yet on this key (answered without a row) and {failed} lookups failed or were not recorded as answered"
         row(4, bool(found) and len(on) == len(found), echo[1], seal[0],
-            f"{len(on)} of {len(found)} end users read back from Otari sit on the vd-analyst budget (sealed in the dossier); Otari echoed the budget on the receipts")
+            f"{len(on)} of the {got} end users found sit on the vd-analyst budget; {got} of {asked} asked were found{gaps} (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts")
     elif users and echo:
         row(4, True, echo[1], echo[0], f"drill only (not sealed in the ledger): {len(users['end_users'])} end users read back on the vd-analyst budget; Otari echoed the budget on the receipts", source="drill")
     else:
