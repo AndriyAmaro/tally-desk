@@ -162,6 +162,13 @@ class Runner:
         status = self.sh(["git", "status", "--porcelain"])
         if status.returncode != 0 or status.stdout.strip():
             raise Stop("the working tree is not clean (or git did not answer): nothing was run (commit or restore what is there first)")
+        # Other work may have pushed to otari since the last cycle: start from the published tip, never on top of a stale one.
+        fetch = self.sh(["git", "fetch", "-q", "origin", "otari"], timeout=180)
+        if fetch.returncode != 0:
+            raise Failure(f"git fetch failed: {(fetch.stderr or '')[-160:].strip()}")
+        ff = self.sh(["git", "merge", "--ff-only", "-q", "origin/otari"], timeout=60)
+        if ff.returncode != 0:
+            raise Stop("the local otari has commits that origin/otari does not (a push failed earlier?): nothing was run, push or reset them first")
         return key
 
     @staticmethod
