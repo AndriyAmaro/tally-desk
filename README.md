@@ -8,7 +8,7 @@ Receipts are checked against Otari's own usage log with free GET calls: the late
 
 ```bash
 export OTARI_API_KEY=...   # from the Otari dashboard; never commit it
-VERDICT_DESK_APPEND_PUBLIC=1 python3 -m verdict_desk decide-v6 BTCUSDT --config config/voices.json   # one cycle, every call through Otari
+VERDICT_DESK_APPEND_PUBLIC=1 python3 -m verdict_desk decide-v7 BTCUSDT --config config/voices.json   # one cycle, every call through Otari
 python3 -m verdict_desk verify && python3 -m verdict_desk replay   # the chain is intact and every verdict is re-derived offline
 python3 -m verdict_desk otari-audit --reconcile   # the eight resources, and each receipt against Otari's usage log
 python3 -m http.server   # then open http://localhost:8000/web/cycle.html
