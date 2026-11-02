@@ -63,3 +63,19 @@ test("the gateway region is read from the base URL and nothing more is claimed",
   d.llm.otari.base_url = "";
   assert.equal(C.whoSaw(d, {}).gateway.region, "unknown");
 });
+
+test("a call without a duration has no bar, and the narrator batches are split from the deciding calls with their index kept", () => {
+  const calls = [{ label: "narrator", receipt: rec("narrator", "1", { started_offset_ms: 0 }) }, { label: "bull", receipt: rec("bull", "2", { started_offset_ms: 500, duration_ms: null }) },
+    { label: "canary", receipt: rec("canary", "3", { started_offset_ms: 900 }) }, { label: "narrator", receipt: rec("narrator", "4", { started_offset_ms: 100 }) }];
+  const lay = C.layout(calls);
+  assert.equal(lay.bars[1].durationMs, null);
+  assert.equal(lay.bars[1].widthPct, 0);
+  const g = C.groups(calls);
+  assert.deepEqual(g.core.map((e) => [e.call.label, e.i]), [["bull", 1], ["canary", 2]]);
+  assert.deepEqual(g.narrator.map((e) => e.i), [0, 3]);
+});
+
+test("the failover canary of a dossier is one of its calls, after the four roles and before the sandbox", () => {
+  const d = { seq: 1, evidence: {}, llm: { otari: { canary: { receipt: rec("judge", "c") } }, bull: { receipt: rec("bull", "b") }, judge: { receipt: rec("judge", "j") } }, sandbox: { receipt: rec("sandbox", "s") } };
+  assert.deepEqual(C.callsOf(d).map((c) => c.label), ["bull", "judge", "canary", "sandbox"]);
+});

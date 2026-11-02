@@ -33,7 +33,7 @@ const config = fs.readFileSync(path.join(ROOT, "config", "otari.json"), "utf8");
 test("served from the repository root (the ledger one level up) it renders the newest cycle, offline, with relative paths only", async () => {
   const m = mount({ "../ledger/ledger.jsonl": ledger, "../config/otari.json": config });
   await m.settle();
-  assert.deepEqual(m.asked.slice(0, 2), ["ledger/ledger.jsonl", "../ledger/ledger.jsonl"], "tries beside the page first, then one level up");
+  assert.deepEqual(m.asked, ["../ledger/ledger.jsonl", "../config/otari.json"], "the paths that work from the repository root come first: nothing is requested that does not exist there");
   assert.ok(m.asked.every((p) => !p.startsWith("/") && !/^https?:/.test(p)), "no absolute path and no host");
   assert.equal(m.els.main.hidden, false);
   const calls = m.els.calls.innerHTML;
@@ -46,10 +46,10 @@ test("served from the repository root (the ledger one level up) it renders the n
   assert.match(m.els.status.textContent, /Otari-era dossiers, read from the published ledger/);
 });
 
-test("served from web/ (the ledger beside the page) the first path is enough", async () => {
+test("served from web/ (the ledger beside the page) the second path is found", async () => {
   const m = mount({ "ledger/ledger.jsonl": ledger });
   await m.settle();
-  assert.equal(m.asked[0], "ledger/ledger.jsonl");
+  assert.deepEqual(m.asked.slice(0, 2), ["../ledger/ledger.jsonl", "ledger/ledger.jsonl"]);
   assert.equal(m.els.main.hidden, false);
   assert.match(m.els.who.innerHTML, /unknown \(config not served here\)/, "without the config the page says it does not know, instead of guessing");
 });
@@ -109,4 +109,50 @@ test("request ids and model names from a ledger are escaped before they reach th
   assert.ok(!m.els.calls.innerHTML.includes("<img src=x"));
   assert.ok(!m.els.calls.innerHTML.includes("<script>alert"));
   assert.match(m.els.calls.innerHTML, /&lt;img src=x/);
+});
+
+function withCanary(seq, mutate) {
+  const d = clone(seq, (r) => { delete r.refusal; });
+  d.llm.otari.canary = { schema: "otari-canary/1", label: "failover canary (not a judgment: its answer is never read)", policy: "vd-judge-drill", passed: true,
+    receipt: { schema: "otari-receipt/1", role: "judge", request_id: "canary-req", request_id_source: "otari", sent_model: "vd-judge-drill", served_by: "deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731",
+      served_model: "deepseek-ai/DeepSeek-V4-Flash-0731", provider: "deepinfra", attempt_count: 2, fallback: true, duration_ms: 1700, cost_usd: "0.002104", started_offset_ms: 100000, end_user: "vd-canary" } };
+  d.llm.otari.headroom = { schema: "otari-headroom/1", limit_usd: "0.10", max_fraction: 0.8, expected_budget_id: "52a154a1-a369-45b9-8922-6728c4fe53c6", judge_user: "vd-judge", judge_ok: true,
+    reason: "the judge's end user has used USD 0.007204 of its USD 0.10 day (7%, under 80%): room for the hard route",
+    users: { "vd-judge": { found: true, budget_id: "52a154a1-a369-45b9-8922-6728c4fe53c6", used_usd: "0.007204", fraction: "0.0720" }, "vd-ghost": { found: false } } };
+  if (mutate) mutate(d);
+  return d;
+}
+
+test("the canary is a labeled call, the headroom is a table, the roles are counted and the narrator batches are one collapsed group", async () => {
+  const d = withCanary(9010);
+  const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9010");
+  await m.settle();
+  const calls = m.els.calls.innerHTML;
+  assert.match(calls, /class="role">canary</);
+  assert.match(calls, /failover canary: its answer is never read/);
+  assert.equal((calls.match(/<details class="group">/g) || []).length, 1, "one group for the narrator");
+  assert.ok(calls.indexOf('class="role">narrator<') > calls.indexOf('<details class="group">'), "narrator calls only inside the group");
+  assert.ok(calls.indexOf('class="role">bull<') < calls.indexOf('<details class="group">'), "the deciding roles come first");
+  assert.match(calls, /Narrator<\/b>: \d+ batches of headlines/);
+  assert.match(m.els.summary.innerHTML, /9 of 9<\/b>plus the failover canary/);
+  assert.match(m.els.headroom.innerHTML, /room for the hard route/);
+  assert.match(m.els.headroom.innerHTML, /vd-analyst/);
+  assert.match(m.els.headroom.innerHTML, /not read/);
+});
+
+test("a call with no duration says n/a (replayed) and draws no bar; a hard route shows the model that was sent, not a policy chip", async () => {
+  const d = withCanary(9011, (x) => {
+    x.llm.bull.receipt.duration_ms = null;
+    x.llm.judge.receipt.route_rule = { rule: "judge-difficulty/v2", hard: true, reason: "many claims: 8 validated claims", model: "deepseek/deepseek-v4-pro" };
+    x.llm.judge.receipt.sent_model = "deepseek/deepseek-v4-pro";
+    x.llm.judge.receipt.policy = null;
+  });
+  const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9011");
+  await m.settle();
+  const calls = m.els.calls.innerHTML;
+  const bull = calls.slice(calls.indexOf('class="role">bull<'), calls.indexOf('class="role">bear<'));
+  assert.match(bull, /n\/a \(replayed\)/);
+  assert.ok(!bull.includes('class="track"'), "no bar without a duration");
+  assert.ok(!/hard case, larger model/.test(calls), "no policy-like chip for the hard route");
+  assert.match(calls, /Model sent <\/span>deepseek\/deepseek-v4-pro/);
 });

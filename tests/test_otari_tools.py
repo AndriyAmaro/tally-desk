@@ -779,7 +779,9 @@ class RouteRuleTest(Env):
             content = json.dumps([{"claim": "Bitcoin rally hits record", "cites": ["E4"]}]) if "bull analyst" in system else (
                 '{"lean": "bull", "conviction": "low", "relied_on": ["B1"], "reason": "rally"}' if "judge in a market debate" in system else "[]")
             return FakeResponse({**BODY, "choices": [{"message": {"content": content}, "finish_reason": "stop"}]}, {**HEADERS, "Otari-Model": served_spelling(payload["model"])})
-        with mock.patch.object(llm, "OTARI_CONFIG", path), mock.patch.dict(os.environ, extra_env or {}), mock.patch.object(urllib.request, "urlopen", urlopen):
+        room = lambda name: {"external_id": name, "budget_id": "", "blocked": False, "spend": 0.001, "reserved": 0.0}  # Otari's spend state: plenty of room
+        with mock.patch.object(llm, "OTARI_CONFIG", path), mock.patch.dict(os.environ, extra_env or {}), mock.patch.object(urllib.request, "urlopen", urlopen), \
+                mock.patch.object(llm, "end_user_info", room):
             d = dossier.build(pkt, dossier.GENESIS, 1, rules_version="v6")
         return d, sent
 
@@ -791,7 +793,7 @@ class RouteRuleTest(Env):
         route = flat["llm"]["judge"]["route_rule"]
         self.assertTrue(route["hard"], route)
         self.assertEqual(flat["llm"]["judge"]["receipt"]["sent_model"], "deepseek/deepseek-v4-pro")
-        self.assertEqual(flat["llm"]["judge"]["receipt"]["route_rule"], {"rule": "judge-difficulty/v1", "hard": True, "reason": route["reason"], "model": "deepseek/deepseek-v4-pro"})
+        self.assertEqual(flat["llm"]["judge"]["receipt"]["route_rule"], {"rule": "judge-difficulty/v2", "hard": True, "reason": route["reason"], "model": "deepseek/deepseek-v4-pro"})
         self.assertIn("deepseek/deepseek-v4-pro", sent_flat)
         self.assertNotIn("deepseek/deepseek-v4-pro", sent_wide)
         self.assertEqual(route["thresholds"], self.THRESHOLDS)

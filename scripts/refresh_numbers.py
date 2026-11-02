@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import readme_cards  # noqa: E402
 
 LEDGER = ROOT / "ledger" / "ledger.jsonl"
-README = ROOT / "README.md"
+README = ROOT / "docs" / "HISTORY.md"  # the BLI-era text moved here from the README; the Otari README is refreshed by scripts/refresh_otari_readme.py
 BUILD_PAGE = ROOT / "SUBMISSAO_DORAHACKS.md"
 JUDGE_PAGE = ROOT / "web" / "judge.html"
 MSG = ROOT / "MSG_ORGANIZADORES.md"
@@ -192,7 +192,7 @@ def differentiators(ledger: list[dict], snap: dict) -> tuple[str, str]:
 
 | | The claim | Measured | Check it yourself |
 |:---:|---|---|---|
-| 🔁 | **The verdict is re-derived, not only re-hashed.** The deterministic judge rules again from the frozen evidence, so a record that no longer explains its own decision fails. Chainlink CRE acts as an **independent auditor**: before it anchors a head, the workflow re-derives that verdict inside the CRE runtime and refuses a forged one | **{matched} of {len(ledger)}** verdicts re-derive. CRE check: **{cre_battery['refusedUnderPublishedHead']:,} of {cre_battery['tried']:,}** edits of a dossier refused (dossier {cre_battery['seq']}) | `python3 -m verdict_desk replay` · [`cre/`](cre/README.md) |
+| 🔁 | **The verdict is re-derived, not only re-hashed.** The deterministic judge rules again from the frozen evidence, so a record that no longer explains its own decision fails. Chainlink CRE acts as an **independent auditor**: before it anchors a head, the workflow re-derives that verdict inside the CRE runtime and refuses a forged one | **{matched} of {len(ledger)}** verdicts re-derive. CRE check: **{cre_battery['refusedUnderPublishedHead']:,} of {cre_battery['tried']:,}** edits of a dossier refused (dossier {cre_battery['seq']}) | `python3 -m verdict_desk replay` · [`cre/`](../cre/README.md) |
 | 🔢 | **Every number an AI analyst states must be in the evidence it cites.** A claim that cites an item id which does not hold that number is refused and kept with its reason | **{every['accepted']:,}** claims accepted, **{every['rejected']}** refused ({no_number} for a number not in the cited evidence, {unknown_id} for an evidence id that does not exist) | [Dashboard](https://andriyamaro.github.io/verdict-desk/), open any row |
 | 🛰️ | **Three outside witnesses the operator does not control.** The head is timestamped into Bitcoin through OpenTimestamps (each proof reads pending until a block confirms it), signed in the public Sigstore log by a GitHub workflow (no key of ours), and anchored on Sepolia | **{len(wit['heads'])}** heads timestamped (OpenTimestamps), **{len(wit['rekor'])}** signed in Sigstore, contract [`{anchor[:10]}…`](https://sepolia.etherscan.io/address/{anchor}) | [Witnesses](https://andriyamaro.github.io/verdict-desk/witnesses.html) |
 | 📜 | **A long public record, gaps included.** Every hourly decision is kept, the ones that lost money too, and every gap between runs is shown, never filled in | **{c['total']}** dossiers over **{c['window_days']} days** since {first} | `python3 -m verdict_desk stats --git` |
@@ -226,28 +226,28 @@ def refreshed(tests: int | None, run_battery: bool = False) -> dict[Path, str]:
     table, card = differentiators(ledger, battery_snapshot(ledger, run_battery))
     text, n = re.subn(r"<!-- differentiators:start.*?<!-- differentiators:end -->", lambda _: table, text, flags=re.S)
     if n != 1:
-        raise SystemExit("README.md has no differentiators block to refresh")
+        raise SystemExit("docs/HISTORY.md has no differentiators block to refresh")
     out[FIGURES_CARD] = card
     text, n = re.subn(r"<!-- live-numbers:.*?(?=## Auditing someone else's agent)", lambda _: live_section(ledger), text, flags=re.S)
     if n != 1:
-        raise SystemExit("README.md has no live-numbers block to refresh")
+        raise SystemExit("docs/HISTORY.md has no live-numbers block to refresh")
     narrative = sum(1 for d in ledger if (d.get("evidence") or {}).get("narrative"))
     text, n = re.subn(r"(\d+) of (\d+) dossiers carry a narrative layer",
                       f"{narrative} of {len(ledger)} dossiers carry a narrative layer", text)
     if n != 1:
-        raise SystemExit("README.md has no narrative-coverage line to refresh")
+        raise SystemExit("docs/HISTORY.md has no narrative-coverage line to refresh")
     convergences = sum(len((d.get("evidence") or {}).get("narrative", {}).get("convergence") or []) for d in ledger)
     text, n = re.subn(r"\*\*\d+ convergences\*\* recorded across the live ledger, as of dossier \d+",
                       f"**{convergences} convergences** recorded across the live ledger, as of dossier {ledger[-1]['seq']}", text)
     if n != 1:
-        raise SystemExit("README.md has no convergence-count line to refresh")
+        raise SystemExit("docs/HISTORY.md has no convergence-count line to refresh")
     latest = next((d for d in reversed(ledger) if (d.get("evidence") or {}).get("narrative", {}).get("method") == "llm"), None)
     if latest is not None:
         block = latest["evidence"]["narrative"]
         text, n = re.subn(r"\d+ extractions accepted and \d+ rejected by the grounding gate in the latest dossier \(#\d+\)",
                           f"{len(block.get('extractions') or [])} extractions accepted and {len(block.get('rejected') or [])} rejected by the grounding gate in the latest dossier (#{latest['seq']})", text)
         if n != 1:
-            raise SystemExit("README.md has no extraction-count line to refresh")
+            raise SystemExit("docs/HISTORY.md has no extraction-count line to refresh")
     out[README] = text
     if BUILD_PAGE.exists():
         page = BUILD_PAGE.read_text(encoding="utf-8")

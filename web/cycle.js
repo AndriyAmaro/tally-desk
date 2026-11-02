@@ -56,6 +56,8 @@
     if ((web.page || {}).receipt) found.push(["fetcher", web.page.receipt]);
     if ((ev.market_mcp || {}).receipt) found.push(["mcp", ev.market_mcp.receipt]);
     for (const part of ["bull", "bear", "checker", "judge"]) if ((llm[part] || {}).receipt) found.push([part, llm[part].receipt]);
+    const canary = ((llm.otari || {}).canary) || {};
+    if (canary.receipt) found.push(["canary", canary.receipt]);
     if ((d.sandbox || {}).receipt) found.push(["sandbox", d.sandbox.receipt]);
     let calls = found.map(([label, receipt], n) => ({ label, receipt, n }));
     if (calls.some((c) => Number.isInteger(c.receipt.started_offset_ms))) {
@@ -66,18 +68,30 @@
   }
 
   /* Bars for the timeline. With the start offset of each call (dossiers recorded from F4) a bar sits where the call began; without it the
-   * bars are laid end to end in the order the cycle makes the calls, and the page says the position is only an order. */
+   * bars are laid end to end in the order the cycle makes the calls, and the page says the position is only an order. A call with no
+   * duration (Otari replayed a stored answer, or no answer came) has no bar: it says "n/a" and draws nothing. */
   function layout(calls) {
     const timed = calls.length > 0 && calls.every((c) => Number.isInteger(c.receipt.started_offset_ms));
     let cursor = 0;
     const spans = calls.map((c) => {
-      const dur = Number.isInteger(c.receipt.duration_ms) ? c.receipt.duration_ms : 0;
+      const has = Number.isInteger(c.receipt.duration_ms);
+      const dur = has ? c.receipt.duration_ms : 0;
       const start = timed ? c.receipt.started_offset_ms : cursor;
       cursor += dur;
-      return { start, dur };
+      return { start, dur, has };
     });
     const total = Math.max(1, ...spans.map((s) => s.start + s.dur));
-    return { timed, totalMs: total, bars: spans.map((s) => ({ leftPct: +(s.start / total * 100).toFixed(3), widthPct: +Math.max(s.dur / total * 100, 0.6).toFixed(3), startMs: s.start, durationMs: s.dur })) };
+    return { timed, totalMs: total, bars: spans.map((s) => (s.has
+      ? { leftPct: +(s.start / total * 100).toFixed(3), widthPct: +Math.max(s.dur / total * 100, 0.6).toFixed(3), startMs: s.start, durationMs: s.dur }
+      : { leftPct: 0, widthPct: 0, startMs: s.start, durationMs: null })) };
+  }
+
+  /* The calls that decide (bull, bear, judge, checker, the tools, the canary) come first, in time order; the narrator's batches of
+   * headlines are many and alike, so they are one group. Each entry keeps its index into `calls`, so the bars still line up. */
+  function groups(calls) {
+    const core = [], narrator = [];
+    calls.forEach((c, i) => (c.label === "narrator" ? narrator : core).push({ call: c, i }));
+    return { core, narrator };
   }
 
   function microsOf(text) {
@@ -164,5 +178,5 @@
     return { seq: d.seq, gateway, providers: rows };
   }
 
-  return { REMEDY, failureOf, era, callsOf, layout, board, whoSaw, percentile, microsOf, microsText };
+  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText };
 });

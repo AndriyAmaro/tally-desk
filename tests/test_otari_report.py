@@ -66,10 +66,28 @@ class AuditTest(unittest.TestCase):
 
     def test_the_real_ledger_proves_seven_of_eight_and_says_why_the_guardrail_does_not_count(self):
         rows = self.rows()
-        self.assertEqual([rows[n]["status"] for n in range(1, 9)], ["PASS", "PASS", "PASS", "PASS", "NAO", "PASS", "PASS", "PASS"])
+        self.assertEqual([rows[n]["status"] for n in range(1, 9)], ["PASS", "PASS", "PASS", "PASS", "NOT PROVEN", "PASS", "PASS", "PASS"])
         self.assertIn("valid null", rows[5]["note"])
         self.assertIn("not counted", rows[5]["note"])
         self.assertEqual(len(rep.RUBRIC), 8)
+
+    def test_in_the_real_ledger_fallback_budget_and_end_users_are_proven_from_sealed_receipts_not_from_drills(self):
+        rows = self.rows()
+        self.assertEqual({n: rows[n]["source"] for n in range(1, 9) if n != 5}, {n: "sealed" for n in (1, 2, 3, 4, 6, 7, 8)})
+        self.assertEqual(rows[5]["source"], "none")
+        self.assertEqual(rep.summary_line(list(rows.values())), "8 resources: 7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN")
+        self.assertTrue(rows[2]["proof"] and rows[3]["proof"], "the sealed proofs name request ids of the ledger")
+        self.assertTrue(rows[3]["drill_proof"], "the Otari-side 403 refusal is still named, and marked as a drill")
+
+    def test_a_proof_that_lives_only_in_a_drill_file_is_marked_as_such_and_counted_apart(self):
+        d = copy.deepcopy(ERA[-1])  # a real dossier without the canary and the headroom: nothing is sealed for rows 2 to 4
+        d["llm"]["otari"].pop("canary", None)
+        d["llm"]["otari"].pop("headroom", None)
+        d["llm"]["judge"]["route_rule"].pop("gates", None)
+        rows = {r["n"]: r for r in rep.audit([d], EVIDENCE)}
+        self.assertEqual([rows[n]["source"] for n in (2, 3, 4)], ["drill", "drill", "drill"])
+        self.assertTrue(all(rows[n]["note"].startswith("drill only (not sealed") for n in (2, 3, 4)))
+        self.assertRegex(rep.summary_line(list(rows.values())), r"^8 resources: \d proven from sealed receipts \+ 3 from drills \(not sealed\) \+ \d NOT PROVEN$")
 
     def test_every_proof_id_is_a_request_id_that_the_ledger_or_the_evidence_file_holds(self):
         known = {c["receipt"].get("request_id") for d in ERA for c in rep.calls_of(d)}
@@ -80,30 +98,31 @@ class AuditTest(unittest.TestCase):
             for rid in row["proof"]:
                 self.assertIn(rid, known, f"resource {row['n']} cites {rid}")
 
-    def test_rows_without_their_proof_are_NAO_and_an_evaluated_guardrail_would_pass(self):
+    def test_rows_without_their_proof_are_not_proven_and_an_evaluated_guardrail_would_pass(self):
         rows = {r["n"]: r["status"] for r in rep.audit([], [])}
-        self.assertEqual(set(rows.values()), {"NAO"})
+        self.assertEqual(set(rows.values()), {"NOT PROVEN"})
         d = synthetic()
         d["llm"]["judge"]["receipt"]["guardrail_result"] = {"prompt-injection": "pass"}
         self.assertEqual(rep.audit([d], [])[4]["status"], "PASS")
         d["llm"]["judge"]["receipt"]["guardrail_result"] = {"prompt-injection": "not_evaluated"}
-        self.assertEqual(rep.audit([d], [])[4]["status"], "NAO")
+        self.assertEqual(rep.audit([d], [])[4]["status"], "NOT PROVEN")
 
     def test_two_roles_on_the_same_model_do_not_prove_distinct_roles(self):
         d = synthetic()
         d["llm"]["bear"]["receipt"]["served_model"] = d["llm"]["bull"]["receipt"]["served_model"]
-        self.assertEqual(rep.audit([d], [])[0]["status"], "NAO")
+        self.assertEqual(rep.audit([d], [])[0]["status"], "NOT PROVEN")
 
     def test_a_native_but_different_sandbox_result_does_not_pass(self):
         d = copy.deepcopy([x for x in ERA if (x.get("sandbox") or {}).get("schema") == "otari-sandbox/2"][-1])
         self.assertEqual(rep.audit([d], [])[6]["status"], "PASS")
         d["sandbox"]["equal"] = False
-        self.assertEqual(rep.audit([d], [])[6]["status"], "NAO")
+        self.assertEqual(rep.audit([d], [])[6]["status"], "NOT PROVEN")
 
     def test_the_text_report_lists_every_row_and_the_count(self):
         text = rep.render_audit(rep.audit(LEDGER, EVIDENCE))
-        self.assertEqual(len(re.findall(r"^(PASS|NAO) ", text, re.M)), 8)
-        self.assertIn("7 of 8 resources proven", text)
+        self.assertEqual(len(re.findall(r"^(PASS|NOT PROVEN) ", text, re.M)), 8)
+        self.assertIn("7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN", text)
+        self.assertNotIn("NAO", text)
 
 
 class ReconcileTest(unittest.TestCase):

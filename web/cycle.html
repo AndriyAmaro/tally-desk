@@ -30,6 +30,7 @@ button,select{padding:6px 12px;border:1px solid var(--line);border-radius:6px;ba
 .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:2px 16px;font-size:13px}
 .meta span.k{color:var(--mut)}
 .remedy{border-left:3px solid var(--bad);padding:4px 10px;margin:4px 0;font-size:13px}
+details.group{border:1px dashed var(--line);border-radius:10px;padding:8px 14px;margin:10px 0}details.group summary{cursor:pointer}
 table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}th{color:var(--mut);font-size:12px}
 td.n{text-align:right;font-variant-numeric:tabular-nums}
 .scroll{overflow-x:auto}
@@ -52,6 +53,8 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
   <h2>Timeline</h2>
   <p class="mut" id="timenote"></p>
   <div id="calls"></div>
+  <h2>Budget headroom</h2>
+  <div id="headroom"></div>
   <h2>Who saw this prompt</h2>
   <div class="scroll" id="who"></div>
   <h2>Open-model scoreboard</h2>
@@ -65,10 +68,11 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
   const $ = (id) => document.getElementById(id);
   const C = window.VerdictCycle;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  // Relative paths only: the site may be served from web/ (ledger copied beside the pages), or from the repository root
-  // (GitHub Pages "deploy from branch", /web/cycle.html with the ledger one level up), or by `python3 -m http.server`.
-  const LEDGER_PATHS = ["ledger/ledger.jsonl", "../ledger/ledger.jsonl"];
-  const CONFIG_PATHS = ["config/otari.json", "../config/otari.json"];
+  // Relative paths only. The first ones are those of the repository root served as the site (GitHub Pages "deploy from branch" or
+  // `python3 -m http.server` in the repository: /web/cycle.html, the ledger one level up), so no request fails there; the second ones
+  // are for a site rooted at web/ with the ledger copied beside the pages.
+  const LEDGER_PATHS = ["../ledger/ledger.jsonl", "ledger/ledger.jsonl"];
+  const CONFIG_PATHS = ["../config/otari.json", "config/otari.json"];
   let ledger = [], config = null;
 
   async function firstOk(paths) {
@@ -87,18 +91,19 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
     const chips = [];
     if (f) chips.push(`<span class="chip bad">${f.source === "client" ? "stopped here" : "refused"}: ${esc(f.code)}</span>`);
     if (r.fallback) chips.push(`<span class="chip warn">fallback · ${esc(r.attempt_count)} attempts</span>`);
+    if (c.label === "canary") chips.push(`<span class="chip warn">failover canary: its answer is never read</span>`);
     if (r.policy) chips.push(`<span class="chip">policy ${esc(r.policy)}</span>`);
     if (r.truncated) chips.push(`<span class="chip warn">answer cut off</span>`);
     if (r.client_attempts > 1) chips.push(`<span class="chip">${esc(r.client_attempts)} tries</span>`);
-    if (r.route_rule) chips.push(`<span class="chip ${r.route_rule.hard ? "warn" : ""}">${r.route_rule.hard ? "hard case, larger model" : "standard route"}</span>`);
     const guard = r.guardrail_result ? Object.entries(r.guardrail_result).map(([k, v]) => `${esc(k)}: ${esc(v.replace("_", " "))}`).join(", ") : null;
     const tools = (r.tool_calls || []).map((t) => `${esc(t.type)} ${esc(t.status)}${t.query ? ` "${esc(t.query)}"` : ""}${t.url ? ` ${esc(t.url)}` : ""}`).join("; ");
     const start = timed ? `${(bar.startMs / 1000).toFixed(1)} s` : "order only";
+    const took = bar.durationMs == null ? (f ? "n/a" : "n/a (replayed)") : `${bar.durationMs} ms`;
     return `<article class="call${f ? " fail" : ""}">
       <div class="head"><span class="role">${esc(c.label)}</span><span class="mono">${esc(r.sent_model)}</span>${sentVsServed ? ` &rarr; <span class="mono">${esc(served)}</span>` : (r.served_by ? ` &rarr; <span class="mono">${esc(served)}</span>` : "")} ${chips.join(" ")}</div>
-      <div class="track" role="img" aria-label="${esc(c.label)}: started at ${esc(start)}, took ${esc(bar.durationMs)} ms"><div class="bar" style="left:${bar.leftPct}%;width:${bar.widthPct}%"></div></div>
+      ${bar.durationMs == null ? "" : `<div class="track" role="img" aria-label="${esc(c.label)}: started at ${esc(start)}, took ${esc(took)}"><div class="bar" style="left:${bar.leftPct}%;width:${bar.widthPct}%"></div></div>`}
       <div class="meta">
-        <div><span class="k">Took </span>${esc(bar.durationMs)} ms · started ${esc(start)}</div>
+        <div><span class="k">Took </span>${esc(took)} · started ${esc(start)}</div>
         <div><span class="k">Cost </span>${esc(usd(r.cost_usd))}${r.tokens && r.tokens.prompt != null ? ` · ${esc(r.tokens.prompt)} in, ${esc(r.tokens.completion)} out` : ""}</div>
         <div><span class="k">Provider </span>${esc(r.provider || "none answered")}</div>
         <div><span class="k">End user </span>${esc(r.end_user || "none")}${r.end_user_budget ? " · on its budget" : ""}</div>
@@ -106,7 +111,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
         ${guard ? `<div><span class="k">Guardrail </span>${guard}</div>` : ""}
         ${r.finish_reason ? `<div><span class="k">Stopped </span>${esc(r.finish_reason)}</div>` : ""}
         ${tools ? `<div><span class="k">Tool </span>${tools}</div>` : ""}
-        ${r.route_rule ? `<div><span class="k">Route </span>${esc(r.route_rule.reason)}</div>` : ""}
+        ${r.route_rule ? `<div><span class="k">Model sent </span>${esc(r.sent_model)} <span class="mut">(${r.route_rule.hard ? "chosen by the routing rule for a hard case" : "the standard judge"}: ${esc(r.route_rule.reason)})</span></div>` : ""}
       </div>
       ${f ? `<div class="remedy"><b>${esc(f.what)}</b><br>${esc(f.fix)}${f.retryAfter ? `<br><span class="mut">Retry after ${esc(f.retryAfter)} s.</span>` : ""}${f.scope ? `<br><span class="mut">Budget that refused: ${esc(f.scope)}.</span>` : ""}</div>` : ""}
     </article>`;
@@ -120,9 +125,22 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
     $("summary").innerHTML = `<div><span class="mut">Dossier</span><b>#${esc(d.seq)}</b>${esc((d.evidence || {}).symbol)} · ${esc((d.verdict || {}).action)}</div>
       <div><span class="mut">Calls</span><b>${calls.length}</b>${calls.filter((c) => C.failureOf(c.receipt)).length} refused or failed</div>
       <div><span class="mut">Cost of the receipts</span><b>$${C.microsText(micros)}</b>${cycle ? "sealed spend $" + esc(cycle.total_spent_usd) : ""}</div>
+      <div><span class="mut">Roles</span><b>${new Set(calls.map((c) => c.label).filter((l) => l !== "canary")).size} of 9</b>${calls.some((c) => c.label === "canary") ? "plus the failover canary" : "took part"}</div>
       <div><span class="mut">Wall time</span><b>${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " s" : "n/a"}</b>${lay.timed ? "from the first call to the last answer" : "this dossier predates start offsets"}</div>`;
     $("timenote").textContent = lay.timed ? "Bars sit where each call began, on one scale for the whole cycle." : "This dossier was recorded before receipts carried the start of each call, so the bars are laid end to end in the order the cycle makes the calls: their length is real, their position is only an order.";
-    $("calls").innerHTML = calls.map((c, i) => callHtml(c, lay.bars[i], lay.timed)).join("");
+    const g = C.groups(calls);
+    const block = (list) => list.map((e) => callHtml(e.call, lay.bars[e.i], lay.timed)).join("");
+    const nTook = g.narrator.reduce((t, e) => t + (Number.isInteger(e.call.receipt.duration_ms) ? e.call.receipt.duration_ms : 0), 0);
+    let nMicros = 0n;
+    for (const e of g.narrator) nMicros += C.microsOf(e.call.receipt.cost_usd) || 0n;
+    $("calls").innerHTML = block(g.core) + (g.narrator.length
+      ? `<details class="group"><summary><b>Narrator</b>: ${g.narrator.length} batches of headlines, ${g.narrator.filter((e) => C.failureOf(e.call.receipt)).length} refused or failed, $${C.microsText(nMicros)}, ${(nTook / 1000).toFixed(1)} s of call time (open to see each call)</summary>${block(g.narrator)}</details>` : "");
+    const h = (d.llm.otari || {}).headroom, rr = (d.llm.judge || {}).route_rule;
+    $("headroom").innerHTML = h && h.users ? `<p class="mut">${esc(h.reason)}${rr && rr.gates ? " The router " + (rr.hard ? "sent a hard case to the larger model." : (rr.wanted_hard ? "kept a hard case on the standard route." : "found the case standard.")) : ""}</p>
+      <div class="scroll"><table><thead><tr><th>End user</th><th class="n">Used today (USD)</th><th class="n">Of the day limit</th><th>Budget</th></tr></thead><tbody>${Object.entries(h.users).map(([n, u]) =>
+        `<tr><td>${esc(n)}</td><td class="n">${u.found ? esc(u.used_usd) : "n/a"}</td><td class="n">${u.found && u.fraction != null ? (Number(u.fraction) * 100).toFixed(1) + "%" : "n/a"}</td><td class="mono">${u.found ? esc(u.budget_id === h.expected_budget_id ? "vd-analyst" : u.budget_id) : "not read"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="mut">Read from Otari (GET /end-users, free) before the judge was routed. The limit (USD ${esc(h.limit_usd)} a day) comes from the config: the service key cannot read the budget itself.</p>`
+      : `<p class="mut">This dossier was recorded before the cycle sealed Otari's spend state.</p>`;
     const who = C.whoSaw(d, config);
     $("who").innerHTML = `<p class="mut">Gateway: <b>${esc(who.gateway.host || "unknown")}</b> sees every prompt and tool request. Region: ${esc(who.gateway.region)}. Upstream providers it routed to:</p>
       <table><thead><tr><th>Provider</th><th>Models</th><th>Roles</th><th>Open weights</th><th class="n">Calls</th></tr></thead><tbody>${who.providers.map((p) =>

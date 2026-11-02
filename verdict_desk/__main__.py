@@ -215,7 +215,7 @@ def cmd_otari_drill(opts) -> int:
 
 
 def cmd_otari_audit(opts) -> int:
-    """Prints the eight resources with PASS or NAO and the request ids that prove them; with --reconcile also compares receipts with Otari's usage."""
+    """Prints the eight resources with PASS or NOT PROVEN, where each proof lives (sealed receipts or a drill) and the request ids; with --reconcile also compares receipts with Otari's usage."""
     from . import otari_report
     ledger = dossier.read_ledger(opts.ledger)
     print(otari_report.render_audit(otari_report.audit(ledger, otari_report.read_evidence(opts.evidence) if opts.evidence else None)))
@@ -371,6 +371,15 @@ def print_record(record: dict) -> None:
                 print(f"  [llm {side}] {c['claim']} cites {c['cites']}")
             print(f"  [llm {side}] {len(layer[side]['rejected'])} claims rejected by the citation validator"
                   + (f" (answered by {layer[side]['served_by']})" if layer[side].get("served_by") else ""))
+        canary = (layer.get("otari") or {}).get("canary")
+        if isinstance(canary, dict):
+            cr = canary.get("receipt") or {}
+            print(f"  [otari canary] {'PASSED' if canary.get('passed') else 'FAILED'}: policy {canary.get('policy')} "
+                  + (f"served by {cr.get('served_by')} after {cr.get('attempt_count')} attempts, fallback {cr.get('fallback')}, ${cr.get('cost_usd')}" if cr.get("served_by") else f"not answered ({canary.get('error') or (cr.get('refusal') or {}).get('code')})")
+                  + f" (request {cr.get('request_id')})")
+        headroom = (layer.get("otari") or {}).get("headroom")
+        if isinstance(headroom, dict):
+            print(f"  [otari headroom] {headroom.get('reason')}")
         judge = layer.get("judge")
         if isinstance(judge, dict):
             route = judge.get("route_rule")

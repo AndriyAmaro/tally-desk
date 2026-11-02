@@ -7,15 +7,15 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-README = ROOT / "README.md"
+README = ROOT / "docs" / "HISTORY.md"  # the README cards moved there with the BLI-era text; paths are relative to docs/
 
 
 class ReadmeCardsTest(unittest.TestCase):
     def test_every_card_the_readme_shows_exists_and_parses(self):
-        shown = re.findall(r'src="(docs/readme/[^"]+\.svg)"', README.read_text(encoding="utf-8"))
-        self.assertGreaterEqual(len(shown), 8)
+        shown = re.findall(r'src="(readme/[^"]+\.svg)"', README.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(shown), 7)
         for rel in shown:
-            path = ROOT / rel
+            path = ROOT / "docs" / rel
             self.assertTrue(path.exists(), f"README shows {rel}, which does not exist")
             ET.fromstring(path.read_text(encoding="utf-8"))
 

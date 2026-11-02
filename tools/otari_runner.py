@@ -47,7 +47,7 @@ MAX_FAILURES = 2
 AUTHOR = ("AndriyAmaro", "andriytattoo1992@gmail.com")
 # Built in two pieces so that this very file never contains the prefix: the scan below is a git grep over the whole tree.
 KEY_PREFIX = "otk" + "_"
-TRAILERS = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_0172AG4XFNKk8e27ZYaxvcuj"
+FAILED_CYCLE_ESTIMATE_USD = Decimal("0.08")  # a cycle that failed before any dossier says what it spent: counted at its two caps together (0.02 core + 0.06 tools)
 PATHS = ["ledger/ledger.jsonl", "ledger/head.json", "ledger/head-dossier.json", "ledger/timestamps", "README.md"]
 
 
@@ -56,7 +56,11 @@ class Stop(Exception):
 
 
 class Failure(Exception):
-    """One cycle failed; the tree is restored and the failure counted."""
+    """One cycle failed; the tree is restored and the failure counted. `entry` is what the cycle spent, when its dossier was already written."""
+
+    def __init__(self, message: str, entry: dict | None = None):
+        super().__init__(message)
+        self.entry = entry
 
 
 class Runner:
@@ -96,7 +100,11 @@ class Runner:
 
     # ------------------------------------------------------------------ plumbing
     def sh(self, args, env=None, timeout=120):
-        return self.run(args, cwd=str(self.root), capture_output=True, text=True, timeout=timeout, env=env)
+        """Runs a command; one that outlives its timeout comes back as exit 124 with the reason, never as an exception."""
+        try:
+            return self.run(args, cwd=str(self.root), capture_output=True, text=True, timeout=timeout, env=env)
+        except subprocess.TimeoutExpired:
+            return subprocess.CompletedProcess(args, 124, "", f"timed out after {timeout} s")
 
     def read_key(self) -> str:
         try:
@@ -151,8 +159,9 @@ class Runner:
         branch = self.sh(["git", "rev-parse", "--abbrev-ref", "HEAD"])
         if branch.stdout.strip() != "otari":
             raise Stop(f"the branch is {branch.stdout.strip() or 'unknown'}, not otari: nothing was run")
-        if self.sh(["git", "status", "--porcelain"]).stdout.strip():
-            raise Stop("the working tree is not clean: nothing was run (commit or restore what is there first)")
+        status = self.sh(["git", "status", "--porcelain"])
+        if status.returncode != 0 or status.stdout.strip():
+            raise Stop("the working tree is not clean (or git did not answer): nothing was run (commit or restore what is there first)")
         return key
 
     @staticmethod
@@ -171,43 +180,48 @@ class Runner:
         env = {**os.environ, "OTARI_API_KEY": key, "VERDICT_DESK_APPEND_PUBLIC": "1"}
         out = self.sh([sys.executable, "-m", "verdict_desk", "decide-v6", symbol, "--config", "config/voices.json"], env=env, timeout=900)
         if out.returncode != 0:
-            raise Failure(f"decide-v6 {symbol} exited {out.returncode}: {(out.stderr or out.stdout or '')[-200:].strip()}")
+            raise Failure(f"decide-v6 {symbol} {'timed out' if out.returncode == 124 else 'exited ' + str(out.returncode)}: {(out.stderr or out.stdout or '')[-200:].strip()}")
         ledger = self.ledger()
         if len(ledger) != before + 1:
             raise Failure(f"the ledger went from {before} to {len(ledger)} dossiers, not by one")
         dossier = ledger[-1]
-        verify = self.sh([sys.executable, "-m", "verdict_desk", "verify"])
-        if verify.returncode != 0 or "Chain intact" not in verify.stdout:
-            raise Failure("verify did not report an intact chain")
-        replay = self.sh([sys.executable, "-m", "verdict_desk", "replay"], timeout=600)
-        bad = [line for line in replay.stdout.splitlines() if "MATCHES" not in line and line.strip() and ("differ" in line.lower() or "mismatch" in line.lower())]
-        if replay.returncode != 0 or bad:
-            raise Failure(f"replay reported a divergence: {(bad or ['exit ' + str(replay.returncode)])[0][:160]}")
-        head = self.root / "ledger" / "head.json"
-        if head.exists():
-            stamp = self.root / "ledger" / "timestamps" / f"{dossier['seq']}.json"
-            stamp.parent.mkdir(parents=True, exist_ok=True)
-            stamp.write_text(head.read_text(encoding="utf-8"), encoding="utf-8")
-            ots = self.ots()
-            if ots:
-                done = self.sh([ots, "stamp", f"ledger/timestamps/{dossier['seq']}.json"])
-                if done.returncode != 0:  # a stamp is a witness, not the dossier: its absence is logged, not fatal
-                    self.log(f"the OpenTimestamps stamp of {dossier['seq']} failed (kept going; the dossier is intact): {(done.stderr or '')[-120:].strip()}")
-            else:
-                self.log("the ots client is not installed: the head of this dossier is not stamped")
-        refresh = self.sh([sys.executable, "scripts/refresh_otari_readme.py"])
-        if refresh.returncode != 0:
-            raise Failure("the README refresh failed")
-        self.scan_for_secrets(key)
-        self.sh(["git", "add", "--"] + PATHS)
-        message = f"otari: era dossier {dossier['seq']} ({symbol}), recorded by the runner\n\n{TRAILERS}\n"
-        commit = self.sh(["git", "-c", f"user.name={AUTHOR[0]}", "-c", f"user.email={AUTHOR[1]}", "commit", "-q", "-m", message])
-        if commit.returncode != 0:
-            raise Failure(f"git commit failed: {(commit.stderr or commit.stdout or '')[-160:].strip()}")
-        push = self.sh(["git", "push", "-q", "origin", "otari"], timeout=180)
-        if push.returncode != 0:
-            raise Failure(f"git push failed (the commit stays local): {(push.stderr or '')[-160:].strip()}")
-        return self.account(dossier, symbol)
+        entry = self.account(dossier, symbol)  # what this cycle spent, known from here on even if a later step fails
+        try:
+            verify = self.sh([sys.executable, "-m", "verdict_desk", "verify"])
+            if verify.returncode != 0 or "Chain intact" not in verify.stdout:
+                raise Failure("verify did not report an intact chain")
+            replay = self.sh([sys.executable, "-m", "verdict_desk", "replay"], timeout=600)
+            bad = [line for line in replay.stdout.splitlines() if "MATCHES" not in line and line.strip() and ("differ" in line.lower() or "mismatch" in line.lower())]
+            if replay.returncode != 0 or bad:
+                raise Failure(f"replay reported a divergence: {(bad or ['exit ' + str(replay.returncode)])[0][:160]}")
+            head = self.root / "ledger" / "head.json"
+            if head.exists():
+                stamp = self.root / "ledger" / "timestamps" / f"{dossier['seq']}.json"
+                stamp.parent.mkdir(parents=True, exist_ok=True)
+                stamp.write_text(head.read_text(encoding="utf-8"), encoding="utf-8")
+                ots = self.ots()
+                if ots:
+                    done = self.sh([ots, "stamp", f"ledger/timestamps/{dossier['seq']}.json"])
+                    if done.returncode != 0:  # a stamp is a witness, not the dossier: its absence is logged, not fatal
+                        self.log(f"the OpenTimestamps stamp of {dossier['seq']} failed (kept going; the dossier is intact): {(done.stderr or '')[-120:].strip()}")
+                else:
+                    self.log("the ots client is not installed: the head of this dossier is not stamped")
+            refresh = self.sh([sys.executable, "scripts/refresh_otari_readme.py"])
+            if refresh.returncode != 0:
+                raise Failure("the README refresh failed")
+            self.scan_for_secrets(key)
+            self.sh(["git", "add", "--"] + PATHS)
+            message = f"otari: era dossier {dossier['seq']} ({symbol}), recorded by the runner\n"  # a data commit of the app, not of a model: no model trailer
+            commit = self.sh(["git", "-c", f"user.name={AUTHOR[0]}", "-c", f"user.email={AUTHOR[1]}", "commit", "-q", "-m", message])
+            if commit.returncode != 0:
+                raise Failure(f"git commit failed: {(commit.stderr or commit.stdout or '')[-160:].strip()}")
+            push = self.sh(["git", "push", "-q", "origin", "otari"], timeout=180)
+            if push.returncode != 0:
+                raise Failure(f"git push failed (the commit stays local): {(push.stderr or '')[-160:].strip()}")
+            return entry
+        except (Failure, Stop) as err:
+            err.entry = entry  # a cycle that is discarded after its dossier was written has still spent that money
+            raise
 
     def scan_for_secrets(self, key: str) -> None:
         changed = [p for p in self.sh(["git", "diff", "--name-only"]).stdout.split() if p] + [p for p in self.sh(["git", "ls-files", "--others", "--exclude-standard"]).stdout.split() if p]
@@ -256,7 +270,10 @@ class Runner:
             except Failure as err:
                 self.restore()
                 state["failures"] += 1
-                self.log(f"cycle failed ({state['failures']} in a row): {err}")
+                spent = err.entry or {"seq": None, "symbol": SYMBOLS[state["cycles"] % len(SYMBOLS)], "usd": str(FAILED_CYCLE_ESTIMATE_USD), "users": {}, "estimated": True}
+                state["history"].append({**spent, "failed": str(err)[:160], "day": day, "at": now.strftime("%Y-%m-%dT%H:%M:%SZ")})
+                state["total_usd"] = str(Decimal(state["total_usd"]) + Decimal(spent["usd"]))  # a failed cycle spent money too
+                self.log(f"cycle failed ({state['failures']} in a row): {err}; counted USD {spent['usd']}{' (an estimate: no dossier says)' if spent.get('estimated') else ''}, total USD {state['total_usd']}")
                 if state["failures"] >= MAX_FAILURES:
                     state["stopped"] = f"{MAX_FAILURES} cycles failed in a row; the last: {err}"
                     self.log(f"STOPPED: {state['stopped']}")
@@ -275,6 +292,10 @@ class Runner:
             self.log(f"cycle ok: dossier {entry['seq']} {entry['symbol']}, USD {entry['usd']}, total USD {state['total_usd']}; next at {state['next_run']}")
             return "ok"
         except Stop as stop:
+            spent = getattr(stop, "entry", None)
+            if spent:
+                state["history"].append({**spent, "failed": str(stop)[:160], "day": day, "at": now.strftime("%Y-%m-%dT%H:%M:%SZ")})
+                state["total_usd"] = str(Decimal(state["total_usd"]) + Decimal(spent["usd"]))
             state["stopped"] = str(stop)
             self.save(state)
             self.log(f"STOPPED: {stop}")

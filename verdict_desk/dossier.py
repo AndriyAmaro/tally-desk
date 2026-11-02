@@ -82,10 +82,17 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
     if getattr(m["agents"], "USES_LLM_JUDGE", False):
         route = None
         if summary and ask is None and hasattr(m["llm"], "judge_route"):
+            canary = headroom = None
+            if hasattr(m["llm"], "canary_on") and m["llm"].canary_on():
+                from . import otari_canary
+                canary = layer["otari"]["canary"] = otari_canary.run()  # the backup route, shown before the judge is trusted with it
+            if hasattr(m["llm"], "headroom_on") and m["llm"].headroom_on():
+                headroom = layer["otari"]["headroom"] = m["llm"].read_headroom()  # Otari's own spend state per end user, free to read
             # the arguments the judge cannot change, to measure how tight the case is: the deterministic scores before its vote
             first = _decide(m, feats if feats is not None else m["features"].compute(packet), None, packet.get("narrative"), packet.get("symbol"), layer)
             bull_ok, bear_ok = (layer.get("bull") or {}).get("accepted") or [], (layer.get("bear") or {}).get("accepted") or []
-            route = m["llm"].judge_route(len(bull_ok), len(bear_ok), sum(a["weight"] for a in first["bull"]), sum(a["weight"] for a in first["bear"]))
+            route = m["llm"].judge_route(len(bull_ok), len(bear_ok), sum(a["weight"] for a in first["bull"]), sum(a["weight"] for a in first["bear"]),
+                                         headroom=headroom, canary=canary)
         layer["judge"] = _judge_layer(m, layer, items, ask, route)
     if summary and hasattr(m["llm"], "cycle_status"):  # what the app's own cycle cap has counted so far in this cycle
         layer["otari"]["cycle"] = m["llm"].cycle_status()
@@ -255,12 +262,22 @@ def replay(dossier: dict, rules_version: str = "v1") -> dict:
         try:
             bull_ok, bear_ok = (dossier["llm"].get("bull") or {}).get("accepted") or [], (dossier["llm"].get("bear") or {}).get("accepted") or []
             sums = [sum(a["weight"] for a in dossier[side] if a.get("evidence_ref") != "llm.judge") for side in ("bull", "bear")]
-            again = llm_module.route_decision(len(bull_ok), len(bear_ok), sums[0], sums[1], judged["thresholds"], dossier["llm"]["judge"]["receipt"]["sent_model"] if not judged["hard"] else judged["thresholds"]["hard_model"])
-            route_ok = {k: again[k] for k in ("rule", "hard", "reason", "metrics", "thresholds")} == {k: judged[k] for k in ("rule", "hard", "reason", "metrics", "thresholds")}
+            sealed = (dossier["llm"].get("otari") or {})
+            gated = "gates" in judged  # rule v2: the headroom and the canary are replayed from what was sealed beside the verdict
+            again = llm_module.route_decision(len(bull_ok), len(bear_ok), sums[0], sums[1], judged["thresholds"], dossier["llm"]["judge"]["receipt"]["sent_model"] if not judged["hard"] else judged["thresholds"]["hard_model"],
+                                              headroom=sealed.get("headroom") if gated and "headroom" in judged["gates"] else None,
+                                              canary=sealed.get("canary") if gated and "canary" in judged["gates"] else None)
+            keys = ("rule", "hard", "reason", "metrics", "thresholds") + (("wanted_hard", "gates") if gated else ())
+            route_ok = {k: again.get(k) for k in keys} == {k: judged.get(k) for k in keys}
         except (KeyError, TypeError, ValueError):
             route_ok = False
         result["route_rule_ok"] = route_ok
         result["matches"] = result["matches"] and route_ok
+    canary = ((dossier.get("llm") or {}).get("otari") or {}).get("canary")
+    if isinstance(canary, dict):
+        from . import otari_canary
+        result["canary_ok"] = bool(canary.get("passed")) == otari_canary.passes(canary.get("receipt"))  # the verdict on the canary follows from its own receipt
+        result["matches"] = result["matches"] and result["canary_ok"]
     if isinstance((dossier.get("evidence") or {}).get("web"), dict):
         from . import otari_web
         webcheck = otari_web.recheck(dossier)  # the sealed excerpt check, recomputed from its own fields: nothing is fetched again

@@ -40,6 +40,9 @@ def calls_of(d: dict) -> list[dict]:
     for part in ("bull", "bear", "checker", "judge"):
         if (llm.get(part) or {}).get("receipt"):
             found.append((part, llm[part]["receipt"]))
+    canary = ((llm.get("otari") or {}).get("canary") or {})
+    if canary.get("receipt"):
+        found.append(("canary", canary["receipt"]))
     if (d.get("sandbox") or {}).get("receipt"):
         found.append(("sandbox", d["sandbox"]["receipt"]))
     calls = [{"label": label, "receipt": r, "n": i} for i, (label, r) in enumerate(found)]
@@ -64,13 +67,15 @@ def read_evidence(path: Path | None = None) -> list[dict]:
 
 
 def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
-    """The eight resources: PASS or NAO from sealed receipts, the request ids that prove it, the dossier it was found in, and a note."""
+    """The eight resources: PASS or NOT PROVEN, where the proof comes from (`source`: sealed receipts in the ledger, or a drill that lives
+    in docs/evidence and is not sealed), the request ids that prove it, the dossier it was found in, and a note."""
     evidence = read_evidence() if evidence is None else evidence
     newest = list(reversed(era(ledger)))
     rows = []
 
-    def row(n, ok, ids, seq, note):
-        rows.append({"n": n, "resource": RUBRIC[n - 1], "status": "PASS" if ok else "NAO", "proof": [i for i in ids if i], "dossier": seq, "note": note})
+    def row(n, ok, ids, seq, note, source="sealed", drill_ids=()):
+        rows.append({"n": n, "resource": RUBRIC[n - 1], "status": "PASS" if ok else "NOT PROVEN", "source": source if ok else "none",
+                     "proof": [i for i in ids if i], "drill_proof": [i for i in drill_ids if i], "dossier": seq, "note": note})
 
     # 1 several open-weight models in distinct roles
     done = False
@@ -83,27 +88,47 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
             break
     if not done:
         row(1, False, [], None, "no dossier has four roles answered by four distinct models")
-    # 2 routing and fallback
+    # 2 routing and fallback: the failover canary of a cycle (sealed), else the drill (not sealed)
+    canary = next(((d["seq"], d["llm"]["otari"]["canary"]) for d in newest if (d["llm"]["otari"].get("canary") or {}).get("passed")), None)
     fb = next((e for e in reversed(evidence) if e.get("drill") == "fallback" and e.get("pass")), None)
-    if fb:
+    if canary:
+        r = canary[1]["receipt"]
+        row(2, True, [_rid(r)], canary[0], f"the failover canary of the cycle: policy {canary[1].get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true), sealed in the dossier",
+            drill_ids=[fb["receipt"]["request_id"]] if fb else ())
+    elif fb:
         r = fb["receipt"]
-        row(2, True, [r["request_id"]], None, f"policy {fb.get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true); usage rows: {(fb.get('usage') or {}).get('row_count')}")
+        row(2, True, [], None, f"drill only (not sealed in the ledger): policy {fb.get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true)", source="drill", drill_ids=[r["request_id"]])
     else:
         hit = next(((d["seq"], c["receipt"]) for d in newest for c in calls_of(d) if c["receipt"].get("fallback")), None)
         row(2, bool(hit), [_rid(hit[1])] if hit else [], hit[0] if hit else None, "a receipt with Otari-Fallback true" if hit else "no fallback seen")
-    # 3 budgets and spend limits
+    # 3 budgets and spend limits: Otari's spend state sealed with the verdict and used by the router (sealed); the 403 refusal itself is a drill
     bd = next((e for e in reversed(evidence) if e.get("drill") == "budget" and e.get("pass")), None)
     capped = next((d["seq"] for d in newest if (d["llm"]["otari"].get("cycle") or {}).get("cap_usd")), None)
-    if bd:
+    gated = next(((d["seq"], d) for d in newest if ((d["llm"].get("judge") or {}).get("route_rule") or {}).get("gates", {}).get("headroom")), None)
+    drill_ids = [bd["big_call"]["receipt"].get("request_id")] if bd else []
+    if gated:
+        d = gated[1]
+        rr, h = d["llm"]["judge"]["route_rule"], d["llm"]["otari"]["headroom"]
+        mine = h["users"].get(h["judge_user"]) or {}
+        row(3, True, [_rid(d["llm"]["judge"].get("receipt") or {})], gated[0],
+            f"budget-aware routing: Otari's spend for the judge's end user (USD {mine.get('used_usd')} of USD {h['limit_usd']}) was read and sealed, and the router {'allowed' if rr['gates']['headroom']['ok'] else 'refused'} the hard route on it; per-cycle caps sealed too. "
+            + (f"Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed)" if bd else "no 403 refusal drill recorded"), drill_ids=drill_ids)
+    elif bd:
         big = bd["big_call"]
-        row(3, True, [big["receipt"].get("request_id")], capped, f"{big['error'].get('status')} {big['error'].get('code')} (scope {big['error'].get('budget_scope')}) kept as a refusal receipt; per-cycle caps sealed in the dossier (dossier {capped})")
+        row(3, True, [], capped, f"drill only (not sealed in the ledger): {big['error'].get('status')} {big['error'].get('code')} (scope {big['error'].get('budget_scope')}) kept as a refusal receipt; per-cycle caps sealed in the dossier (dossier {capped})", source="drill", drill_ids=drill_ids)
     else:
-        row(3, False, [], capped, "no budget refusal recorded")
-    # 4 budget per user
+        row(3, False, [], capped, "no budget evidence recorded")
+    # 4 budget per user: the end users read back from Otari, sealed with the verdict (else the drill)
     users = next((e for e in reversed(evidence) if e.get("drill") == "end-users" and e.get("pass")), None)
     echo = next(((d["seq"], [_rid(c["receipt"]) for c in calls_of(d) if c["receipt"].get("end_user_budget")][:4]) for d in newest if any(c["receipt"].get("end_user_budget") for c in calls_of(d))), None)
-    if users and echo:
-        row(4, True, echo[1], echo[0], f"{len(users['end_users'])} end users, one per role, all read back on the vd-analyst budget; Otari echoed the budget on the receipts")
+    seal = next(((d["seq"], d["llm"]["otari"]["headroom"]) for d in newest if (d["llm"]["otari"].get("headroom") or {}).get("users")), None)
+    if seal and echo:
+        found = {n: u for n, u in seal[1]["users"].items() if u.get("found")}
+        on = [n for n, u in found.items() if u.get("budget_id") == seal[1].get("expected_budget_id")]
+        row(4, bool(found) and len(on) == len(found), echo[1], seal[0],
+            f"{len(on)} of {len(found)} end users read back from Otari sit on the vd-analyst budget (sealed in the dossier); Otari echoed the budget on the receipts")
+    elif users and echo:
+        row(4, True, echo[1], echo[0], f"drill only (not sealed in the ledger): {len(users['end_users'])} end users read back on the vd-analyst budget; Otari echoed the budget on the receipts", source="drill")
     else:
         row(4, False, [], None, "no end-user proof")
     # 5 guardrails
@@ -149,13 +174,20 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     return rows
 
 
+def summary_line(rows: list[dict]) -> str:
+    sealed = sum(1 for r in rows if r["status"] == "PASS" and r["source"] == "sealed")
+    drills = sum(1 for r in rows if r["status"] == "PASS" and r["source"] == "drill")
+    none = sum(1 for r in rows if r["status"] != "PASS")
+    return f"{len(rows)} resources: {sealed} proven from sealed receipts + {drills} from drills (not sealed) + {none} NOT PROVEN"
+
+
 def render_audit(rows: list[dict]) -> str:
     out = []
     for r in rows:
-        out.append(f"{r['status']:4s} {r['n']}  {r['resource']:46s} dossier {r['dossier'] if r['dossier'] else '-':>4}  proof: {', '.join(r['proof']) or '-'}")
-        out.append(f"          {r['note']}")
-    passed = sum(1 for r in rows if r["status"] == "PASS")
-    out.append(f"{passed} of {len(rows)} resources proven from sealed receipts")
+        out.append(f"{r['status']:10s} {r['n']}  {r['resource']:36s} {('[' + r['source'] + ']'):9s} dossier {r['dossier'] if r['dossier'] else '-':>4}  proof: {', '.join(r['proof']) or '-'}"
+                   + (f"  drill: {', '.join(r['drill_proof'])}" if r["drill_proof"] else ""))
+        out.append(f"           {r['note']}")
+    out.append(summary_line(rows))
     return "\n".join(out)
 
 
@@ -282,12 +314,15 @@ def who_saw(d: dict, cfg: dict | None = None) -> dict:
 # ---------------------------------------------------------------- README blocks
 
 def proofs_markdown(rows: list[dict]) -> str:
-    lines = ["| # | Resource | Proof | Dossier | Request id(s) | Where in the code |", "|---|---|---|---|---|---|"]
-    where = {1: "`config/otari.json`, `llm.py`", 2: "`llm.sent_model`, `otari_drill.py`", 3: "`llm._cycle_check`, `otari_drill.py`", 4: "`llm._end_user`", 5: "`llm.parse_receipt`",
+    lines = ["| # | Resource | Status | Where the proof lives | Dossier | Request id(s) | Code |", "|---|---|---|---|---|---|---|"]
+    where = {1: "`config/otari.json`, `llm.py`", 2: "`otari_canary.py`", 3: "`llm.read_headroom`, `llm.route_decision`", 4: "`llm._end_user`, `llm.read_headroom`", 5: "`llm.parse_receipt`",
              6: "`otari_web.py`", 7: "`sandbox_rederive.py`", 8: "`otari_mcp.py`"}
+    origin = {"sealed": "sealed receipts in the ledger", "drill": "a drill file, not sealed", "none": "-"}
     for r in rows:
-        ids = "<br>".join(f"`{i}`" for i in r["proof"]) or "-"
-        lines.append(f"| {r['n']} | {r['resource']} | **{r['status']}**: {r['note']} | {r['dossier'] or '-'} | {ids} | {where[r['n']]} |")
+        ids = "<br>".join([f"`{i}`" for i in r["proof"]] + [f"`{i}` (drill, not sealed)" for i in r["drill_proof"]]) or "-"
+        lines.append(f"| {r['n']} | {r['resource']} | **{r['status']}** | {(origin[r['source']] + ': ' + r['note']) if r['source'] == 'sealed' else r['note']} | {r['dossier'] or '-'} | {ids} | {where[r['n']]} |")
+    lines.append("")
+    lines.append(f"**{summary_line(rows)}.**")
     return "\n".join(lines)
 
 

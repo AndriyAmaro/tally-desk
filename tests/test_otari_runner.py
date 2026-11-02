@@ -33,10 +33,10 @@ class Clock:
 class World:
     """Answers the commands the runner issues, and remembers them."""
 
-    def __init__(self, root, branch="otari", dirty="", fail_decide=False, fail_push=False, key_in_readme=False, fail_verify=False, replay_line=None, noisy_error=False):
+    def __init__(self, root, branch="otari", dirty="", fail_decide=False, fail_push=False, key_in_readme=False, fail_verify=False, replay_line=None, noisy_error=False, timeout_decide=False):
         self.root, self.branch, self.dirty = Path(root), branch, dirty
         self.fail_decide, self.fail_push, self.key_in_readme, self.fail_verify, self.noisy_error = fail_decide, fail_push, key_in_readme, fail_verify, noisy_error
-        self.replay_line = replay_line
+        self.replay_line, self.timeout_decide = replay_line, timeout_decide
         self.calls, self.envs = [], []
         (self.root / "ledger" / "timestamps").mkdir(parents=True, exist_ok=True)
         (self.root / "ledger" / "ledger.jsonl").write_text("")
@@ -64,6 +64,8 @@ class World:
                 return self.cp(rc=1 if self.fail_push else 0, err="rejected" if self.fail_push else "")
             return self.cp()
         if "decide-v6" in args:
+            if self.timeout_decide:
+                raise subprocess.TimeoutExpired(args, timeout)
             if self.fail_decide:
                 return self.cp(rc=1, err=(f"boom with {KEY} in it" if self.noisy_error else "boom"))
             path = self.root / "ledger" / "ledger.jsonl"
@@ -103,7 +105,7 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual((R.INTERVAL_S, R.MAX_CYCLES_PER_DAY, R.TOTAL_CAP_USD, R.MAX_FAILURES), (10800, 8, Decimal("2.00"), 2))
         self.assertEqual(R.SYMBOLS, ("BTCUSDT", "ETHUSDT", "SOLUSDT"))
 
-    def test_one_good_tick_runs_the_steps_in_order_and_commits_only_the_dossier_files_with_author_and_trailers(self):
+    def test_one_good_tick_runs_the_steps_in_order_and_commits_only_the_dossier_files_as_the_author_with_no_model_trailer(self):
         r = self.make()
         self.assertEqual(r.tick(), "ok")
         steps = self.commands()
@@ -116,12 +118,53 @@ class RunnerTest(unittest.TestCase):
         commit = next(c for c in self.world.calls if "commit" in c)
         self.assertIn("user.name=AndriyAmaro", commit)
         self.assertIn("user.email=andriytattoo1992@gmail.com", commit)
-        self.assertIn("Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>", commit[-1])
-        self.assertIn("Claude-Session:", commit[-1])
+        self.assertNotIn("Co-Authored-By", commit[-1], "a data commit of the app, not of a model")
+        self.assertNotIn("Claude", commit[-1])
+        self.assertTrue(commit[-1].startswith("otari: era dossier 1 (BTCUSDT), recorded by the runner"))
         push = next(c for c in self.world.calls if "push" in c)
         self.assertEqual(push[-3:], ["-q", "origin", "otari"][-3:])
         self.assertNotIn("--force", push)
         self.assertNotIn("-f", push)
+
+    def test_a_decide_that_outlives_its_timeout_is_a_failure_with_the_tree_restored_not_an_exception(self):
+        r = self.make(timeout_decide=True)
+        self.assertEqual(r.tick(), "failed")
+        self.assertTrue(any(c[:3] == ["git", "checkout", "--"] for c in self.world.calls), "the tree is restored")
+        self.assertTrue(any(c[:2] == ["git", "clean"] for c in self.world.calls))
+        self.assertIn("timed out after", (self.root / "logs" / "otari-runner.log").read_text())
+        self.assertFalse(any("commit" in c or "push" in c for c in self.world.calls))
+
+    def test_a_failed_cycle_with_no_dossier_is_counted_at_its_two_caps_together(self):
+        r = self.make(fail_decide=True)
+        r.tick()
+        state = r.load()
+        self.assertEqual(state["total_usd"], str(R.FAILED_CYCLE_ESTIMATE_USD))
+        self.assertEqual(R.FAILED_CYCLE_ESTIMATE_USD, Decimal("0.08"))
+        self.assertTrue(state["history"][-1]["estimated"] and state["history"][-1]["failed"])
+        self.assertEqual(state["cycles"], 0, "the symbol rotation does not move on a failure")
+        self.assertIn("an estimate", (self.root / "logs" / "otari-runner.log").read_text())
+
+    def test_a_failure_after_the_dossier_is_written_counts_what_that_dossier_spent_and_who_spent_it(self):
+        r = self.make(fail_verify=True)
+        r.tick()
+        state = r.load()
+        last = state["history"][-1]
+        self.assertEqual(last["usd"], "0.036000")
+        self.assertNotIn("estimated", last)
+        self.assertTrue(last["users"], "the end users of the receipts are charged too")
+        self.assertEqual(state["total_usd"], "0.036000")
+        count, usd, users = R.Runner.today(state, START.strftime("%Y-%m-%d"))
+        self.assertEqual((count, usd), (1, Decimal("0.036000")), "a failed cycle counts toward the day")
+
+    def test_failed_cycles_spend_eats_the_total_cap_too(self):
+        r = self.make(fail_decide=True)
+        state = r.load()
+        state["total_usd"] = "1.95"
+        r.save(state)
+        r.tick()
+        self.assertEqual(r.load()["total_usd"], "2.03")
+        self.clock.advance(R.RETRY_S)
+        self.assertTrue(r.tick().startswith("stopped"))
 
     def test_the_key_goes_only_to_the_child_that_runs_the_cycle_and_is_never_logged(self):
         r = self.make()
@@ -229,6 +272,7 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(any("commit" in c or "push" in c for c in self.world.calls))
         self.assertTrue(any(c[:2] == ["git", "checkout"] for c in self.world.calls))
         self.assertNotIn(KEY, (self.root / "logs" / "otari-runner.log").read_text())
+        self.assertEqual(r.load()["total_usd"], "0.036000", "the discarded cycle spent that money")
 
     def test_what_a_failing_child_prints_is_sanitized_before_it_reaches_the_log(self):
         r = self.make(fail_decide=True, noisy_error=True)

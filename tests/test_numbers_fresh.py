@@ -38,14 +38,14 @@ class NumbersFreshTest(unittest.TestCase):
                              cwd=ROOT, capture_output=True, text=True)
         if run.returncode == 0:
             return
-        found = CITED.search((ROOT / "README.md").read_text(encoding="utf-8"))
-        self.assertIsNotNone(found, "README.md no longer states which dossier its figures are as of")
+        found = CITED.search((ROOT / "docs" / "HISTORY.md").read_text(encoding="utf-8"))
+        self.assertIsNotNone(found, "docs/HISTORY.md no longer states which dossier its figures are as of")
         cited, head = int(found.group(1)), ledger_head_seq()
-        self.assertLessEqual(cited, head, f"README cites dossier {cited}, which the chain (head {head}) does not have")
+        self.assertLessEqual(cited, head, f"HISTORY cites dossier {cited}, which the chain (head {head}) does not have")
         if cited < head:
-            self.skipTest(f"the README figures are a snapshot as of dossier {cited}; the chain is at {head}. "
+            self.skipTest(f"the HISTORY figures are a snapshot as of dossier {cited}; the chain is at {head}. "
                           "Expected between refreshes, run scripts/refresh_numbers.py before a release.")
-        self.fail("the README cites the current head but a document disagrees with the ledger; "
+        self.fail("the HISTORY cites the current head but a document disagrees with the ledger; "
                   "run scripts/refresh_numbers.py:\n" + run.stdout + run.stderr)
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

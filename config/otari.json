@@ -94,5 +94,11 @@
     "vd-judge": true,
     "vd-judge-drill": true
   },
-  "_models_open_weights_doc": "Whether each id that can appear as a receipt's sent_model is an open-weight model: every role's catalog id (flag on the role, checked by tools/otari_catalog_check.py), the larger judge, and the two routing policies, which only list open DeepSeek models."
+  "_models_open_weights_doc": "Whether each id that can appear as a receipt's sent_model is an open-weight model: every role's catalog id (flag on the role, checked by tools/otari_catalog_check.py), the larger judge, and the two routing policies, which only list open DeepSeek models.",
+  "_canary_doc": "Every decision cycle starts with a failover canary before it trusts the judge: one small, honest call through the routing policy `drill_policy` (vd-judge-drill), whose main model has a 32k-token context and whose backup is DeepSeek. The prompt is filler long enough to overflow that context, so Otari must move to the backup. The receipt (attempt_count 2, fallback true) is sealed in the dossier under llm.otari.canary, labeled as a canary. If the backup did not take over, the cycle records it and the judge stays on the standard route. OTARI_CANARY=0 turns it off.",
+  "canary": true,
+  "canary_user": "vd-canary",
+  "_headroom_doc": "Budget-aware routing: each cycle reads, free, what Otari says each end user has spent (GET /end-users) and seals it as llm.otari.headroom. The hard judge route (judge_route) is allowed only while the judge's end user has used less than `headroom_max_fraction` of `end_user_limit_usd` (the day limit of the dashboard budget vd-analyst, USD 0.10; the service key cannot read the limit, so it is stated here). Unreadable state keeps the standard route.",
+  "end_user_limit_usd": "0.10",
+  "headroom_max_fraction": 0.8
 }

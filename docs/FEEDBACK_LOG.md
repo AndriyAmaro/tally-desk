@@ -152,6 +152,10 @@ Status words: **open** (still reproduces), **worked around** (our client handles
 - A second full cycle (nine narrative batches on the narrator model) still needed retries on three batches (two and three tries, all after an edge 504 and, for one, the 409 of entry 7); every batch finished and the replayed answers were not billed twice.
 - `Otari-Tags: role=bull` and `Otari-Conversation-Id` were accepted without error. We could not see them anywhere with an inference key, so we do not yet know whether they are visible in the dashboard or in `usage/summary` (to check in F2 with the panel).
 
+### 20. The service key can read an end user's spend but not its limit, and the usage record has no model (note)
+
+`GET /end-users` answers with `spend`, `reserved`, `budget_id`, `blocked` and the reset time, and no limit; `GET /budgets` and `GET /budgets/{id}` answer 401 "Invalid master key" to a service key. So the day limit the app compares against (USD 0.10, the dashboard budget `vd-analyst`) is a config value, said so in the sealed headroom record. `GET /usage/requests/{id}` (free) settles cost, tokens, status and row count, and not the model, so the model on a receipt cannot be reconciled against Otari's record. A field for the limit and one for the model would let an app reconcile everything it seals.
+
 ## Process notes
 
 - **A discarded test cycle.** The first full cycle on 2026-11-01 (BTCUSDT, local, `decide-v6`) appended a dossier 792 whose narrative had four of nine extraction batches failed by the 409 of entry 7 (its bull, bear, checker and judge requests were `11c4541b-8211-409b-ad47-d5828ce95e80`, `d061214b-c8d4-4278-b366-8b0d9a884176`, `4a7a1a13-2ece-429b-8b74-f194886eef6a` and `fb534b12-ebae-41cb-9666-d5f87c0d2a17`). It was never committed, pushed, stamped or published: the three ledger files were restored from git, the client was fixed to retry that 409, and the cycle was run again. The dossier 792 in this repository is the second run. The failed run is mentioned here so that nobody wonders about the missing first attempt; the ledger is append-only once it is committed, and this one never was.

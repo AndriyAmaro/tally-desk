@@ -953,9 +953,78 @@ def argue(side: str, evidence_items: dict[str, str], ask=chat) -> list[dict]:
 
 
 ROUTE_RULE = "judge-difficulty/v1"
+ROUTE_RULE_GATED = "judge-difficulty/v2"
+HEADROOM_SCHEMA = "otari-headroom/1"
 
 
-def route_decision(n_bull: int, n_bear: int, bull_score: float, bear_score: float, thresholds: dict, standard_model: str) -> dict:
+def headroom_ok(h: dict | None) -> tuple[bool, str]:
+    """Whether the judge's end user has room for the hard route, from the sealed numbers only (so a replay gets the same answer).
+    Room means: Otari's own spend plus what it holds in reserve is under `max_fraction` of the day limit."""
+    users = (h or {}).get("users") or {}
+    mine = users.get((h or {}).get("judge_user")) or {}
+    try:
+        limit, used = decimal.Decimal(str(h["limit_usd"])), decimal.Decimal(str(mine["used_usd"]))
+        top = decimal.Decimal(str(h["max_fraction"]))
+    except (KeyError, TypeError, decimal.InvalidOperation):
+        return False, "Otari's spend state for the judge's end user was not readable, so the standard route is kept"
+    if mine.get("blocked"):
+        return False, "Otari reports the judge's end user as blocked, so the standard route is kept"
+    if limit <= 0:
+        return False, "no day limit is configured, so the standard route is kept"
+    fraction = used / limit
+    if fraction >= top:
+        return False, f"the judge's end user has used USD {used} of its USD {limit} day ({fraction:.0%}, the hard route needs under {top:.0%}), so the standard route is kept"
+    return True, f"the judge's end user has used USD {used} of its USD {limit} day ({fraction:.0%}, under {top:.0%}): room for the hard route"
+
+
+def read_headroom(info=None, cfg: dict | None = None) -> dict:
+    """What Otari says each end user has spent today (GET /end-users, free), sealed with the verdict that drew on it. The limit is the
+    dashboard budget's day limit, taken from the config because the service key cannot read the budget itself."""
+    from concurrent.futures import ThreadPoolExecutor
+    info = info or end_user_info
+    cfg = cfg or otari_config()
+    names = [f"{cfg.get('end_user_prefix') or ''}{role}" for role in cfg["roles"]]
+    if cfg.get("canary_user"):
+        names.append(cfg["canary_user"])
+    with ThreadPoolExecutor(max_workers=min(8, len(names))) as pool:
+        rows = list(pool.map(lambda n: info(n), names))
+    limit = decimal.Decimal(str(cfg.get("end_user_limit_usd") or "0"))
+    users = {}
+    for name, row in zip(names, rows):
+        if not row:
+            users[name] = {"found": False}
+            continue
+        try:
+            used = decimal.Decimal(str(row.get("spend") or 0)) + decimal.Decimal(str(row.get("reserved") or 0))
+        except decimal.InvalidOperation:
+            users[name] = {"found": False}
+            continue
+        users[name] = {"found": True, "budget_id": row.get("budget_id"), "blocked": bool(row.get("blocked")), "spend_usd": str(row.get("spend")),
+                       "reserved_usd": str(row.get("reserved")), "used_usd": f"{used:.6f}",
+                       "fraction": f"{(used / limit):.4f}" if limit > 0 else None, "next_reset": row.get("next_budget_reset_at")}
+    out = {"schema": HEADROOM_SCHEMA, "source": "GET /end-users (free)", "limit_usd": format(limit, "f"),
+           "limit_source": "config end_user_limit_usd, the day limit of the dashboard budget vd-analyst (the service key cannot read the budget)",
+           "max_fraction": cfg.get("headroom_max_fraction", 0.8), "expected_budget_id": cfg.get("end_user_budget"),
+           "judge_user": _end_user("judge", cfg) or f"{cfg.get('end_user_prefix') or ''}judge", "users": users}
+    out["judge_ok"], out["reason"] = headroom_ok(out)
+    return out
+
+
+def canary_on(cfg: dict | None = None) -> bool:
+    """The per-cycle failover canary runs on the real Otari path unless the config or OTARI_CANARY=0 turns it off."""
+    return otari_active() and _flag("OTARI_CANARY", bool((cfg or otari_config()).get("canary", True)))
+
+
+def headroom_on(cfg: dict | None = None) -> bool:
+    """Otari's spend state is read and sealed in every cycle that can route the judge by the difficulty rule (OTARI_HEADROOM=0 turns it off)."""
+    if not otari_active():
+        return False
+    cfg = cfg or otari_config()
+    return isinstance(cfg.get("judge_route"), dict) and _flag("OTARI_JUDGE_ROUTE", True) and _flag("OTARI_HEADROOM", True)
+
+
+def route_decision(n_bull: int, n_bear: int, bull_score: float, bear_score: float, thresholds: dict, standard_model: str,
+                   headroom: dict | None = None, canary: dict | None = None) -> dict:
     """Which model rules, by a rule that is deterministic and sealed with the ruling.
 
     The harder case goes to a larger open model, sent straight by its catalog id (no new dashboard policy); the rest to the standard judge
@@ -964,7 +1033,10 @@ def route_decision(n_bull: int, n_bear: int, bull_score: float, bear_score: floa
         1.0 by default, the largest weight the judge's own vote can add (low 0.5, medium 0.75, high 1.0), so in that zone the vote is the
         tie-breaker and a mistake of the judge can change the action; or
       - there are too many claims: `claims_at_least` (8, both analysts at their cap of four) validated claims is the most debate there can be.
-    Both numbers are frozen in the record, and the replay recomputes the decision from the frozen claims and arguments."""
+    Both numbers are frozen in the record, and the replay recomputes the decision from the frozen claims and arguments.
+
+    Two gates, given from rule v2 on, can only keep a hard case on the standard route (never the other way): the failover canary of
+    this cycle must have shown the backup route working, and the judge's end user must have budget headroom in Otari's own state."""
     margin = round(abs(bull_score - bear_score), 4)
     total = n_bull + n_bear
     reasons = []
@@ -972,20 +1044,39 @@ def route_decision(n_bull: int, n_bear: int, bull_score: float, bear_score: floa
         reasons.append(f"tight margin: the deterministic arguments differ by {margin}, under {thresholds['margin_below']}, the most the judge's vote can add")
     if total >= thresholds["claims_at_least"]:
         reasons.append(f"many claims: {total} validated claims, at least {thresholds['claims_at_least']}, the most the analysts can bring")
-    hard = bool(reasons)
-    return {"rule": ROUTE_RULE, "hard": hard, "model": thresholds["hard_model"] if hard else standard_model,
-            "reason": "; ".join(reasons) or f"margin {margin} and {total} claims: the standard judge policy",
-            "metrics": {"n_bull": n_bull, "n_bear": n_bear, "bull_score": bull_score, "bear_score": bear_score, "margin": margin, "claims": total},
-            "thresholds": dict(thresholds)}
+    wanted = bool(reasons)
+    gates, blocked = {}, []
+    if headroom is not None:
+        ok, why = headroom_ok(headroom)
+        gates["headroom"] = {"ok": ok, "reason": why}
+        if not ok:
+            blocked.append(why)
+    if canary is not None:
+        ok = bool(canary.get("passed"))
+        why = "the failover canary showed the backup route working" if ok else "the failover canary did not show the backup route working, so the judge stays on the standard route"
+        gates["canary"] = {"ok": ok, "reason": why}
+        if not ok:
+            blocked.append(why)
+    hard = wanted and not blocked
+    out = {"rule": ROUTE_RULE_GATED if gates else ROUTE_RULE, "hard": hard, "model": thresholds["hard_model"] if hard else standard_model,
+           "reason": ("; ".join(reasons) + ("; kept on the standard route: " + "; ".join(blocked) if blocked else "")) if wanted
+           else f"margin {margin} and {total} claims: the standard judge policy",
+           "metrics": {"n_bull": n_bull, "n_bear": n_bear, "bull_score": bull_score, "bear_score": bear_score, "margin": margin, "claims": total},
+           "thresholds": dict(thresholds)}
+    if gates:
+        out["wanted_hard"] = wanted
+        out["gates"] = gates
+    return out
 
 
-def judge_route(n_bull: int, n_bear: int, bull_score: float, bear_score: float, cfg: dict | None = None) -> dict | None:
+def judge_route(n_bull: int, n_bear: int, bull_score: float, bear_score: float, cfg: dict | None = None,
+                headroom: dict | None = None, canary: dict | None = None) -> dict | None:
     """The route of this ruling in Otari mode (None when the config has no `judge_route`, or OTARI_JUDGE_ROUTE=0)."""
     cfg = cfg or otari_config()
     thresholds = cfg.get("judge_route")
     if not isinstance(thresholds, dict) or not _flag("OTARI_JUDGE_ROUTE", True):
         return None
-    return route_decision(n_bull, n_bear, bull_score, bear_score, thresholds, sent_model("judge", cfg))
+    return route_decision(n_bull, n_bear, bull_score, bear_score, thresholds, sent_model("judge", cfg), headroom=headroom, canary=canary)
 
 
 def use_checker(ask=None) -> bool:
