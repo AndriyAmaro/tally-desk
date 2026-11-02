@@ -16,6 +16,10 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 
 **See one cycle call by call: [`web/cycle.html`](web/cycle.html)** (a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models).
 
+## One ledger, two eras
+
+`ledger/ledger.jsonl` is a single hash chain. Dossiers 1 to 791 were recorded by the earlier version of this project, before it ran on Otari (models behind other providers, no gateway receipts). **The Otari era starts at dossier 792**: its `prev_hash` is the hash of dossier 791, so the chain was continued, not restarted, and `python3 -m verdict_desk verify` checks all of it. Every dossier from 792 carries the Otari run summary and a receipt for each call; the audit, the scoreboard and `web/cycle.html` read only those. Dossiers 792 to 800 were recorded from a local machine (by hand or by the local runner); from dossier 801 on, a scheduled GitHub Actions job (the workflow `otari-cycle`, every three hours) records the cycles.
+
 ## Proofs, resource by resource
 
 <!-- otari:proofs:start -->
@@ -52,6 +56,18 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 
 Every call of every Otari-era dossier, grouped by the model that answered. The fallbacks in this table have two sources. Real traffic: calls that Otari re-routed to a second provider when the first did not answer (receipts with `Otari-Fallback: true` and attempt count 2; so far only narrator batches: 8 in dossier 800 and 7 in dossier 801, sent as the plain catalog id `alibaba/qwen3-235b-a22b-instruct-2507`, with no routing policy of ours, and served by bedrock where earlier cycles were served by deepinfra, so this is Otari's own provider failover and not the `vd-judge` policy). The deliberate test: the failover canary, one small call per cycle through a policy built to fail over, which shows the backup route working even when no real call needs it.
 
+## Budgets: what Otari enforces, and what the app adds
+
+Three different things, kept apart on purpose:
+
+| Layer | Who enforces it | What it is | Proof in this repository |
+|---|---|---|---|
+| Budget objects on the Otari side | **Otari** | `vd-analyst`: USD 0.10 a day per end user, attached to each role's end user (`vd-bull`, `vd-judge`, and so on) through the `Otari-End-User-Budget` header when the end user is created; `vd-org-lifetime`: a USD 1.50 a day ceiling for the organization; `vd-drill-tiny`: USD 0.01, for one drill | the echoed budget id on the receipts (audit row 4); a refusal `403 budget_exceeded` (scope `user`) in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) |
+| Otari's spend state, read by the app | Otari holds the numbers, the **app only reads them** | each cycle reads `GET /end-users` (spend plus reserve per end user) and the judge may use the larger model only while its end user is under 80 percent of its day; the read, with the HTTP status of every lookup, is sealed in `llm.otari.headroom` | audit row 3, from the newest dossier whose read of the judge worked |
+| Cycle caps and runner limits | **The app alone** (`llm._cycle_check`, `tools/otari_runner.py`) | no new call starts once a cycle has spent USD 0.02 on the core roles or USD 0.06 on the tool roles; the runner stops at USD 2.00 in all and at 8 cycles a day | a refusal by a cap is a client-side receipt (`cycle_cap_exceeded`, `source: client`), never an Otari refusal |
+
+What is and is not shown: Otari's own `403 budget_exceeded` refusal has been seen once, in a deliberate drill against the USD 0.01 budget, and is **not** in a sealed production dossier. No production cycle has been refused by an Otari budget. The cycle caps are our own code and are not an Otari feature.
+
 ## Who sees what
 
 Every prompt goes to the gateway, then to the upstream provider named in the receipt (the page shows it per dossier). Every other host the code names:
@@ -82,10 +98,12 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 
 ## More
 
-[Integration notes](docs/OTARI_NOTES.md) · [friction log](docs/FEEDBACK_LOG.md) · [first map of the gateway](docs/OTARI_MAP.md) · [the BLI Legal Tech Hackathon 2 history of this code](docs/HISTORY.md) (hash-chained dossiers, citation validator, Chainlink CRE).
+[Friction log: every real snag met with the gateway](docs/FEEDBACK_LOG.md) · [architecture of the code](docs/architecture.md) · evidence files in [`docs/evidence/`](docs/evidence/).
+
+Background, not part of the Otari work: the earlier chain and its tooling (hash-chained dossiers, the citation validator, a Chainlink CRE anchor on Sepolia) are described in [`docs/HISTORY.md`](docs/HISTORY.md).
 
 ## About this repository
 
-It starts as a snapshot of [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9` (its state when the BLI Legal Tech Hackathon 2 closed), which stays frozen while it is judged. The work for MozFest Developers Wilding: Online lives on the `otari` branch. The scheduled GitHub workflows stay in the original, and so do three tests that read them (`test_workflows`, `test_rekor_workflow`, `test_numbers_fresh`).
+It started as a snapshot of [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9` (the state of that project when the BLI Legal Tech Hackathon 2 closed), which is kept as it was. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` is defined on `main` and runs `tools/otari_runner.py` against the `otari` branch. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
 
 MIT, see [`LICENSE`](LICENSE). Built by Andri Amaro with the help of an AI coding agent (Claude Code). The AI assistance is disclosed here on purpose.

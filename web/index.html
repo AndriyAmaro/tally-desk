@@ -51,11 +51,17 @@ a.btn[hidden]{display:none}
 .diff-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .diff-card .t{font-weight:700;margin:0 0 4px}.diff-card .t span{margin-right:6px}
 .diff-card p{margin:0 0 6px;font-size:14px}.diff-card a{color:var(--accent);font-weight:600;font-size:14px}
+#otari-banner{border:2px solid var(--accent);border-radius:10px;padding:10px 14px;margin:0 0 12px;background:var(--card)}
+#otari-banner p{margin:0 0 6px}#otari-banner .actions{margin:6px 0 0}
 </style>
 <link rel="stylesheet" href="theme.css">
 </head><body>
+<div id="otari-banner" role="note">
+  <p><b>Verdict Desk on Otari</b> (MozFest Developers Wilding): an agent whose every model call goes through the Otari gateway, on open-weight models, with a receipt for each call sealed in this ledger. The Otari era starts at dossier 792; this page checks the whole chain.</p>
+  <div class="actions"><a class="btn" href="cycle.html" style="border-color:var(--accent);font-weight:700">Start here: one cycle, call by call →</a><a class="btn" href="https://github.com/AndriyAmaro/verdict-desk-otari#readme">README and the eight-resource audit</a></div>
+</div>
 <header class="hero">
-  <p class="kicker">BLI Legal Tech Hackathon 2 · Autonomous Agents</p>
+  <p class="kicker">The ledger dashboard · every dossier of the chain, earlier era and Otari era</p>
   <h1>Verdict Desk</h1>
   <p class="tagline">An AI agent makes a market decision, and each one becomes a piece of evidence a lawyer can file. Frozen inputs, a debate where every claim cites its source, a deterministic verdict, and a hash-chained record anchored on Sepolia and in Bitcoin. Recomputed in your browser, not on our server.</p>
   <div class="actions">

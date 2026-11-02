@@ -1,8 +1,8 @@
 # Architecture: Verdict Desk
 
-> Status: Draft · Last updated: 2026-10-17 · Scope: BLI Legal Tech Hackathon 2, bounties "Autonomous Agents" (RYO-CHAN) and "Best CRE workflow" (Chainlink)
+> Status: living document · Scope: the design of the code in this repository. It was first written for the BLI Legal Tech Hackathon 2; the Otari era (from dossier 792) is described in the README.
 
-No SRS exists for this project. Drivers below come from the bounty text, the project strategy (`../../ESTRATEGIA.md`) and the constraints in section 2, and are stated in prose. Each section marks what is **Built** (in the repo today: 67 Python tests, 10 anchor workflow tests, 6 contract tests) and what is **Planned** (designed, not yet written). Nothing planned is presented as done.
+No SRS exists for this project. Drivers below come from the original bounty text and the constraints in section 2, and are stated in prose. Each section marks what is **Built** (in the repo) and what is **Planned** (designed, not yet written). Nothing planned is presented as done.
 
 ## 1. Introduction and Goals
 
@@ -23,12 +23,11 @@ The legal angle fits the organizer (Blockchain Legal Institute): a dossier is bu
 
 | Constraint | Effect on the design |
 |---|---|
-| Submission due 2026-10-31 22:01 (DoraHacks time); internal cut-off 2026-10-22 for an end-to-end demo with LLM | Small modular core, reuse of what exists, no new platforms |
 | Budget zero | Public keyless data, free LLM tier only, free hosting (GitHub) |
 | Brazil-based maintainer | Binance futures API is blocked by location; the public spot mirror is used |
-| LLM key (Mistral API) not configured yet in the cloud environment | LLM layer is optional and injectable; the core runs alone |
+| The LLM key may be absent (for example in CI for pull requests) | LLM layer is optional and injectable; the core runs alone |
 | No X (Twitter) API | Narrative agent reads public RSS feeds instead |
-| Original code, MIT license, third-party code only credited | The automaton's journal is used as a data source only, never as submitted code |
+| Original code, MIT license, third-party code only credited | Everything in the repository is original or credited |
 | Judge-facing text in American English | This document, README, dashboard and video script |
 | Simulation only | No order routing, no keys with trading rights, anywhere |
 
@@ -174,7 +173,7 @@ sequenceDiagram
 | Environment | What runs | Status |
 |---|---|---|
 | Local | `python -m verdict_desk ...`, `python -m unittest discover` | Built |
-| Live (public repo) | GitHub Actions cron runs `decide` hourly and commits the ledger; GitHub Pages serves the dashboard; CRE workflow anchors the head hash daily | Planned, blocked on repo creation scope |
+| Live (public repo) | GitHub Actions runs a decision cycle on a schedule and commits the ledger (every three hours on the `otari` branch); GitHub Pages can serve the pages; the earlier project's CRE workflow anchored the head hash daily | Built |
 
 No server, database or container is needed. Hosting cost is zero. The live environment is the same code on a schedule, not a different build.
 
@@ -208,7 +207,7 @@ No server, database or container is needed. Hosting cost is zero. The live envir
 - **LLM judge.** More "agentic", but non-reproducible and unauditable. Lost on the main goal.
 - **Rules only.** Fully reproducible but weak against a "show me an agent" criterion.
 
-**Consequences.** Replay reports `llm_citations_valid` instead of regenerating text. The LLM layer is optional and currently untested against the real API (no key). Revisit if judges expect the LLM to influence the verdict.
+**Consequences.** Replay reports `llm_citations_valid` instead of regenerating text. The LLM layer is optional. Later rule versions let a validated judge lean add a capped weight to the verdict; the README describes that.
 
 ### ADR-002: Embed frozen evidence in every dossier
 
@@ -296,7 +295,7 @@ No server, database or container is needed. Hosting cost is zero. The live envir
 
 ### ADR-009: Hourly GitHub Actions run commits the ledger to a public repo
 
-**Status:** Accepted in principle, **Planned (blocked)** · **Date:** 2026-10-12
+**Status:** Accepted and built (a scheduled job commits one cycle every three hours on the `otari` branch) · **Date:** 2026-10-12
 **Requirements addressed:** independent timestamps; "live history" credibility
 
 **Decision.** A scheduled workflow runs `decide` and commits the new ledger line. The commit time and public repo history act as a witness the operator does not control.
@@ -323,10 +322,8 @@ No server, database or container is needed. Hosting cost is zero. The live envir
 3. ~~Browser verifier cannot recompute hashes~~ Closed on 2026-10-17 (ADR-007): `verdict_desk/canonical.py` and `web/canonical.js` produce the same RFC 8785 text. Remaining gap: the browser checks hashes and links, not `replay` (features and judge are Python).
 4. ~~Ledger path is gitignored and the public repo does not exist yet~~ Closed on 2026-10-17 (ADR-009): the public repo `AndriyAmaro/verdict-desk` exists, `ledger/` is tracked, and hourly GitHub Actions commits live dossiers. The counted size and cadence of the chain are in the README, section "Live operation" (scheduled runs are best effort, so the cadence has gaps). Dossiers 54 to 68 are demo and test runs that were appended by hand; since then `decide` refuses to append to the public ledger outside the workflow.
 5. ~~Integrity is not authenticity~~ Partially closed: the CRE workflow (`cre/`) and `LedgerAnchor` contract are written and mock-tested (10 workflow tests + 6 EVM tests). `cre workflow simulate` and a live Sepolia deployment ran on 2026-10-21: the head of dossier 80 is anchored on Sepolia and `check-anchor.mjs` answers ok; the evidence is in `cre/SIMULATION-OUTPUT.md` and `cre/DEPLOY_SEPOLIA.md` remains the runbook.
-6. **Rules, eligibility and payout terms are unpublished** by the organizer, and the Q&A page is not reachable from the cloud environment. Risk that deliverables change late.
-7. **Closest rival (EvidenceTrail)** also claims a hash-chained, replayable trail. Differentiators to keep sharp: the independent verifier, the legal-report dossier format, the narrative agent, the honest walk-forward backtest, and the CRE anchor.
-8. **Free data fragility.** GDELT throttles to one call per 5 seconds; the Binance mirror and OKX can change without notice.
-9. **Deliberate shortcut:** no retries, no concurrency, one position at a time in the backtest, ATR-based sizing with a fixed 1% risk. Fine for a simulation; revisit before anything resembling real use.
+6. **Free data fragility.** GDELT throttles to one call per 5 seconds; the Binance mirror and OKX can change without notice.
+7. **Deliberate shortcut:** no retries, no concurrency, one position at a time in the backtest, ATR-based sizing with a fixed 1% risk. Fine for a simulation; revisit before anything resembling real use.
 
 ## 12. Glossary
 
