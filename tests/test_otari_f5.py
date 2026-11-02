@@ -181,6 +181,90 @@ class AuditBudgetRowsTest(unittest.TestCase):
         self.assertEqual(row["status"], "PASS")
 
 
+
+class InFlightKeyTest(Env):
+    """HTTP 409 "Idempotency-Key in progress": the request is still running at Otari after the edge cut our connection. Wait for it on the
+    same key (the stored reply is replayed) instead of giving up, or sending a second request that would bill the same work twice."""
+
+    def transport(self, script):
+        """script: one entry per request, an HTTP status int (an error) or 'ok'. Returns (urlopen, keys seen)."""
+        from tests.test_otari import BODY, HEADERS
+        keys, queue = [], list(script)
+
+        def urlopen(request, timeout=None):
+            keys.append(request.get_header("Idempotency-key"))
+            step = queue.pop(0)
+            if step == "ok":
+                return FakeResponse(BODY, HEADERS)
+            body = b'{"detail":"A request with this Idempotency-Key is still in progress. Retry with the same key to get its result."}' if step == 409 else b"{}"
+            raise urllib.error.HTTPError(request.full_url, step, "x", message({"Retry-After": "5"} if step in (409, 429) else {}), io.BytesIO(body))
+        return urlopen, keys
+
+    def test_a_request_that_finishes_after_many_polls_is_answered_from_the_same_key(self):
+        polls = llm.MAX_RETRIES + 5  # more waits than the retries a failing call gets
+        urlopen, keys = self.transport([504] + [409] * polls + ["ok"])
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            text = llm.chat("s", "u", role="narrator")
+        self.assertTrue(text)
+        self.assertEqual((len(keys), len(set(keys))), (polls + 2, 1), "one logical call, one key, every try")
+        receipt = llm.served_receipt()
+        self.assertEqual(receipt["client_attempts"], polls + 2)
+        self.assertNotIn("refusal", receipt)
+
+    def test_polls_do_not_use_up_the_retries_of_real_failures(self):
+        script = [409] * 6 + [429] * llm.MAX_RETRIES + ["ok"]
+        urlopen, keys = self.transport(script)
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            self.assertTrue(llm.chat("s", "u", role="narrator"))
+        self.assertEqual(len(keys), len(script))
+        urlopen, keys = self.transport([429] * (llm.MAX_RETRIES + 1))
+        with mock.patch.object(urllib.request, "urlopen", urlopen), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="narrator")
+        self.assertEqual(len(keys), llm.MAX_RETRIES + 1, "a real failure still stops after MAX_RETRIES")
+
+    def test_a_key_that_never_finishes_gives_up_inside_the_wait_budget_with_the_409_on_record(self):
+        urlopen, keys = self.transport([409] * 200)
+        with mock.patch.object(urllib.request, "urlopen", urlopen), self.assertRaises(llm.OtariError) as ctx:
+            llm.chat("s", "u", role="narrator")
+        self.assertEqual(ctx.exception.status, 409)
+        waited = sum(c.args[0] for c in llm._pause.call_args_list)
+        self.assertLessEqual(waited, llm.IN_PROGRESS_BUDGET)
+        self.assertEqual(len(set(keys)), 1)
+        r = llm.served_receipt()
+        self.assertEqual((r["refusal"]["status"], r["client_attempts"]), (409, len(keys)))
+
+    def test_the_servers_retry_after_is_the_floor_of_each_wait(self):
+        urlopen, _ = self.transport([409, "ok"])
+
+        def slow(request, timeout=None):
+            try:
+                return urlopen(request, timeout)
+            except urllib.error.HTTPError as err:
+                raise urllib.error.HTTPError(err.url, 409, "x", message({"Retry-After": "12"}), io.BytesIO(b'{"detail":"still in progress"}'))
+        with mock.patch.object(urllib.request, "urlopen", slow):
+            llm.chat("s", "u", role="narrator")
+        self.assertEqual([c.args[0] for c in llm._pause.call_args_list], [12.0])
+
+    def test_a_409_that_is_not_about_a_key_in_progress_is_not_waited_for(self):
+        def other(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 409, "x", message({}), io.BytesIO(b'{"detail":"conflict of another kind"}'))
+        with mock.patch.object(urllib.request, "urlopen", other), self.assertRaises(llm.OtariError):
+            llm.chat("s", "u", role="narrator")
+        llm._pause.assert_not_called()
+
+
+class NarratorBatchTest(unittest.TestCase):
+    def test_batches_are_small_and_the_otari_token_ceiling_leaves_room_without_reserving_a_fortune(self):
+        from verdict_desk import narrative
+        self.assertLessEqual(narrative.CHUNK, 6, "a slow batch (25 to 30 s with ten headlines) is cut by the edge at about 30 s")
+        with mock.patch.dict(os.environ, {"OTARI_API_KEY": "k" * 20}):
+            self.assertEqual(narrative.max_tokens(), narrative.OTARI_MAX_TOKENS)
+        with mock.patch.dict(os.environ, {"OTARI_API_KEY": ""}):
+            self.assertEqual(narrative.max_tokens(), narrative.LLM_MAX_TOKENS)
+        self.assertGreaterEqual(narrative.OTARI_MAX_TOKENS, 2000, "the longest answer seen for ten headlines was 1066 tokens")
+        self.assertLess(narrative.OTARI_MAX_TOKENS, narrative.LLM_MAX_TOKENS)
+
+
 @unittest.skipUnless(NODE, "node is not installed")
 class VerifyPageTest(unittest.TestCase):
     def test_the_browser_verifier_reads_the_ledger_from_either_layout_and_agrees_with_itself(self):

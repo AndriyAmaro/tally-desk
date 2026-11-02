@@ -324,7 +324,7 @@ class ReceiptCompletenessTest(Base):
         self.assertEqual(result(False), {"prompt-injection": "flagged"})
         self.assertNotIn("guardrail_result", llm.parse_receipt(HEADERS, BODY, "judge", "vd-judge"))
 
-    def test_waits_between_tries_grow_exponentially(self):
+    def test_waits_for_an_in_flight_key_grow_by_half_each_time_stay_on_one_key_and_end_inside_the_time_budget(self):
         calls = []
 
         def in_progress(request, timeout=None):
@@ -334,16 +334,20 @@ class ReceiptCompletenessTest(Base):
         with mock.patch.object(urllib.request, "urlopen", in_progress), self.assertRaises(llm.OtariError):
             llm.chat("s", "u", role="narrator")
         waits = [c.args[0] for c in llm._pause.call_args_list]
-        self.assertEqual(waits, [5.0, 10.0, 20.0, 40.0])
-        self.assertEqual((len(calls), len(set(calls))), (llm.MAX_RETRIES + 1, 1))
+        self.assertEqual(waits[:4], [5.0, 7.5, 11.25, 16.875])
+        self.assertTrue(all(w <= llm.IN_PROGRESS_POLL_MAX for w in waits))
+        self.assertLessEqual(sum(waits), llm.IN_PROGRESS_BUDGET)
+        self.assertGreater(sum(waits), llm.IN_PROGRESS_BUDGET - llm.IN_PROGRESS_POLL_MAX, "it waits as long as the budget allows")
+        self.assertEqual((len(calls), len(set(calls))), (len(waits) + 1, 1))
+        self.assertEqual(llm.served_receipt()["client_attempts"], len(calls))
 
-    def test_the_wait_stops_growing_at_the_cap(self):
+    def test_the_wait_budget_is_a_knob_and_the_poll_never_exceeds_its_cap(self):
         def in_progress(request, timeout=None):
             body = b'{"detail":"A request with this Idempotency-Key is still in progress."}'
             raise urllib.error.HTTPError(request.full_url, 409, "Conflict", message({}), io.BytesIO(body))
-        with mock.patch.object(llm, "MAX_WAIT", 15.0), mock.patch.object(urllib.request, "urlopen", in_progress), self.assertRaises(llm.OtariError):
+        with mock.patch.object(llm, "IN_PROGRESS_BUDGET", 21.0), mock.patch.object(llm, "IN_PROGRESS_POLL_MAX", 8.0), mock.patch.object(urllib.request, "urlopen", in_progress), self.assertRaises(llm.OtariError):
             llm.chat("s", "u", role="narrator")
-        self.assertEqual([c.args[0] for c in llm._pause.call_args_list], [5.0, 10.0, 15.0, 15.0])
+        self.assertEqual([c.args[0] for c in llm._pause.call_args_list], [5.0, 7.5, 8.0])
 
     def test_nothing_that_is_recorded_or_raised_holds_the_key(self):
         leaking = urllib.error.HTTPError("https://otari.ai/x", 403, "Forbidden", message({"Otari-Error-Code": "x"}), io.BytesIO(f'{{"detail":"key {KEY} refused"}}'.encode()))

@@ -29,11 +29,17 @@ MIN_VOICES = 2
 MAX_VOICES = 20  # limite de feeds por decisao
 PER_FEED = 8
 TELEGRAM_PAGE = 40  # mensagens lidas do preview de um canal antes do filtro por token
-CHUNK = 10  # titulos por chamada ao LLM (lotes menores gastam menos tokens de raciocinio)
+CHUNK = 6  # titulos por chamada ao LLM (lotes menores gastam menos tokens de raciocinio e respondem antes do corte de ~30 s da borda do Otari)
 MAX_WORKERS = 4  # lotes em paralelo
 LLM_TIMEOUT = 240  # segundos por chamada de extracao: modelo de raciocinio no tier gratuito oscila
 INDEX_VERSION = 2  # 2: o indice de evidencia lista so as vozes e convergencias do ativo da decisao (1: todas)
-LLM_MAX_TOKENS = 6000  # com 3000 um lote chegou a gastar tudo raciocinando e devolver conteudo vazio
+LLM_MAX_TOKENS = 6000  # com 3000 um lote chegou a gastar tudo raciocinando e devolver conteudo vazio (modelo de raciocinio do tier gratuito)
+OTARI_MAX_TOKENS = 2500  # Otari: modelo sem raciocinio; a maior resposta vista (10 titulos) teve 1066 tokens, e o teto vira reserva de saldo ate a chamada fechar
+
+
+def max_tokens() -> int:
+    """The completion ceiling of one extraction batch: small behind Otari (its budgets hold the whole ceiling until the call settles), large elsewhere."""
+    return OTARI_MAX_TOKENS if llm_mod.otari_active() else LLM_MAX_TOKENS
 STANCES = ("bullish", "bearish", "neutral")
 LEVELS = ("low", "medium", "high")
 USER_AGENT = "verdict-desk/0.1"

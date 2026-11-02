@@ -533,7 +533,9 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     _served.receipt = None
     _served.started_ms = _offset_ms()
     _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, headers["Idempotency-Key"])
-    for attempt in range(MAX_RETRIES + 1):
+    tries = _Tries()
+    while True:
+        tries.n += 1
         _wait_turn(interval)
         _served.receipt = None  # each try starts clean: what is kept is the outcome of the LAST try, never an earlier one
         request = urllib.request.Request(f"{base}/chat/completions", data=body, headers=headers)
@@ -542,7 +544,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
                 raw = response.read()
                 reply_headers = getattr(response, "headers", None)
             data = json.loads(raw.decode("utf-8"))
-            receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=attempt + 1, local_id=headers["Idempotency-Key"])
+            receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=tries.n, local_id=headers["Idempotency-Key"])
             _served.receipt = receipt
             _cycle_add(receipt)
             _served.model = receipt["served_by"] or (data.get("model") if isinstance(data, dict) else None)
@@ -552,9 +554,9 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             _seal_exchange(receipt, system, user, choice.get("finish_reason"), message_text((choice.get("message") or {}).get("content") if isinstance(choice.get("message"), dict) else None))
             break
         except urllib.error.HTTPError as err:
-            _pause(_retry_or_raise(err, attempt, key, base, role, model, end_user, headers["Idempotency-Key"]))
+            _pause(_retry_or_raise(err, tries, key, base, role, model, end_user, headers["Idempotency-Key"]))
         except (urllib.error.URLError, TimeoutError, ConnectionError) as err:  # no HTTP answer: record what happened, never a stale status
-            _transport_failure(err, attempt, base, role, model, end_user, headers["Idempotency-Key"])
+            _transport_failure(err, tries.n - 1, base, role, model, end_user, headers["Idempotency-Key"])
     message = choice.get("message")
     content = message_text(message.get("content") if isinstance(message, dict) else None)
     if not content:
@@ -562,16 +564,49 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     return content
 
 
-def _retry_or_raise(err: urllib.error.HTTPError, attempt: int, key: str, base: str, role: str, model: str, end_user: str | None, local_id: str) -> float:
+IN_PROGRESS_POLL = 5.0  # first wait on a key Otari is still working on; it grows by half each time
+IN_PROGRESS_POLL_MAX = 20.0
+IN_PROGRESS_BUDGET = 150.0  # seconds one call may spend waiting for its own in-flight request to finish
+
+
+class _Tries:
+    """The tries of ONE logical call, all on the same Idempotency-Key: `n` of them so far (the receipt's client_attempts), `failures`
+    that count against MAX_RETRIES, and the polls spent waiting for an in-flight request, which have a time budget of their own."""
+
+    def __init__(self):
+        self.n = 0
+        self.failures = 0
+        self.polls = 0
+        self.waited = 0.0
+
+
+def _poll_delay(err: urllib.error.HTTPError, tries: _Tries) -> float | None:
+    """Seconds to wait before asking again on a key Otari answers "still in progress", or None when the budget for waiting is used up.
+    The edge cuts a slow reply at about 30 s while Otari goes on and finishes it; the same key then replays the stored answer, so waiting
+    is cheaper and truer than a new key (which would bill the same work twice). The server's Retry-After is the floor of each wait."""
+    floor = 0.0
+    try:
+        floor = float((err.headers or {}).get("Retry-After") or 0)
+    except (TypeError, ValueError):
+        pass
+    delay = min(max(IN_PROGRESS_POLL * 1.5 ** tries.polls, floor), IN_PROGRESS_POLL_MAX)
+    if tries.waited + delay > IN_PROGRESS_BUDGET:
+        return None
+    tries.polls += 1
+    tries.waited += delay
+    return delay
+
+
+def _retry_or_raise(err: urllib.error.HTTPError, tries: _Tries, key: str, base: str, role: str, model: str, end_user: str | None, local_id: str) -> float:
     """After an HTTP error: records the receipt and returns the seconds to wait before the next try on the same Idempotency-Key,
     or raises an OtariError when retrying cannot help (402, 403, 424...) or the tries are used up."""
     detail = _read_detail(err)
-    _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user, client_attempts=attempt + 1, local_id=local_id)
-    delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
-    if delay is None and err.code == 409 and "in progress" in detail and attempt < MAX_RETRIES:
-        # Our first try timed out at the edge (504) while Otari kept working: the same Idempotency-Key answers 409
-        # "still in progress" until it finishes, and then replays the stored reply. Wait and ask again.
-        delay = min(5.0 * 2 ** attempt, MAX_WAIT)  # exponential, capped, on the same Idempotency-Key
+    _served.receipt = refusal_receipt(err.headers, err.code, role, model, end_user, client_attempts=tries.n, local_id=local_id)
+    if err.code == 409 and "in progress" in detail:
+        delay = _poll_delay(err, tries)  # our request is still running at Otari: poll for it, not counted against MAX_RETRIES
+    else:
+        delay = _retry_delay(err, tries.failures) if err.code in RETRY_STATUS and tries.failures < MAX_RETRIES else None
+        tries.failures += 1
     if delay is None:
         raise _otari_error(err, key, detail, base, model) from err
     return delay
@@ -619,7 +654,9 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
     started_ms = _offset_ms()
     _served.started_ms = started_ms
     _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, local_id)
-    for attempt in range(MAX_RETRIES + 1):
+    tries = _Tries()
+    while True:
+        tries.n += 1
         _wait_turn(interval)
         _served.receipt = None
         request = urllib.request.Request(f"{base}/messages", data=body, headers=headers)
@@ -632,13 +669,13 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
                     data, streamed = json.loads(response.read().decode("utf-8")), None
             break
         except urllib.error.HTTPError as err:
-            _pause(_retry_or_raise(err, attempt, key, base, role, model, end_user, local_id))
+            _pause(_retry_or_raise(err, tries, key, base, role, model, end_user, local_id))
         except (urllib.error.URLError, TimeoutError, ConnectionError) as err:
-            _transport_failure(err, attempt, base, role, model, end_user, local_id)
+            _transport_failure(err, tries.n - 1, base, role, model, end_user, local_id)
     usage = data.get("usage") if isinstance(data, dict) and isinstance(data.get("usage"), dict) else {}
     mapped = {"usage": {"prompt_tokens": usage.get("input_tokens"), "completion_tokens": usage.get("output_tokens"),
                         "cost_usd": usage.get("cost_usd"), "pricing_source": usage.get("pricing_source")}}
-    receipt = parse_receipt(reply_headers, mapped, role, model, end_user, client_attempts=attempt + 1, local_id=local_id)
+    receipt = parse_receipt(reply_headers, mapped, role, model, end_user, client_attempts=tries.n, local_id=local_id)
     if receipt["cost_usd"] is None and receipt["request_id_source"] == "otari":
         row = usage_for(receipt["request_id"])  # a stream carries no cost: the settled row gives it
         if row and row.get("cost_usd") is not None:
