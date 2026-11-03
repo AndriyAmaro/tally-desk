@@ -130,12 +130,14 @@ class DossierTest(unittest.TestCase):
         d = self.build(flag=True)
         self.assertEqual(d["verdict"]["policy"]["checker_gate"], "a judge ruling that relies on a claim the citation checker marked unsupported carries no weight")
 
-    def test_the_dossiers_of_the_ledger_replay_as_they_always_did(self):
+    def test_every_dossier_of_the_ledger_replays_and_only_v7_ones_carry_the_gate(self):
         ledger = [json.loads(line) for line in (ROOT / "ledger" / "ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-        for d in ledger[-12:]:
+        for d in ledger[-30:]:
             self.assertTrue(dossier.replay(d, rules_version="auto")["matches"], d["seq"])
-            self.assertNotIn("checker_gate", d["verdict"])
-
+            v7 = d["verdict"].get("rules_version") == "v7"
+            self.assertEqual("checker_gate" in d["verdict"], v7, f"dossier {d['seq']}: the gate belongs to v7 verdicts and to no other")
+            if v7:
+                self.assertEqual(d["verdict"]["checker_gate"], agents_v2.checker_gate(d["llm"]), d["seq"])
 
 
 from tests.test_otari_tools import FlowEnv  # noqa: E402

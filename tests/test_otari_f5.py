@@ -160,12 +160,15 @@ class AuditBudgetRowsTest(unittest.TestCase):
         self.assertEqual(self.rows(ledger)[3]["dossier"], ledger[-2]["seq"])
 
     def test_row_four_prints_found_out_of_asked_and_prefers_the_newest_complete_read(self):
+        from verdict_desk import otari_report
         ledger = self.ledger()
         for name in ("vd-sandbox", "vd-mcp"):
             ledger[-1]["llm"]["otari"]["headroom"]["users"][name] = {"found": False, "lookup": "absent", "status": 200}
+        complete = [d["seq"] for d in otari_report.era(ledger)[:-1]
+                    if (u := (d["llm"]["otari"].get("headroom") or {}).get("users")) and all(x.get("found") for x in u.values())]
         rows = self.rows(ledger)
-        self.assertEqual(rows[4]["dossier"], ledger[-2]["seq"])
-        self.assertIn("10 of 10 asked were found", rows[4]["note"])
+        self.assertEqual(rows[4]["dossier"], max(complete), "the newest dossier before the edited one whose every asked user was found")
+        self.assertRegex(rows[4]["note"], r"(\d+) of \1 asked were found")
 
     def test_when_no_read_is_complete_row_four_names_the_gap_instead_of_hiding_it(self):
         ledger = self.ledger()
@@ -284,8 +287,13 @@ class AuditFallbackRowTest(unittest.TestCase):
         self.assertEqual(row["source"], "sealed")
         self.assertIn(f"{len(real)} real calls", row["note"])
         self.assertIn("deliberate test", row["note"])
-        self.assertIn("not the vd-judge policy", row["note"], "the narrator's fallbacks carry no policy: say which failover it was")
-        self.assertTrue(all(r.get("policy") is None and r["role"] == "narrator" for r in real), "the real fallbacks of the ledger are narrator calls on a plain catalog id")
+        newest = max((d for d in otari_report.era(ledger) if any(c["receipt"].get("fallback") and c["label"] != "canary" for c in otari_report.calls_of(d))), key=lambda d: d["seq"])
+        self.assertEqual(row["dossier"], newest["seq"], "the newest dossier with a real fallback")
+        newest_real = next(c["receipt"] for c in reversed(otari_report.calls_of(newest)) if c["label"] != "canary" and c["receipt"].get("fallback"))
+        if newest_real.get("policy") is None:
+            self.assertIn("not the vd-judge policy", row["note"], "a fallback with no policy of ours is Otari's own failover: say so")
+        else:
+            self.assertIn(str(newest_real["policy"]), row["note"])
         canary_id = next(d["llm"]["otari"]["canary"]["receipt"]["request_id"] for d in reversed(otari_report.era(ledger)) if (d["llm"]["otari"].get("canary") or {}).get("passed"))
         self.assertEqual(row["proof"][0] in {r["request_id"] for r in real}, True, "the first proof is a real call")
         self.assertIn(canary_id, row["proof"], "the canary is cited too")
@@ -327,9 +335,17 @@ class WebEvidenceUseTest(unittest.TestCase):
     def test_the_web_proof_cites_the_newest_dossier_where_the_analysts_cited_what_was_found(self):
         ledger = self.ledger()
         row = self.row6(ledger)
-        cited = [d["seq"] for d in ledger if ((d.get("llm") or {}).get("otari") or {}).get("evidence_use", {}).get("web_items_cited")]
-        self.assertEqual(row["dossier"], max(cited), "the newest dossier that shows a cited web item, not just the newest fetch")
-        self.assertRegex(row["note"], r"the analysts cited \d+ of \d+ source titles")
+
+        def tier(d):
+            use = ((d.get("llm") or {}).get("otari") or {}).get("evidence_use") or {}
+            web = (d.get("evidence") or {}).get("web") or {}
+            page = web.get("page") or {}
+            done = page.get("otari_reported_fetch") and page.get("excerpt") and any(t.get("type") == "web_search" and t.get("status") == "completed" for t in (web.get("receipt") or {}).get("tool_calls") or [])
+            return (bool(use.get("web_excerpts_cited")), bool(use.get("web_items_cited"))) if done else None
+        tiers = {d["seq"]: tier(d) for d in ledger if tier(d) is not None}
+        best = max(tiers.values())
+        self.assertEqual(row["dossier"], max(seq for seq, t in tiers.items() if t == best), "the newest dossier of the best tier")
+        self.assertRegex(row["note"], r"the analysts cited \d+ of \d+ source titles" if any(best) else "cited none of what was found")
 
     def test_a_cited_excerpt_beats_a_cited_title_and_the_audit_picks_it_up_by_itself(self):
         ledger = self.ledger()
@@ -402,6 +418,67 @@ class TimestampHelperTest(unittest.TestCase):
         self.assertFalse(self.run_with(0, "verify PendingAttestation('https://x')"))
         self.assertFalse(self.run_with(0, error=subprocess.TimeoutExpired("ots", 90)))
         self.assertFalse(self.run_with(0, error=OSError("no network")))
+
+
+
+class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
+    """The ledger grows every three hours. Append one synthetic dossier of each kind the scheduled job can write (a plain one, one with a
+    real fallback on an analyst call, one whose headroom read failed, one with a flagged checker mark under v7) to a copy of the real ledger
+    and run every reader of the ledger over it: the chain, the replay, the audit, the scoreboard, the README blocks and who-saw."""
+
+    @staticmethod
+    def appended():
+        import copy
+        from verdict_desk import dossier, otari_report
+        real = [json.loads(line) for line in (ROOT / "ledger" / "ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+        base = next(d for d in reversed(real) if d["verdict"].get("rules_version") == "v7" and d.get("llm", {}).get("otari"))
+        kinds = {}
+        plain = copy.deepcopy(base)
+        kinds["plain"] = plain
+        fb = copy.deepcopy(base)
+        fb["llm"]["bull"]["receipt"].update(fallback=True, attempt_count=2, served_by="bedrock:openai/gpt-oss-120b")
+        kinds["analyst fallback"] = fb
+        failed = copy.deepcopy(base)
+        h = failed["llm"]["otari"]["headroom"]
+        h["users"][h["judge_user"]] = {"found": False, "lookup": "error", "status": 429, "attempts": 2}
+        kinds["failed lookup"] = failed
+        flagged = copy.deepcopy(base)
+        flagged["llm"]["checker"] = {"advisory": True, "checks": [{"label": "B1", "supported": False, "note": "x"}], "checked": 1, "supported": 0, "claims": 1}
+        kinds["flagged mark"] = flagged
+        out = list(real)
+        for d in kinds.values():  # re-seal each as the next link of the chain: only receipts and marks differ, so the verdicts still replay
+            body = {k: v for k, v in d.items() if k != "hash"}
+            body["seq"], body["prev_hash"] = out[-1]["seq"] + 1, out[-1]["hash"]
+            out.append({**body, "hash": dossier.digest(body)})
+        return real, out, otari_report
+
+    def test_every_reader_of_the_ledger_accepts_each_kind_of_new_dossier(self):
+        from verdict_desk import dossier, scoreboard
+        real, out, otari_report = self.appended()
+        prev = dossier.GENESIS
+        for d in out:
+            self.assertEqual(d["prev_hash"], prev)
+            self.assertEqual(dossier.digest({k: v for k, v in d.items() if k != "hash"}), d["hash"])
+            prev = d["hash"]
+        for d in out[len(real):]:
+            result = dossier.replay(d, rules_version="auto")
+            self.assertIn(result["matches"], (True, False))  # never raises; whether a doctored mark matches is the gate test's business
+        rows = otari_report.audit(out, otari_report.read_evidence())
+        self.assertEqual([r["n"] for r in rows], list(range(1, 9)))
+        self.assertTrue(all(r["status"] in ("PASS", "NOT PROVEN") for r in rows))
+        self.assertTrue(otari_report.board(out))
+        text = otari_report.refresh_readme((ROOT / "README.md").read_text(encoding="utf-8"), out, otari_report.read_evidence())
+        self.assertIn("<!-- otari:proofs:end -->", text)
+        for d in otari_report.era(out)[-4:]:
+            self.assertTrue(otari_report.who_saw(d)["providers"])
+        self.assertIsNotNone(scoreboard)
+
+    def test_a_failed_lookup_in_the_newest_dossier_moves_the_budget_proof_to_the_newest_good_read(self):
+        real, out, otari_report = self.appended()
+        rows = {r["n"]: r for r in otari_report.audit(out, [])}
+        failed_seq = real[-1]["seq"] + 3
+        self.assertNotEqual(rows[3]["dossier"], failed_seq)
+        self.assertNotIn("None", rows[3]["note"])
 
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
