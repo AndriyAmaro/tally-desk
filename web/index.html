@@ -1,434 +1,216 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Verdict Desk</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5fbf'/%3E%3Cpath d='M9 11h14M9 16h9M9 21h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
-<meta name="description" content="A public, tamper-evident ledger of AI agent decisions: frozen evidence, a citation-enforced bull/bear debate, deterministic verdicts, and every hash recomputed in your browser.">
-<meta property="og:title" content="Verdict Desk · simulated decision ledger">
-<meta property="og:description" content="A live, hash-chained ledger of AI agent decisions, anchored on Sepolia and in Bitcoin. Break the chain yourself in 30 seconds.">
+<title>Verdict Desk on Otari</title>
+<meta name="description" content="A paper-trading agent whose every model call goes through the Otari gateway on open-weight models and leaves a receipt in a hash-chained ledger that anyone can re-verify offline.">
+<meta property="og:title" content="Verdict Desk on Otari">
+<meta property="og:description" content="Every model call leaves a receipt: who asked, which model answered through which provider, what it cost. Read one cycle call by call, or verify a record in your browser.">
 <meta property="og:type" content="website">
-<style>
-:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf}
-@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--line:#333;--ok:#4cc38a;--bad:#ff6b5e;--card:#1b1b1b;--accent:#6ea8fe}}
-body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0 auto;max-width:900px;padding:16px}
-h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:16px 0 4px}.mut{color:var(--mut)}
-table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
-tbody tr{cursor:pointer}tbody tr:hover{background:var(--card)}
-tr.latest{background:var(--card);outline:2px solid var(--accent);outline-offset:-2px}
-tr.flagged{background:rgba(179,38,30,.16)}
-.LONG,.ok{color:var(--ok)}.SHORT,.bad{color:var(--bad)}code{font-size:12px;word-break:break-all}
-#banner{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);margin:12px 0}
-#detail{border:1px solid var(--line);border-radius:8px;padding:4px 14px 12px;margin-top:14px;background:var(--card)}
-#detail[hidden]{display:none}ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
-input[type=file]{margin-left:6px}
-.stats{border:1px solid var(--line);border-radius:8px;padding:2px 14px 10px;margin:12px 0;background:var(--card)}
-.stats table{font-size:13px}
-button,.btn{font:inherit;padding:7px 14px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-block}
-button:hover:not(:disabled),.btn:hover{border-color:var(--accent)}
-button:disabled{opacity:.5;cursor:not-allowed}
-button.primary{background:#b3261e;border-color:#b3261e;color:#fff;font-weight:600}
-a.btn[hidden]{display:none}
-#tamper{border:2px solid var(--accent);border-radius:10px;padding:2px 16px 14px;margin:14px 0;background:var(--card)}
-#tamper ul.what{margin:8px 0 8px 18px;padding:0}#tamper li{margin:3px 0}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
-.scroll,#positions{overflow-x:auto}
-#mini{font-size:13px;margin:8px 0}#mini td,#mini th{padding:4px 8px}
-#tamper-note{margin:8px 0;min-height:1.5em}
-#tamper textarea{width:100%;box-sizing:border-box;font:12px/1.4 ui-monospace,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px}
-#tamper details{margin:10px 0 0}#tamper summary{cursor:pointer;font-weight:600}
-#tamper details{margin:10px 0 0}#tamper summary{cursor:pointer;font-weight:600}
-.hero{margin:6px 0 4px}
-.kicker{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0}
-.hero h1{font-size:34px;letter-spacing:-.02em;margin:2px 0 6px}
-.tagline{font-size:16px;line-height:1.55;max-width:780px;margin:4px 0 12px;color:var(--fg)}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0 4px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600}
-.stat .v{font-size:22px;font-weight:700;margin:3px 0 0;line-height:1.1}
-.stat .s{font-size:12px;color:var(--mut);margin-top:3px}
-.hero-diagram{margin:14px 0 0}.hero-diagram img{width:100%;height:auto;border:1px solid var(--line);border-radius:12px}
-.diff{margin:16px 0 4px}.diff h2{font-size:17px;margin:0 0 8px}
-.diff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
-.diff-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.diff-card .t{font-weight:700;margin:0 0 4px}.diff-card .t span{margin-right:6px}
-.diff-card p{margin:0 0 6px;font-size:14px}.diff-card a{color:var(--accent);font-weight:600;font-size:14px}
-#otari-banner{border:2px solid var(--accent);border-radius:10px;padding:10px 14px;margin:0 0 12px;background:var(--card)}
-#otari-banner p{margin:0 0 6px}#otari-banner .actions{margin:6px 0 0}
-</style>
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1017'/%3E%3Crect x='4' y='13' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Crect x='11' y='7' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Cpath d='M21 5h7v20l-1.75-1.3-1.75 1.3-1.75-1.3L21 25z' fill='none' stroke='%23fbbf24' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="theme.css">
+<style>
+.hero{margin:var(--space-8) 0 var(--space-6)}
+.hero h1{font-size:var(--text-display);letter-spacing:var(--tracking-display);max-width:16ch;margin:0 0 var(--space-4)}
+.hero .lede{margin-bottom:var(--space-5)}
+.hero .actions{margin:0 0 var(--space-3)}
+.hero .fine{font-size:var(--text-sm);color:var(--color-text-subtle);max-width:60ch;margin:0}
+.peek{display:block;text-decoration:none;color:inherit;margin-top:var(--space-7);padding:var(--space-4) var(--space-5) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);transition:border-color var(--dur-fast) var(--ease)}
+.peek:hover{border-color:var(--color-text-subtle)}
+.peek-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:var(--space-1) var(--space-4);margin-bottom:var(--space-3)}
+.peek-head b{font-weight:var(--weight-semibold)}
+.peek-head span{color:var(--color-text-muted);font-size:var(--text-sm)}
+.strip{position:relative;height:2.5rem;border-radius:var(--radius-md);background:var(--color-surface-sunken);border:1px solid var(--color-border-subtle);overflow:hidden}
+.strip i{position:absolute;top:6px;bottom:6px;min-width:3px;border-radius:3px;background:var(--role,var(--role-narrator))}
+.peek .strip i{top:5px;bottom:5px}
+.legend{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-4);margin:var(--space-3) 0 0;padding:0;list-style:none;font-size:var(--text-sm);color:var(--color-text-muted)}
+.legend li{display:inline-flex;align-items:center;gap:var(--space-2);margin:0}
+.legend .sw{width:.625rem;height:.625rem;border-radius:3px;background:var(--role,var(--role-narrator));flex:none}
+.legend b{color:var(--color-text);font-weight:var(--weight-medium)}
+.peek-foot{margin:var(--space-3) 0 0;font-size:var(--text-sm);color:var(--color-accent-text);font-weight:var(--weight-medium)}
+.asof{margin:var(--space-3) 0 0;font-size:var(--text-sm);color:var(--color-text-muted);max-width:none}
+.map{margin-top:var(--space-4)}
+.map th{padding-block:var(--space-3)}
+.map td{padding-block:var(--space-4);vertical-align:top}
+.map td:first-child{width:22%;font-weight:var(--weight-semibold)}
+.map td:first-child small{display:block;margin-top:var(--space-1);font-weight:var(--weight-regular);color:var(--color-text-muted);font-size:var(--text-xs)}
+.map td:nth-child(3){width:28%}
+.map ul{margin:0;padding:0;list-style:none}
+.map li{margin:0 0 var(--space-1)}
+.map tr.gap td{background:var(--color-warning-wash)}
+.map .status{display:flex;width:fit-content;margin-bottom:var(--space-2)}
+@media (max-width:48em){
+  .map table,.map tbody,.map tr,.map td{display:block;width:auto!important}
+  .map thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .map tr{padding:var(--space-4);border-bottom:1px solid var(--color-border)}
+  .map tr:last-child{border-bottom:0}
+  .map td{border:0;padding:var(--space-1) 0!important}
+  .map td[data-label]::before{content:attr(data-label);display:block;font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--color-text-subtle);margin-bottom:2px}
+  .map td:first-child::before{display:none}
+}
+.map-wrap{border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface);overflow:hidden}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-4);margin-top:var(--space-4)}
+.steps .card{display:flex;flex-direction:column;gap:var(--space-2)}
+.steps h3{margin:0}
+.steps p{color:var(--color-text-muted);font-size:var(--text-sm);margin:0}
+.steps .btn{margin-top:auto;align-self:flex-start}
+.steps pre{margin:var(--space-2) 0 0;font-size:.75rem}
+@media (max-width:56em){.steps{grid-template-columns:1fr}}
+.earlier{margin-top:var(--space-8);padding:var(--space-4) var(--space-5);border:1px dashed var(--color-border-strong);border-radius:var(--radius-lg);color:var(--color-text-muted);font-size:var(--text-sm)}
+.earlier p{margin:0 0 var(--space-2);max-width:none}
+.earlier ul{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-4);list-style:none;margin:0;padding:0}
+.earlier li{margin:0}
+.section-note{color:var(--color-text-muted);max-width:60ch}
+</style>
 </head><body>
-<div id="otari-banner" role="note">
-  <p><b>Verdict Desk on Otari</b> (MozFest Developers Wilding): an agent whose every model call goes through the Otari gateway, on open-weight models, with a receipt for each call sealed in this ledger. The Otari era starts at dossier 792; this page checks the whole chain.</p>
-  <div class="actions"><a class="btn" href="cycle.html" style="border-color:var(--accent);font-weight:700">Start here: one cycle, call by call →</a><a class="btn" href="https://github.com/AndriyAmaro/verdict-desk-otari#readme">README and the eight-resource audit</a></div>
-</div>
-<header class="hero">
-  <p class="kicker">The ledger dashboard · every dossier of the chain, earlier era and Otari era</p>
-  <h1>Verdict Desk</h1>
-  <p class="tagline">An AI agent makes a market decision, and each one becomes a piece of evidence a lawyer can file. Frozen inputs, a debate where every claim cites its source, a deterministic verdict, and a hash-chained record anchored on Sepolia and in Bitcoin. Recomputed in your browser, not on our server.</p>
+<!-- shell:header:start -->
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html" aria-current="page"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html" aria-current="page">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more"><summary>Earlier era</summary><ul><li><a href="dashboard.html">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="exhibit/index.html">Exhibits</a></li><li><a href="scorecard.html">Scorecard</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="learn.html">Learn</a></li><li><a href="usecase.html">Use case</a></li></ul></details></nav></header>
+<!-- shell:header:end -->
+<main id="content">
+
+<section class="hero band" aria-labelledby="hero-title">
+  <h1 id="hero-title">A trading agent that shows its receipts</h1>
+  <p class="lede"><b>Verdict Desk decides on paper trades and answers for every model call it makes.</b> Each call goes through the Otari gateway on an open-weight model and leaves a receipt, sealed in a hash-chained ledger that anyone can verify and replay offline.</p>
   <div class="actions">
-    <a class="btn" href="judge.html" style="border-color:var(--accent);font-weight:700">Judge path →</a>
-    <a class="btn" href="evidence.html" style="border-color:var(--accent);font-weight:700">For a lawyer: draft a foundation declaration →</a>
-    <a class="btn" href="ask.html" style="border-color:var(--accent);font-weight:700">Ask the record →</a>
-    <a class="btn" href="cycle.html" style="border-color:var(--accent);font-weight:700">One cycle, call by call →</a>
-    <a class="btn" href="lab.html">Cause and effect lab</a>
-    <a class="btn" href="exhibit/index.html">Decision exhibits</a>
-    <a class="btn" href="scorecard.html">Scorecard</a>
-    <a class="btn" href="verify.html">Verify a record</a>
-    <a class="btn" href="narrative.html" style="border-color:var(--accent);font-weight:700">Market voices →</a>
-    <a class="btn" href="witnesses.html">Witnesses</a>
-    <a class="btn" href="learn.html">Learn it by breaking it</a>
+    <a class="btn p lg" href="cycle.html">See one cycle, call by call</a>
+    <a class="btn lg" href="verify.html">Verify a record in your browser</a>
+    <a class="btn lg quiet" href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Read the audit</a>
   </div>
-  <section class="diff" aria-labelledby="diff-title">
-    <h2 id="diff-title">What you can check here that a debate log cannot show</h2>
-    <div class="diff-grid">
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M6 21h12M4 7h16M4 7l-2.5 6a3 3 0 0 0 5 0L4 7zm16 0-2.5 6a3 3 0 0 0 5 0L20 7z"/></svg>The verdict is re-derived, not only re-hashed</p><p>The deterministic judge rules again from the frozen evidence. Chainlink CRE acts as an independent auditor: before it anchors a head, it re-derives that verdict and refuses a forged one.</p><a href="verify.html">Re-derive a record →</a></div>
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 6 6M8.2 10.5h4.6M10.5 8.2v4.6"/></svg>Every number an AI states must be in its evidence</p><p>An analyst claim that cites an item which does not hold its number is refused, and kept with the reason.</p><a href="#ledger-table">Open any row below →</a></div>
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.2 7 21l5-2.5 5 2.5-1.5-7.8M10 9l1.5 1.5L14.5 7.5"/></svg>Three outside witnesses</p><p>The head is timestamped into Bitcoin, signed in the public Sigstore log by a GitHub workflow, and anchored on Sepolia. None of them is ours to rewrite.</p><a href="witnesses.html">Ask the witnesses →</a></div>
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 11h6M10 15h6M4 6v15h12"/></svg>A long public record, gaps included</p><p>Every decision is kept, the losing ones too, and every gap between runs is shown, never filled in.</p><a href="#stats">See the cadence →</a></div>
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 14 10M14 10l3-3 3 3-3 3zM9 4l1.5 3M4 9l3 1.5M15 14l2 5-5-2"/></svg>We attack our own verifier and publish the score</p><p>Edits, deletions, swaps, forged heads, a truncated tail and re-hashed history, on a copy of the ledger, every hour.</p><a href="witnesses.html#battery">See the score →</a></div>
-    </div>
-  </section>
-  <div class="stats-grid" id="hero-stats"><div class="stat"><div class="k">Loading</div><div class="v">…</div></div></div>
-  <figure class="hero-diagram"><img src="custody.svg" alt="Verdict Desk chain of custody: evidence, debate, validator, judge, dossier, anchored"></figure>
-</header>
-<p class="mut">Ledger: <code id="source"></code> <label>or open a file <input id="file" type="file" accept=".jsonl,.json,.txt"></label></p>
-<div id="banner" class="mut">Loading...</div>
-<section id="tamper" aria-labelledby="tamper-title">
-  <h2 id="tamper-title">Test the chain: break it yourself in 30 seconds</h2>
-  <p>The banner above is green because this tab just recomputed every hash from the ledger text. Press <b>Test the chain</b>: it tampers with one dossier in a copy held in this tab and verifies again. Nothing is uploaded, saved or downloaded.</p>
-  <div class="actions">
-    <button id="btn-tamper" class="primary" type="button" disabled>Test the chain</button>
-    <button id="btn-rehash" type="button" disabled>Tamper and re-hash</button>
-    <button id="btn-rewrite" type="button" disabled>Rewrite the whole chain</button>
-    <button id="btn-restore" type="button" disabled>Restore the real ledger</button>
-    <a id="dl" class="btn" download="ledger-tampered.jsonl" hidden>Download the tampered copy</a>
+  <p class="fine">Nothing to install and no account: these pages read the public ledger file and check it in your browser. No real-money order is ever placed.</p>
+
+  <a class="peek" id="peek" href="cycle.html" hidden aria-label="Open the latest cycle, call by call">
+    <div class="peek-head"><b id="peek-title">Latest cycle</b><span id="peek-meta"></span></div>
+    <div id="peek-strip"></div>
+    <ul class="legend" id="peek-legend"></ul>
+    <p class="peek-foot">Open this cycle call by call</p>
+  </a>
+</section>
+
+<section class="band" aria-labelledby="fig-title">
+  <h2 id="fig-title">The record in five figures</h2>
+  <div class="stat-grid" id="figs" aria-live="polite"><div class="fig" style="grid-column:1/-1"><span class="l">Loading the ledger...</span></div></div>
+  <p class="asof" id="asof"></p>
+</section>
+
+<section class="band" aria-labelledby="map-title">
+  <h2 id="map-title">Score map</h2>
+  <p class="section-note">Each line of the rubric, what we did about it, and where you can check it yourself. Status marks are counted from the audit of the ledger, not typed.</p>
+  <div class="map-wrap map"><table>
+    <thead><tr><th>Rubric line</th><th>What we did</th><th>Status and where to verify</th></tr></thead>
+    <tbody id="map-rows">
+      <tr data-res="1"><td>Open-weight models<small>30 points</small></td><td data-label="What we did">Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model.</td>
+        <td data-label="Status and where to verify"><span class="badge status" data-badge></span><ul><li><a href="cycle.html#board">Model scoreboard</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Proofs, row 1</a></li></ul></td></tr>
+      <tr data-res="2,3,4,6,7,8"><td>Otari features<small>10 points each, up to 6</small></td><td data-label="What we did">Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, and MCP.</td>
+        <td data-label="Status and where to verify"><span class="badge status" data-badge></span><ul><li><a href="cycle.html">Receipts with request ids</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Proofs, rows 2, 3, 4, 6, 7, 8</a></li></ul></td></tr>
+      <tr class="gap" data-res="5"><td>Guardrails<small>Not claimed</small></td><td data-label="What we did"><b>NOT PROVEN, and not claimed.</b> Attached to the <code>vd-judge</code> policy, but Otari reported <code>valid: null</code> on every call, so nothing was evaluated.</td>
+        <td data-label="Status and where to verify"><span class="badge status" data-badge></span><ul><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Proofs, row 5</a></li></ul></td></tr>
+      <tr><td>Working app<small>5 points</small></td><td data-label="What we did">One command records a cycle through Otari. <code>verify</code> and <code>replay</code> re-check the whole chain offline, and so does your browser.</td>
+        <td data-label="Status and where to verify"><span class="badge info status">Runs offline</span><ul><li><a href="verify.html">Verify a record</a></li><li><a href="cycle.html">One cycle, call by call</a></li></ul></td></tr>
+      <tr><td>Feedback to Otari<small>Our friction log</small></td><td data-label="What we did">Every real snag met with the gateway, with the symptom, the steps to reproduce and the status.</td>
+        <td data-label="Status and where to verify"><ul><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/docs/FEEDBACK_LOG.md" rel="noopener">docs/FEEDBACK_LOG.md</a></li></ul></td></tr>
+    </tbody></table></div>
+</section>
+
+<section class="band" aria-labelledby="try-title">
+  <h2 id="try-title">Check it yourself</h2>
+  <div class="steps">
+    <div class="card"><h3>Read a cycle</h3><p>Every model and tool call of one decision, as a receipt: model asked for and model that answered, provider, cost, latency, fallback, request id.</p><a class="btn" href="cycle.html">Open the timeline</a></div>
+    <div class="card"><h3>Check a record</h3><p>Paste a dossier. Your browser recomputes its hash, checks its link in the chain and re-derives the verdict from the frozen evidence.</p><a class="btn" href="verify.html">Open the verifier</a></div>
+    <div class="card"><h3>Replay the chain</h3><p>The whole ledger, offline, from a clone of the repository.</p><pre><code>python3 -m verdict_desk verify
+python3 -m verdict_desk replay</code></pre></div>
   </div>
-  <div class="scroll"><table id="mini" hidden><thead><tr><th>#</th><th>Symbol</th><th>Action</th><th>Integrity</th><th>Recorded hash</th><th>Recomputed here</th></tr></thead><tbody></tbody></table></div>
-  <div id="tamper-note" role="status" aria-live="polite" class="mut">Waiting for the ledger...</div>
-  <ul class="what">
-    <li><b>Test the chain</b> flips one decision in dossier <span class="t-seq">...</span>, in a copy held in this tab. The row turns red and the banner says the chain no longer verifies.</li>
-    <li><b>Tamper and re-hash</b> plays the cleverer attacker. The edited row looks valid again, but the next row no longer links to it: <em>chain broken</em>.</li>
-    <li><b>Rewrite the whole chain</b> shows the limit. Everything verifies again, but the head hash is different. That is why the head is published outside the operator's reach.</li>
-  </ul>
-  <details>
-    <summary>Or edit a decision by hand</summary>
-    <p class="mut">Pick a dossier, change any character of its verdict (the action, the edge, a price) and press verify. The recorded hash stays as it was, so the page can tell.</p>
-    <p><label>Dossier <select id="h-seq"></select></label></p>
-    <textarea id="h-text" rows="14" spellcheck="false" aria-label="Verdict of the selected dossier, as JSON"></textarea>
-    <p><button id="h-go" type="button" disabled>Verify my edit</button></p>
-  </details>
-  <p class="mut">Outside this page: download the tampered copy and run <code>python3 -m verdict_desk --ledger ledger-tampered.jsonl verify</code>, or open the file with the file picker above. The Python verifier reports the same dossier.</p>
 </section>
-<section class="stats" id="stats" hidden>
-  <h2>Cadence of the live history</h2>
-  <p id="cadence" class="mut"></p>
-  <h2>LLM debate and the citation validator</h2>
-  <p id="llmera" class="mut"></p>
-  <p id="llmearly" class="mut"></p>
-  <h2>Market voices (narrative agent)</h2>
-  <p id="narrative" class="mut"></p>
-  <h2>Simulated portfolio (start capital 10,000, risk 1% per position, fees not included)</h2>
-  <p id="portfolio" class="mut"></p>
-  <div id="positions"></div>
-</section>
-<div class="scroll"><table id="ledger-table"><thead><tr><th>#</th><th>Symbol</th><th>Action</th><th>Edge</th><th>LLM claims</th><th>Integrity</th><th>Hash</th></tr></thead><tbody id="rows"></tbody></table></div>
-<section id="detail" hidden></section>
-<script src="canonical.js"></script>
-<script src="stats.js"></script>
+
+<aside class="earlier" aria-labelledby="earlier-title">
+  <p id="earlier-title"><b>Earlier era.</b> <span id="earlier-note">Before Otari, this project recorded its first dossiers with other providers and no gateway receipts.</span> The chain was continued, not restarted, and the pages below still read it.</p>
+  <ul><li><a href="dashboard.html">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="learn.html">Learn</a></li></ul>
+</aside>
+
+</main>
+<!-- shell:footer:start -->
+<footer class="site-footer"><p>Verdict Desk on Otari decides on paper trades only. No real-money order is ever placed.</p><ul><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari" rel="noopener">Source (branch otari)</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/docs/FEEDBACK_LOG.md" rel="noopener">Feedback to Otari</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Proofs table</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/LICENSE" rel="noopener">MIT license</a></li></ul><p>Built by Andri Amaro with the help of an AI coding agent (Claude Code). The AI assistance is disclosed here on purpose.</p></footer>
+<!-- shell:footer:end -->
+
+<script src="cycle.js"></script>
 <script>
-"use strict";
-const $ = (id) => document.getElementById(id);
-const params = new URLSearchParams(location.search);
-const defaultSource = params.get("ledger") || "ledger/ledger.jsonl";
-// The last ledger that verified cleanly (the server's file or one the visitor opened): the tamper buttons work on a copy of it.
-const state = { real: null, downloadUrl: null };
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const C = window.VerdictCycle;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // Relative paths only: the repository root served as the site first, then a site rooted at web/ with the ledger beside the pages.
+  const LEDGER_PATHS = ["../ledger/ledger.jsonl", "ledger/ledger.jsonl"];
+  const FIGURES_PATHS = ["otari-figures.json", "web/otari-figures.json"];
+  const ROLE_NAMES = { bull: "Bull", bear: "Bear", judge: "Judge", checker: "Checker", narrator: "Narrator", searcher: "Tools", fetcher: "Tools", mcp: "Tools", sandbox: "Tools", canary: "Canary" };
 
-function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
-const parseLedger = (text) => text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
-const dumpLedger = (list) => list.map((d) => JSON.stringify(d)).join("\n") + "\n";
-const short = (h, n) => (h || "").slice(0, n || 12);
-
-function render(result, name) {
-  $("source").textContent = name;
-  const rows = $("rows"); rows.replaceChildren(); $("detail").hidden = true;
-  for (const r of result.rows.slice().reverse()) {
-    const d = r.dossier, tr = document.createElement("tr");
-    const claims = d.llm ? ((d.llm.bull.error && d.llm.bear.error) ? "model call failed" : (d.llm.bull.accepted || []).length + (d.llm.bear.accepted || []).length) : "off";
-    const ok = r.linked && r.intact;
-    for (const [v, cls] of [[d.seq], [d.evidence.symbol], [d.verdict.action, d.verdict.action], [d.verdict.edge], [claims], [ok ? "verified" : (r.intact ? "chain broken" : "ALTERED"), ok ? "ok" : "bad"], [d.hash.slice(0, 16)]]) {
-      tr.appendChild(el("td", v, cls));
+  async function firstOk(paths) {
+    for (const p of paths) {
+      try { const res = await fetch(p, { cache: "no-store" }); if (res.ok) return await res.text(); } catch (e) { /* try the next */ }
     }
-    if (!ok) tr.classList.add("flagged");
-    tr.addEventListener("click", () => showDetail(r));
-    rows.appendChild(tr);
+    return null;
   }
-  renderStats(result.rows.map((r) => r.dossier), result.problems.length > 0);
-  // Highlight the latest dossier row
-  const latestRow = rows.querySelector("tr");
-  if (latestRow) latestRow.classList.add("latest");
-  const banner = $("banner");
-  banner.className = result.problems.length ? "bad" : "ok";
-  banner.textContent = result.problems.length
-    ? `${result.rows.length} dossiers. PROBLEMS: ${result.problems.join("; ")}`
-    : `${result.rows.length} dossiers. Every hash recomputed in this browser matches and every link in the chain is consistent.`;
-}
 
-function renderHero(dossiers, broken, e, nar, p) {
-  const grid = $("hero-stats");
-  if (!grid) return;
-  const card = (k, v, sub) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
-  // the whole ledger, so the card matches the scoreboard (the era stats below start at the first working LLM dossier)
-  const all = VerdictStats.llmEra(dossiers, 1);
-  const accepted = all.accepted, rejected = all.rejected;
-  const winRate = (p && p.win_rate_pct !== null && p.win_rate_pct !== undefined) ? p.win_rate_pct + "%" : "·";
-  const dd = p ? p.max_drawdown_pct + "%" : "·";
-  const committed = dossiers.filter((d) => d.verdict.action === "LONG" || d.verdict.action === "SHORT").length;
-  grid.innerHTML =
-    card("Dossiers", dossiers.length, "hash-chained, one per hour") +
-    card("Integrity", broken ? "broken" : "verified", broken ? "a check failed" : "every hash recomputes here") +
-    card("Positions", committed + " / " + dossiers.length, "sized LONG or SHORT; the rest name what would flip them") +
-    card("LLM claims", `${accepted} / ${accepted + rejected}`, `${rejected} refused for bad citations`) +
-    card("Narratives", nar.convergences, `${nar.voices} voices · ${nar.tokens.join(", ") || "no token yet"}`) +
-    card("Win rate", winRate, `max drawdown ${dd} · simulated`) +
-    card("Anchored", "Sepolia + Bitcoin", "independent third-party clock");
-}
-
-function renderStats(dossiers, broken) {
-  const box = $("stats");
-  if (!dossiers.length) { box.hidden = true; return; }
-  box.hidden = false;
-  const c = VerdictStats.cadence(dossiers);
-  const per = Object.keys(c.per_symbol).sort().map((k) => `${k} ${c.per_symbol[k]}`).join(", ");
-  const gap = c.longest_gap_minutes >= 60 ? `${Math.floor(c.longest_gap_minutes / 60)} h ${c.longest_gap_minutes % 60} min` : `${c.longest_gap_minutes} min`;
-  $("cadence").textContent = `${c.total} dossiers (${per}) from ${c.first} to ${c.last}, a window of ${c.window_hours} h (${c.window_days} days). ${c.clock_hours_with_records} of ${c.clock_hours_in_window} clock hours (UTC) in that window have at least one dossier (${c.coverage_pct}%). Longest gap between consecutive dossiers of the same symbol: ${gap}${c.longest_gap_symbol ? " (" + c.longest_gap_symbol + ")" : ""}. Gaps over 90 minutes: ${c.gaps_over_90_minutes}. A scheduled run that GitHub delayed or skipped shows up here; nothing is filled in.`;
-  const era = renderLlm(dossiers);
-  if (broken) {
-    $("portfolio").textContent = "Not computed: this ledger failed verification, so nothing derived from it can be trusted.";
-    $("positions").replaceChildren();
-    renderHero(dossiers, true, era.e, era.nar, null);
-    return;
+  function drawFigures(items, note) {
+    $("figs").innerHTML = items.map((f) => `<div class="fig${/not proven/.test(f.sub) ? " warn-fig" : ""}"><span class="v">${esc(f.value)}</span><span class="l">${esc(f.label)}</span><span class="s">${esc(f.sub)}</span></div>`).join("");
+    $("asof").textContent = note;
   }
-  const p = VerdictStats.portfolio(dossiers);
-  $("portfolio").textContent = `${p.decisions} decisions, ${p.flat} opened no position (flat or declined), ${p.positions.length} simulated positions (${p.closed} closed, ${p.open} open). Win rate ${p.win_rate_pct === null ? "n/a" : p.win_rate_pct + "%"}, realized ${p.realized_pnl.toFixed(2)}, unrealized ${p.unrealized_pnl.toFixed(2)}, max drawdown ${p.max_drawdown_pct}%. Decisions are simulated; no real orders are placed. Recomputed in this browser from the ledger with the same rule as portfolio.py.`;
-  const holder = $("positions");
-  holder.replaceChildren();
-  if (!p.positions.length) { holder.appendChild(el("p", "No position has been opened yet: every decision so far stayed flat.", "mut")); return; }
-  const table = document.createElement("table");
-  const head = document.createElement("tr");
-  for (const h of ["#", "Symbol", "Action", "Entry", "Status", "Exit or mark", "P&L", "Bars"]) head.appendChild(el("th", h));
-  table.appendChild(head);
-  for (const x of p.positions) {
-    const tr = document.createElement("tr");
-    for (const [v, cls] of [[x.seq], [x.symbol], [x.action, x.action], [x.entry], [x.status], [x.exit], [x.pnl, x.pnl >= 0 ? "ok" : "bad"], [x.bars]]) tr.appendChild(el("td", v, cls));
-    table.appendChild(tr);
-  }
-  holder.appendChild(table);
-  renderHero(dossiers, broken, era.e, era.nar, p);
-}
 
-// Same counts as `python3 -m verdict_desk stats`: the README quotes that command, this panel shows the live ledger.
-function renderLlm(dossiers) {
-  const e = VerdictStats.llmEra(dossiers);
-  const pct = e.accepted_pct === null ? "n/a" : e.accepted_pct + "%";
-  const reasons = Object.keys(e.rejection_reasons).sort().map((k) => `${k}: ${e.rejection_reasons[k]}`).join("; ") || "none";
-  const failed = e.sides.bull.errors + e.sides.bear.errors;
-  const none = e.dossiers_without_llm.length ? `Dossiers with no LLM layer at all: ${e.dossiers_without_llm.join(", ")}.` : "Every dossier in this range has an LLM layer.";
-  $("llmera").textContent = `From dossier ${e.first_seq} on (the first with working LLM analysts): ${e.dossiers} dossiers, ${e.dossiers_with_analysts} with analyst output. The citation validator accepted ${e.accepted} claims and rejected ${e.rejected} (${pct} accepted). Bull: ${e.sides.bull.accepted} accepted, ${e.sides.bull.rejected} rejected. Bear: ${e.sides.bear.accepted} accepted, ${e.sides.bear.rejected} rejected. Rejections by reason: ${reasons}. Failed analyst calls: ${failed}. ${none}`;
-  const early = e.first_seq > 1 ? VerdictStats.llmEra(dossiers, 1, e.first_seq - 1) : null;
-  const nar = VerdictStats.narrative(dossiers);
-  $("narrative").textContent = `From ${nar.dossiers} dossiers: ${nar.headlines} headlines across ${nar.voices} distinct voices, ${nar.convergences} convergences on ${nar.tokens.length} token${nar.tokens.length === 1 ? "" : "s"} (${nar.tokens.join(", ") || "none yet"}), and ${nar.rejected} mentions recorded as rejected with the reason why no narrative formed.`;
-  if (!early || !early.dossiers) { $("llmearly").textContent = ""; return { e, nar }; }
-  const earlyFailed = early.sides.bull.errors + early.sides.bear.errors;
-  $("llmearly").textContent = `Dossiers 1 to ${e.first_seq - 1} stay exactly as recorded: ${early.dossiers_without_llm.length} had no LLM layer, ${earlyFailed} analyst calls failed, and the analysts that did answer had ${early.accepted} claims accepted and ${early.rejected} rejected.`;
-  return { e, nar };
-}
-
-function list(parent, title, items) {
-  parent.appendChild(el("h2", title));
-  const ul = document.createElement("ul");
-  for (const text of items.length ? items : ["none"]) ul.appendChild(el("li", text));
-  parent.appendChild(ul);
-}
-
-function showDetail(r) {
-  const d = r.dossier, box = $("detail"); box.replaceChildren(); box.hidden = false;
-  box.appendChild(el("h2", `Dossier #${d.seq}: ${d.evidence.symbol} ${d.verdict.action}`));
-  const exLink = document.createElement("a");
-  exLink.href = `exhibit/exhibit-${d.seq}.html`;
-  exLink.className = "btn";
-  exLink.style.marginBottom = "8px";
-  exLink.textContent = "Open this decision as a printable exhibit →";
-  box.appendChild(exLink);
-  box.appendChild(el("p", d.verdict.rationale));
-  const e = d.evidence;
-  box.appendChild(el("p", `Evidence collected ${e.collected_at}. Candles: ${e.market.source}. Funding: ${e.funding.source}.`, "mut"));
-  const sens = d.sensitivity;
-  if (sens) {
-    const drops = sens.drop_one.map((x) => `Without the ${x.side} argument "${x.claim}" (weight ${x.weight}): edge ${x.edge_without}, verdict ${x.action_without}${x.flips ? " (this alone flips the verdict)" : ""}`);
-    list(box, `What would change this verdict: ${sens.needs_for_long} more net edge for LONG, ${sens.needs_for_short} more for SHORT`, drops);
+  function drawPeek(ledger) {
+    const era = C.era(ledger);
+    if (!era.length) return;
+    const d = era[era.length - 1];
+    const calls = C.callsOf(d), lay = C.layout(calls);
+    let micros = 0n;
+    for (const c of calls) micros += C.microsOf(c.receipt.cost_usd) || 0n;
+    $("peek").href = "cycle.html?seq=" + encodeURIComponent(d.seq);
+    $("peek-title").textContent = `Latest cycle: dossier #${d.seq} ${(d.evidence || {}).symbol || ""} ${(d.verdict || {}).action || ""}`.replace(/\s+/g, " ").trim();
+    $("peek-meta").textContent = `${calls.length} calls, ${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " s from first call to last answer, " : ""}$${C.microsText(micros)} on the receipts`;
+    $("peek-strip").innerHTML = C.stripHtml(calls, lay);
+    const seen = new Map();
+    for (const c of calls) { const name = ROLE_NAMES[c.label] || c.label; const e = seen.get(name) || { cls: C.roleClass(c.label), n: 0 }; e.n += 1; seen.set(name, e); }
+    $("peek-legend").innerHTML = [...seen].map(([name, e]) => `<li class="${e.cls}"><span class="sw"></span><b>${esc(name)}</b> ${e.n}</li>`).join("");
+    $("peek").hidden = false;
   }
-  if (e.origin) box.appendChild(el("p", `Origin: ${e.origin.kind}, journal turn ${e.origin.turn_id} (the agent itself did: ${e.origin.automaton_decision}). Shadow replay, not a trade result.`, "mut"));
-  const n = e.narrative;
-  if (n) {
-    const accepted = n.extractions || [], rejected = n.rejected || [];
-    list(box, `Narrative agent (${n.method}${n.model ? ", " + n.model : ""}): ${(n.voices || []).length} headlines, ${accepted.length} extractions accepted, ${rejected.length} rejected by the grounding gate`,
-      (n.convergence || []).map((c) => `Convergence: ${c.token} ${c.bias} across ${c.voices.join(", ")}${c.max_conviction ? ` (top conviction ${c.max_conviction}, top urgency ${c.max_urgency})` : ""}`));
-    if (n.llm_error) box.appendChild(el("p", `The model call failed (${n.llm_error}); keyword fallback used.`, "bad"));
-    list(box, "Accepted extractions", accepted.map((x) => `${x.name}: ${x.tokens.join("/")} ${x.stance}, conviction ${x.conviction}, urgency ${x.urgency}, quote "${x.quote}"`));
-    if (rejected.length) list(box, "Rejected extractions", rejected.map((x) => `REJECTED (${x.rejected_because}): ${x.voice} ${JSON.stringify(x.quote || "")}`));
+
+  function drawMap(payload) {
+    const byN = new Map(((payload || {}).resources || []).map((r) => [r.n, r]));
+    document.querySelectorAll("#map-rows tr[data-res]").forEach((tr) => {
+      const badge = tr.querySelector("[data-badge]");
+      const ns = tr.dataset.res.split(",").map(Number);
+      const rows = ns.map((n) => byN.get(n)).filter(Boolean);
+      if (!badge || rows.length !== ns.length) { if (badge) badge.remove(); return; }
+      const pass = rows.filter((r) => r.status === "PASS").length;
+      badge.className = "badge status " + (pass === rows.length ? "ok" : pass === 0 ? "warn" : "info");
+      badge.textContent = rows.length === 1 ? (pass ? "PASS" : "NOT PROVEN") : `${pass} of ${rows.length} proven`;
+    });
   }
-  list(box, "Bull arguments (deterministic rules)", d.bull.map((a) => `${a.claim} [${a.evidence_ref} = ${JSON.stringify(a.value)}, weight ${a.weight}]`));
-  list(box, "Bear arguments (deterministic rules)", d.bear.map((a) => `${a.claim} [${a.evidence_ref} = ${JSON.stringify(a.value)}, weight ${a.weight}]`));
-  if (d.llm) {
-    const idx = d.llm.evidence_index || {};
-    for (const side of ["bull", "bear"]) {
-      const accepted = d.llm[side].accepted || [], rejected = d.llm[side].rejected || [];
-      if (d.llm[side].error) box.appendChild(el("p", `The ${side} analyst call failed and nothing was recorded for it: ${d.llm[side].error}`, "bad"));
-      list(box, `${side} analyst (LLM ${d.llm.model}): ${accepted.length} accepted, ${rejected.length} rejected by the citation validator`,
-        accepted.map((c) => `${c.claim} cites ${c.cites.map((id) => `${id}: "${idx[id]}"`).join("; ")}`)
-          .concat(rejected.map((c) => `REJECTED (${c.rejected_because}): ${c.claim}`)));
+
+  (async () => {
+    const [ledgerText, figText] = await Promise.all([firstOk(LEDGER_PATHS), firstOk(FIGURES_PATHS)]);
+    let payload = null;
+    try { payload = figText ? JSON.parse(figText) : null; } catch (e) { payload = null; }
+    let ledger = null;
+    try { ledger = ledgerText ? ledgerText.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)) : null; } catch (e) { ledger = null; }
+    const live = ledger && C.era(ledger).length ? C.figures(ledger) : null;
+    if (live) {
+      const proven = payload ? payload.figures.find((f) => /proven/.test(f.label)) : null;
+      const items = [
+        { value: live.dossiers, label: "Otari-era dossiers", sub: `${live.first} to ${live.last}` },
+        { value: live.receipts, label: "sealed receipts", sub: "one per model or tool call" },
+        { value: live.routes, label: "provider:model routes", sub: "answered, all open weight" },
+        proven ? { value: proven.value, label: proven.label, sub: proven.sub } : { value: "n/a", label: "resources proven", sub: "audit file not served here" },
+        { value: live.backups, label: "backup-route answers", sub: "canary plus real traffic" },
+      ];
+      const stale = payload && payload.asof !== live.last ? ` Resources proven are audited as of dossier ${payload.asof}.` : "";
+      drawFigures(items, `As of dossier ${live.last}. Counted in your browser from the published ledger.${stale}`);
+      drawPeek(ledger);
+      $("earlier-note").textContent = `Dossiers 1 to ${live.first - 1} were recorded before Otari, by the earlier version of this project, with other providers and no gateway receipts.`;
+    } else if (payload) {
+      drawFigures(payload.figures, `As of dossier ${payload.asof}, from otari-figures.json. The ledger file is not served next to this page, so the figures were not recounted here.`);
+    } else {
+      $("figs").innerHTML = `<div class="fig" style="grid-column:1/-1"><span class="l">The ledger is not served next to this page.</span><span class="s">Serve the repository root (python3 -m http.server) and open web/index.html.</span></div>`;
     }
-  }
-  box.appendChild(el("h2", "Integrity"));
-  box.appendChild(el("p", `Recorded hash ${d.hash}`, "mut")); box.appendChild(el("p", `Recomputed here ${r.recomputed}`, "mut"));
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-/* ---- Tamper lab: every action works on a copy of the verified ledger held in this tab ---- */
-
-const FLIP = { FLAT: "LONG", LONG: "SHORT", SHORT: "FLAT" };
-
-async function rehash(d) {
-  const body = {};
-  Object.keys(d).forEach((k) => { if (k !== "hash") body[k] = d[k]; });
-  d.hash = await VerdictDesk.webSha256(VerdictDesk.canonical(body));
-}
-
-// The second newest dossier: the one after it exists, so a broken link is visible in the first rows of the table.
-const targetIndex = () => (state.real ? state.real.list.length - 2 : -1);
-
-function setTamperUi(canTamper, tampered) {
-  for (const b of ["btn-tamper", "btn-rehash", "btn-rewrite"]) $(b).disabled = !canTamper;
-  $("btn-restore").disabled = !tampered;
-  $("h-go").disabled = !canTamper;
-  if (!tampered) { $("dl").hidden = true; $("mini").hidden = true; }
-}
-
-function setDownload(text) {
-  if (state.downloadUrl) URL.revokeObjectURL(state.downloadUrl);
-  state.downloadUrl = URL.createObjectURL(new Blob([text], { type: "application/x-ndjson" }));
-  $("dl").href = state.downloadUrl;
-  $("dl").hidden = false;
-}
-
-function renderMini(result, k) {
-  const body = $("mini").querySelector("tbody"); body.replaceChildren();
-  for (let i = Math.max(0, k - 1); i <= Math.min(result.rows.length - 1, k + 1); i++) {
-    const r = result.rows[i], d = r.dossier, ok = r.linked && r.intact, tr = document.createElement("tr");
-    for (const [v, cls] of [[d.seq], [d.evidence.symbol], [d.verdict.action, d.verdict.action], [ok ? "verified" : (r.intact ? "chain broken" : "ALTERED"), ok ? "ok" : "bad"], [short(d.hash), r.intact ? "" : "bad"], [short(r.recomputed), r.intact ? "" : "bad"]]) tr.appendChild(el("td", v, cls));
-    if (!ok) tr.classList.add("flagged");
-    body.appendChild(tr);
-  }
-  $("mini").hidden = false;
-}
-
-async function showTampered(list, k, summary, after) {
-  const text = dumpLedger(list);
-  const result = await VerdictDesk.verifyLedger(text, VerdictDesk.webSha256);
-  render(result, "tampered copy in this tab (the server's file is untouched)");
-  setTamperUi(true, true);
-  setDownload(text);
-  renderMini(result, k);
-  const note = $("tamper-note");
-  note.className = result.problems.length ? "bad" : "ok";
-  note.textContent = `${summary} ${result.problems.length ? "The chain no longer verifies: " + result.problems.join("; ") + "." : "The chain verifies again: no problem found."}${after ? " " + after : ""}`;
-  return result;
-}
-
-async function tamper(level) {
-  if (!state.real || state.real.list.length < 2) return;
-  const list = JSON.parse(JSON.stringify(state.real.list)), k = targetIndex(), d = list[k];
-  const before = d.verdict.action, after = FLIP[before] || "FLAT";
-  d.verdict.action = after;
-  const what = `Changed dossier #${d.seq} (${d.evidence.symbol}): verdict.action ${before} -> ${after}.`;
-  if (level === 1) {
-    return showTampered(list, k, `${what} Its recorded hash ${short(d.hash, 8)} no longer matches what this browser recomputes.`);
-  }
-  await rehash(d);
-  if (level === 2) {
-    return showTampered(list, k, `${what} Then re-hashed it, so it verifies again, but dossier #${list[k + 1].seq} still points to the old hash ${short(state.real.list[k].hash, 8)}, so the chain breaks there.`);
-  }
-  for (let i = k + 1; i < list.length; i++) { list[i].prev_hash = list[i - 1].hash; await rehash(list[i]); }
-  const oldHead = state.real.list[state.real.list.length - 1].hash, newHead = list[list.length - 1].hash;
-  const result = await showTampered(list, k, `${what} Then re-hashed it and every dossier after it (${list.length - k} in total). The head hash is now ${short(newHead, 16)} instead of ${short(oldHead, 16)} (first 16 characters of each).`,
-    "Only a copy of the head that the operator does not control (git history, other clones, an on-chain anchor) can expose this rewrite.");
-  return result;
-}
-
-async function handEdit() {
-  if (!state.real) return;
-  const idx = Number($("h-seq").value);
-  let verdict;
-  try { verdict = JSON.parse($("h-text").value); } catch (err) {
-    $("tamper-note").className = "bad"; $("tamper-note").textContent = `That is not valid JSON (${err.message}). Fix it and press verify again.`; return;
-  }
-  const list = JSON.parse(JSON.stringify(state.real.list)), d = list[idx];
-  if (JSON.stringify(verdict) === JSON.stringify(d.verdict)) {
-    $("tamper-note").className = "mut"; $("tamper-note").textContent = "Nothing changed, so there is nothing to detect. Change a character in the box and press verify again."; return;
-  }
-  d.verdict = verdict;
-  await showTampered(list, idx, `Edited the verdict of dossier #${d.seq} (${d.evidence.symbol}) by hand.`);
-}
-
-function fillHandEdit() {
-  const select = $("h-seq"); select.replaceChildren();
-  const list = state.real.list;
-  if (!list.length) { $("h-text").value = ""; return; }
-  for (let i = list.length - 1; i >= 0; i--) { const o = el("option", `#${list[i].seq} ${list[i].evidence.symbol}`); o.value = i; select.appendChild(o); }
-  select.value = targetIndex() >= 0 ? targetIndex() : 0;
-  $("h-text").value = JSON.stringify(list[Number(select.value)].verdict, null, 2);
-}
-
-async function restore() {
-  if (!state.real) return;
-  await load(state.real.text, state.real.name);
-  $("tamper-note").className = "mut";
-  $("tamper-note").textContent = "Restored: this is the real ledger again, verified again from scratch.";
-}
-
-function armTamperLab(result, text, name) {
-  // Only a ledger that verifies cleanly becomes the base for tampering.
-  if (result.problems.length) return false;
-  const list = result.rows.map((r) => r.dossier);
-  state.real = { text, name, list };
-  document.querySelectorAll(".t-seq").forEach((s) => { s.textContent = list.length >= 2 ? "#" + list[targetIndex()].seq : "(needs 2+ dossiers)"; });
-  fillHandEdit();
-  setTamperUi(list.length >= 2, false);
-  $("tamper-note").className = "mut";
-  $("tamper-note").textContent = list.length >= 2 ? "Ready. Nothing here touches the server or your disk." : "This ledger has fewer than two dossiers, so there is nothing to tamper with yet.";
-  return true;
-}
-
-async function load(text, name) {
-  try {
-    const result = await VerdictDesk.verifyLedger(text, VerdictDesk.webSha256);
-    render(result, name);
-    if (!armTamperLab(result, text, name)) {
-      setTamperUi(!!state.real, !!state.real);
-      $("mini").hidden = true; $("dl").hidden = true;
-      $("tamper-note").className = "bad";
-      $("tamper-note").textContent = "This file fails verification, which is exactly what the page is for. " + (state.real ? "Press restore to go back to the real ledger." : "Open a clean ledger to try the tamper buttons.");
-    }
-  } catch (err) { $("banner").className = "bad"; $("banner").textContent = "Could not verify this ledger: " + err; }
-}
-
-$("btn-tamper").addEventListener("click", () => tamper(1));
-$("btn-rehash").addEventListener("click", () => tamper(2));
-$("btn-rewrite").addEventListener("click", () => tamper(3));
-$("btn-restore").addEventListener("click", restore);
-$("h-go").addEventListener("click", handEdit);
-$("h-seq").addEventListener("change", () => { $("h-text").value = JSON.stringify(state.real.list[Number($("h-seq").value)].verdict, null, 2); });
-$("file").addEventListener("change", async (ev) => { const f = ev.target.files[0]; if (f) load(await f.text(), f.name); });
-fetch(defaultSource).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
-  .then((t) => load(t, defaultSource))
-  .catch((err) => { $("source").textContent = defaultSource; $("banner").textContent = "Could not load " + defaultSource + " (" + err + "). Open a ledger file above."; $("tamper-note").textContent = "Open a ledger file above to try the tamper buttons on it."; });
-</script></body></html>
+    drawMap(payload);
+  })();
+})();
+</script>
+</body></html>

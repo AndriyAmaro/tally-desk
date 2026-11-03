@@ -48,7 +48,7 @@ AUTHOR = ("AndriyAmaro", "177476258+AndriyAmaro@users.noreply.github.com")
 # Built in two pieces so that this very file never contains the prefix: the scan below is a git grep over the whole tree.
 KEY_PREFIX = "otk" + "_"
 FAILED_CYCLE_ESTIMATE_USD = Decimal("0.08")  # a cycle that failed before any dossier says what it spent: counted at its two caps together (0.02 core + 0.06 tools)
-PATHS = ["ledger/ledger.jsonl", "ledger/head.json", "ledger/head-dossier.json", "ledger/timestamps", "README.md", "docs/readme/otari-figures.svg"]
+PATHS = ["ledger/ledger.jsonl", "ledger/head.json", "ledger/head-dossier.json", "ledger/timestamps", "README.md", "docs/readme/otari-figures.svg", "web/otari-figures.json"]
 
 
 class Stop(Exception):
@@ -178,7 +178,7 @@ class Runner:
 
     def restore(self) -> None:
         """Throws away what a failed cycle left: the appended dossier, its head files, a new stamp, a rewritten README."""
-        self.sh(["git", "checkout", "--", "ledger", "README.md", "docs/readme/otari-figures.svg"])
+        self.sh(["git", "checkout", "--", "ledger", "README.md", "docs/readme/otari-figures.svg", "web/otari-figures.json"])
         self.sh(["git", "clean", "-fq", "--", "ledger/timestamps"])
 
     def cycle(self, state: dict, key: str) -> dict:

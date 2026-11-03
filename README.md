@@ -5,9 +5,10 @@
   <img src="docs/readme/otari-figures.svg" width="100%" alt="Figures counted from the ledger: Otari-era dossiers, sealed receipts, provider and model routes that answered, resources proven, backup-route answers">
 </p>
 <p align="center">
-  <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="42" alt="Call-by-call view"></a>
-  <a href="#proofs-resource-by-resource"><img src="docs/readme/otari-button-audit.svg" height="42" alt="Proofs table"></a>
-  <a href="docs/FEEDBACK_LOG.md"><img src="docs/readme/otari-button-feedback.svg" height="42" alt="Feedback to Otari"></a>
+  <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="40" alt="Call-by-call view"></a>
+  <a href="web/verify.html"><img src="docs/readme/otari-button-verify.svg" height="40" alt="Verify a record"></a>
+  <a href="#proofs-resource-by-resource"><img src="docs/readme/otari-button-audit.svg" height="40" alt="Proofs table"></a>
+  <a href="docs/FEEDBACK_LOG.md"><img src="docs/readme/otari-button-feedback.svg" height="40" alt="Feedback to Otari"></a>
 </p>
 
 **Verdict Desk decides on paper trades and answers for every model call it makes.** Each call goes through the [Otari](https://otari.ai) gateway, each role runs on an open-weight model, and each call leaves a receipt (who asked, which model answered through which provider, what it cost, how it stopped) sealed in a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
@@ -34,7 +35,7 @@ python3 -m verdict_desk otari-audit --reconcile   # the eight resources, and eac
 python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 ```
 
-[`web/cycle.html`](web/cycle.html) shows one cycle call by call: a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models. It is a static page, so serve the repository as above to see it rendered.
+[`web/index.html`](web/index.html) is the landing page (live figures, the score map, the latest cycle as one strip). [`web/cycle.html`](web/cycle.html) shows one cycle call by call: a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models. It is a static page, so serve the repository as above to see it rendered.
 
 ## One ledger, two eras
 

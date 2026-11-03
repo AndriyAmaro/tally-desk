@@ -61,12 +61,12 @@ def card_reference_problems() -> list[str]:
     'Positions', the judge page still said 'the Commits card' and nothing failed — a dead link that
     only a reader would notice. This makes it a build failure instead.
     """
-    labels = set(CARD_LABEL.findall((ROOT / "web" / "index.html").read_text(encoding="utf-8")))
+    labels = set(CARD_LABEL.findall((ROOT / "web" / "dashboard.html").read_text(encoding="utf-8")))
     problems = []
     for page in sorted((ROOT / "web").glob("*.html")):
         for name in CARD_REFERENCE.findall(page.read_text(encoding="utf-8")):
             if name not in labels:
-                problems.append(f"{page.relative_to(ROOT)} names the '{name}' card, which index.html does not draw (it draws {sorted(labels)})")
+                problems.append(f"{page.relative_to(ROOT)} names the '{name}' card, which dashboard.html does not draw (it draws {sorted(labels)})")
     return problems
 
 

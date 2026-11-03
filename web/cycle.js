@@ -178,5 +178,33 @@
     return { seq: d.seq, gateway, providers: rows };
   }
 
-  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText };
+  /* Role -> the class that carries its color (web/theme.css: --role-*). The role name is always printed next to the color. */
+  const ROLE_CLASS = { bull: "r-bull", bear: "r-bear", judge: "r-judge", checker: "r-checker", narrator: "r-narrator", searcher: "r-tool", fetcher: "r-tool", mcp: "r-tool", sandbox: "r-tool", canary: "r-canary" };
+  const roleClass = (label) => ROLE_CLASS[label] || "r-narrator";
+  const escText = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* The whole cycle as one strip: each call is a bar in the color of its role, placed where it began (or in order when the dossier predates
+   * start offsets). Used on the landing page and at the top of the timeline. A call with no duration draws nothing. */
+  function stripHtml(calls, lay) {
+    const bars = calls.map((c, i) => ({ c, b: lay.bars[i] })).filter((e) => e.b.durationMs != null);
+    const spans = bars.map((e) => `<i class="${roleClass(e.c.label)}" style="left:${e.b.leftPct}%;width:${e.b.widthPct}%" title="${escText(e.c.label)}: ${e.b.durationMs} ms"></i>`).join("");
+    const roles = [...new Set(calls.map((c) => c.label))].join(", ");
+    return `<div class="strip" role="img" aria-label="${calls.length} calls over ${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " seconds" : "one cycle"}: ${escText(roles)}">${spans}</div>`;
+  }
+
+  /* The four figures of the README card that the ledger alone can give; the same counts as scripts/otari_cards.py (tests/home.test.js checks it). */
+  function figures(ledger) {
+    const dossiers = era(ledger);
+    const rows = board(ledger);
+    return {
+      dossiers: dossiers.length,
+      first: dossiers.length ? dossiers[0].seq : null,
+      last: dossiers.length ? dossiers[dossiers.length - 1].seq : null,
+      receipts: dossiers.reduce((t, d) => t + callsOf(d).length, 0),
+      routes: rows.filter((r) => r.ok && !r.model.startsWith("(no answer)")).length,
+      backups: rows.reduce((t, r) => t + r.fallbacks, 0),
+    };
+  }
+
+  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures };
 });
