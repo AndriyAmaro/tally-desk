@@ -1,10 +1,30 @@
-# Verdict Desk on Otari: a trustworthy agent, open models only, a receipt for every call
+<p align="center">
+  <a href="web/cycle.html"><img src="docs/readme/otari-header.svg" width="100%" alt="Verdict Desk on Otari: a paper-trading agent whose every model call goes through the Otari gateway and leaves a receipt that anyone can re-verify offline"></a>
+</p>
+<p align="center">
+  <img src="docs/readme/otari-figures.svg" width="100%" alt="Figures counted from the ledger: Otari-era dossiers, sealed receipts, provider and model routes that answered, resources proven, backup-route answers">
+</p>
+<p align="center">
+  <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="42" alt="Call-by-call view"></a>
+  <a href="#proofs-resource-by-resource"><img src="docs/readme/otari-button-audit.svg" height="42" alt="Proofs table"></a>
+  <a href="docs/FEEDBACK_LOG.md"><img src="docs/readme/otari-button-feedback.svg" height="42" alt="Feedback to Otari"></a>
+</p>
 
-An agent that decides on paper trades must answer for every model call it makes. Here every call goes through the [Otari](https://otari.ai) gateway, each role runs on an **open-weight model**, and **each call leaves a receipt** (who asked, which model answered through which provider, what it cost, how it stopped) sealed in a hash-chained ledger that anyone can re-verify and replay offline.
-Every cycle also proves two Otari features from inside the app: a **failover canary** shows the backup route working before the judge is trusted with it, and the cycle reads Otari's own **spend state** per end user, so the judge may use the costlier model only while its budget has room.
-Receipts are checked against Otari's own usage log with free GET calls: the latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows (the 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key). Paper trading only: no real-money order is ever placed.
+**Verdict Desk decides on paper trades and answers for every model call it makes.** Each call goes through the [Otari](https://otari.ai) gateway, each role runs on an open-weight model, and each call leaves a receipt (who asked, which model answered through which provider, what it cost, how it stopped) sealed in a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
 
-## Quickstart (Otari)
+## Score map
+
+| Rubric line | What we did | Where to verify |
+|---|---|---|
+| Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard) |
+| Otari features, 10 each, max 6 (60) | Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP | [Proofs](#proofs-resource-by-resource) rows 2, 3, 4, 6, 7, 8, each with request ids |
+| Guardrails | **NOT PROVEN, and not claimed.** Attached to the `vd-judge` policy, but Otari reported `valid: null` on every call, so nothing was evaluated | [Proofs](#proofs-resource-by-resource) row 5 |
+| Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](web/cycle.html) |
+| Our feedback to Otari | Every real snag met with the gateway, with symptom, steps to reproduce and status | [`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md) |
+
+Receipts are also checked against Otari's own usage log with free GET calls: the latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows. The 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key.
+
+## Quickstart
 
 ```bash
 export OTARI_API_KEY=...   # from the Otari dashboard; never commit it
@@ -14,11 +34,11 @@ python3 -m verdict_desk otari-audit --reconcile   # the eight resources, and eac
 python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 ```
 
-**See one cycle call by call: [`web/cycle.html`](web/cycle.html)** (a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models).
+[`web/cycle.html`](web/cycle.html) shows one cycle call by call: a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models. It is a static page, so serve the repository as above to see it rendered.
 
 ## One ledger, two eras
 
-`ledger/ledger.jsonl` is a single hash chain. Dossiers 1 to 791 were recorded by the earlier version of this project, before it ran on Otari (models behind other providers, no gateway receipts). **The Otari era starts at dossier 792**: its `prev_hash` is the hash of dossier 791, so the chain was continued, not restarted, and `python3 -m verdict_desk verify` checks all of it. Every dossier from 792 carries the Otari run summary and a receipt for each call; the audit, the scoreboard and `web/cycle.html` read only those. Dossiers 792 to 800 were recorded from a local machine (by hand or by the local runner); from dossier 801 on, a scheduled GitHub Actions job (the workflow `otari-cycle`, every three hours) records the cycles.
+`ledger/ledger.jsonl` is a single hash chain. Dossiers 1 to 791 were recorded by the earlier version of this project, before it ran on Otari (models behind other providers, no gateway receipts). **The Otari era starts at dossier 792**: its `prev_hash` is the hash of dossier 791, so the chain was continued, not restarted, and `python3 -m verdict_desk verify` checks all of it. Every dossier from 792 carries the Otari run summary and a receipt for each call; the audit, the scoreboard and `web/cycle.html` read only those. Dossiers 792 to 800 were recorded from a local machine (by hand or by the local runner); from dossier 801 on, a scheduled GitHub Actions job (the workflow `otari-cycle`, hourly) records the cycles.
 
 ## Proofs, resource by resource
 
@@ -41,6 +61,9 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 
 ## Open-model scoreboard
 
+<details>
+<summary>Every call of the Otari era, grouped by the model that answered</summary>
+
 <!-- otari:board:start -->
 | Model (provider:model) | Calls | OK | Refusals / failures | p50 ms | p95 ms | Fallbacks | Accepted claims | USD per claim |
 |---|---|---|---|---|---|---|---|---|
@@ -57,11 +80,19 @@ python3 -m http.server   # then open http://localhost:8000/web/cycle.html
 
 Every call of every Otari-era dossier, grouped by the model that answered. The fallbacks in this table have two sources. Real traffic: calls that Otari re-routed to a second provider when the first did not answer (receipts with `Otari-Fallback: true` and attempt count 2; so far only narrator batches: 8 in dossier 800 and 7 in dossier 801, sent as the plain catalog id `alibaba/qwen3-235b-a22b-instruct-2507`, with no routing policy of ours, and served by bedrock where earlier cycles were served by deepinfra, so this is Otari's own provider failover and not the `vd-judge` policy). The deliberate test: the failover canary, one small call per cycle through a policy built to fail over, which shows the backup route working even when no real call needs it.
 
-## The checker has a consequence (rules v7)
+</details>
+
+## Details
+
+<details>
+<summary>The checker has a consequence (rules v7)</summary>
 
 Four models take part in every decision: a bull and a bear analyst, a judge, and a **citation checker** that re-reads each validated claim against the evidence it cites. Through dossier 801 (rules v6) the checker was advisory. From rules v7 its marks are part of the verdict: if the judge's lean rests on a claim the checker marked unsupported, that lean carries no weight (the judge only breaks ties, so this can send a close call back to no position and never opens one). The marks are frozen in the dossier, the rule is written in the verdict's `policy`, the outcome is sealed as `verdict.checker_gate`, and the replay recomputes it, so editing a mark fails the replay. A missing or failed checker changes nothing. Dossiers recorded by the scheduled job after this change use `decide-v7`; dossiers 792 to 801 stay v6 and still replay to the same verdicts.
 
-## Budgets: what Otari enforces, and what the app adds
+</details>
+
+<details>
+<summary>Budgets: what Otari enforces, and what the app adds</summary>
 
 Three different things, kept apart on purpose:
 
@@ -73,7 +104,10 @@ Three different things, kept apart on purpose:
 
 What is and is not shown: Otari's own `403 budget_exceeded` refusal has been seen once, in a deliberate drill against the USD 0.01 budget, and is **not** in a sealed production dossier. No production cycle has been refused by an Otari budget. The cycle caps are our own code and are not an Otari feature.
 
-## Who sees what
+</details>
+
+<details>
+<summary>Who sees what: every host the code names</summary>
 
 Every prompt goes to the gateway, then to the upstream provider named in the receipt (the page shows it per dossier). Every other host the code names:
 
@@ -100,6 +134,8 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 | `api.mistral.ai` | the original, pre-Otari LLM provider (the default when OTARI_API_KEY is not set) | prompts, only when MISTRAL_API_KEY is set and OTARI_API_KEY is not | never in Otari mode |
 | `api.anthropic.com` | the optional native Claude provider (LLM_PROVIDER=anthropic) | prompts, only when that provider is selected | never in Otari mode |
 <!-- otari:hosts:end -->
+
+</details>
 
 ## More
 
