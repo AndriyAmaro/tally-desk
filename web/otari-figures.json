@@ -1,14 +1,14 @@
 {
-  "asof": 809,
+  "asof": 810,
   "source": "scripts/otari_cards.py, from ledger/ledger.jsonl and docs/evidence/otari-drills.jsonl",
   "figures": [
     {
-      "value": "18",
+      "value": "19",
       "label": "Otari-era dossiers",
-      "sub": "792 to 809"
+      "sub": "792 to 810"
     },
     {
-      "value": "361",
+      "value": "383",
       "label": "sealed receipts",
       "sub": "one per model or tool call"
     },
@@ -23,7 +23,7 @@
       "sub": "guardrails not proven"
     },
     {
-      "value": "40",
+      "value": "41",
       "label": "backup-route answers",
       "sub": "canary plus real traffic"
     }
@@ -78,14 +78,14 @@
       "resource": "Code execution",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 809
+      "dossier": 810
     },
     {
       "n": 8,
       "resource": "MCP",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 809
+      "dossier": 810
     }
   ]
 }
