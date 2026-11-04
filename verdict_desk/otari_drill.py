@@ -1,4 +1,4 @@
-"""Drills for the two Otari features that ordinary traffic never trips on purpose: routing fallback and a budget refusal.
+"""Drills for the Otari features that ordinary traffic never trips on purpose: routing fallback, a budget refusal and the app's own role chain.
 
 Both are real requests to the real gateway, started by a command of the app (`python3 -m verdict_desk otari-drill ...`) and
 written, receipts and all, to a versioned evidence file. They are not decisions, so nothing here touches the ledger.
@@ -9,9 +9,13 @@ written, receipts and all, to a versioned evidence file. They are not decisions,
 - budget: the end user `vd-drill` sits on the panel budget `vd-drill-tiny` (USD 0.01 a day). A small call passes, then a call
   whose worst-case cost is larger than what remains is refused with 403 `budget_exceeded` before any model is called. The
   refusal is caught and kept as a refusal receipt.
+- role-fallback: the app's OWN chain (`fallbacks` of a role in config/otari.json), not Otari's provider failover. The bull role is asked
+  with a first candidate the gateway does not know (`drill/does-not-exist`, HTTP 400 `invalid_model`, refused before any model is called,
+  so it costs nothing); the app moves to the first real entry of the role's chain, which answers. Both receipts are kept.
 """
 
 import datetime
+import decimal
 import hashlib
 import json
 from pathlib import Path
@@ -23,6 +27,7 @@ SCHEMA = "otari-drill/1"
 TARGET_CHARS = 165_000  # over 32,768 tokens, the context of the Mistral main model (the first run counted 66,438 prompt tokens for 187,928 characters, about 2.8 characters a token)
 MAX_PROMPT_COST_USD = 0.005  # the backup's input price times the prompt: the drill refuses to run if it would cost more
 INPUT_USD_PER_MILLION = 0.06  # deepseek/deepseek-v4-flash-0731 in the public catalog on 2026-11-01
+MISSING_MODEL = "drill/does-not-exist"  # a selector no provider, alias, policy or catalog id resolves: HTTP 400 invalid_model on the hosted gateway (docs/FEEDBACK_LOG.md, entry 10), refused before a model is called
 BIG_MAX_TOKENS = 100_000  # a worst-case hold of about USD 0.018 on the judge model, more than the USD 0.01 budget holds
 
 
@@ -65,6 +70,83 @@ def fallback_drill(ledger: list[dict], ask=None, usage=None) -> dict:
     return {**record, "answer_chars": len(answer), "receipt": receipt, "usage": row, "pass": ok,
             "reading": "the main model of the policy refused the prompt as too long for its context and Otari served the backup"
                        if ok else "the fallback did not show in the receipt"}
+
+
+def _cost(row: dict | None) -> decimal.Decimal | None:
+    try:
+        return decimal.Decimal(str(row["cost_usd"])) if row and row.get("cost_usd") is not None else None
+    except (decimal.InvalidOperation, KeyError):
+        return None
+
+
+def role_fallback_drill(ask=None, usage=None) -> dict:
+    """Asks the bull role with a first model the gateway refuses without charge, so the app's own chain moves to the role's first real entry.
+
+    Passes only when: the refused entry is the one named, the refusal is a model-side reason (the app's rule, `llm.model_side_reason`), the next
+    entry of the role's chain answered, nothing was billed for the refused request, and both request ids are Otari's."""
+    ask, usage = ask or llm.chat, usage or llm.usage_for
+    cfg = llm.otari_config()
+    role = cfg.get("drill_role") or "bull"
+    missing = cfg.get("drill_missing_model") or MISSING_MODEL
+    chain = [missing] + [m for m in llm.role_fallbacks(role, cfg) if m != missing]
+    user = cfg.get("drill_role_user") or "vd-drill-role"  # never the production end user vd-bull: its spend is the bull's alone
+    record = {"schema": SCHEMA, "drill": "role-fallback", "at": _now(), "role": role, "chain": chain, "refused_model": missing, "end_user": user}
+    if len(chain) < 2:
+        return {**record, "pass": False, "error": f"role {role!r} has no fallbacks in config/otari.json; nothing was sent"}
+    llm.served_receipt()
+    llm.refused_receipts()
+    try:
+        answer = ask("You are the bull analyst in a market debate.", "Reply with the single word ok.", timeout=60, max_tokens=16, role=role, model=missing,
+                     role_fallbacks=True, end_user=user, end_user_budget=cfg.get("end_user_budget"))
+    except llm.OtariError as err:
+        why = (f"the gateway answered HTTP {err.status} {err.code or ''}".strip() + ", which the app does not treat as a model-side refusal, so nothing fell back"
+               if not llm.model_side_reason(err) else f"the chain failed: {err}")
+        return {**record, "pass": False, "error": why, "receipt": llm.served_receipt(), "refused_receipts": llm.refused_receipts()}
+    except (OSError, ValueError) as err:
+        return {**record, "pass": False, "error": str(err), "receipt": llm.served_receipt(), "refused_receipts": llm.refused_receipts()}
+    receipt, refused = llm.served_receipt(), llm.refused_receipts()
+    note = (receipt or {}).get("role_fallback") or {}
+    skipped = note.get("skipped") or []
+    first = skipped[0] if skipped else {}
+    rid_refused, rid_answered = first.get("request_id"), (receipt or {}).get("request_id")
+    rows = {"refused": usage(rid_refused) if first.get("request_id_source") == "otari" else None,
+            "answered": usage(rid_answered) if (receipt or {}).get("request_id_source") == "otari" else None}
+    billed = _cost(rows["refused"])
+    ok = bool(receipt and not receipt.get("refusal") and len(skipped) == 1 and first.get("model") == missing and first.get("reason")
+              and note.get("answered") == chain[1] and note.get("answered_index") == 1 and receipt.get("sent_model") == chain[1]
+              and first.get("request_id_source") == "otari" and receipt.get("request_id_source") == "otari"
+              and any(r.get("request_id") == rid_refused and r.get("refusal") for r in refused) and not billed)
+    return {**record, "answer_chars": len(answer), "refused_receipt": next((r for r in refused if r.get("request_id") == rid_refused), None),
+            "receipt": receipt, "role_fallback": note, "usage": rows,
+            "otari_failover": {"fallback": (receipt or {}).get("fallback"), "attempt_count": (receipt or {}).get("attempt_count"),
+                               "note": "Otari's own provider failover, a different mechanism: the app moved between catalog ids, Otari did not"},
+            "cost_usd": {"refused": str(billed) if billed is not None else "0 (no cost on the usage row)" if rows["refused"] else "not confirmed (no usage row)",
+                         "answered": (receipt or {}).get("cost_usd")},
+            "pass": ok,
+            "reading": "the first model of the chain was refused by the gateway before any model was called, and the app asked the next catalog id of the role, which answered"
+                       if ok else "the app's chain did not show the expected refusal and answer in the receipts"}
+
+
+def summary_lines(r: dict) -> list[str]:
+    """What the role-fallback drill prints for a screen: which entry was refused and why, which answered, and the cost."""
+    head = f"drill role-fallback: {'PASS' if r['pass'] else 'FAIL'} (role {r['role']}, end user {r['end_user']}, chain {' -> '.join(r['chain'])})"
+    if r.get("error") and not r.get("receipt"):
+        return [head, f"  {r['error']}"]
+    out = [head]
+    note = r.get("role_fallback") or {}
+    for entry in note.get("skipped") or []:
+        out.append(f"  1. REFUSED  {entry['model']}: HTTP {entry.get('status')} {entry.get('code')} ({entry.get('reason')}), request {entry.get('request_id')}, no model was called")
+    rc = r.get("receipt") or {}
+    if note.get("answered"):
+        out.append(f"  2. ANSWERED {note['answered']}: served by {rc.get('served_by')}, request {rc.get('request_id')}, {rc.get('duration_ms')} ms")
+    elif r.get("error"):
+        out.append(f"  2. NOT ANSWERED: {r['error']}")
+    cost = r.get("cost_usd") or {}
+    out.append(f"  cost: refused entry {cost.get('refused')}; answering entry USD {cost.get('answered')}")
+    fo = r.get("otari_failover") or {}
+    out.append(f"  Otari's own provider failover: Otari-Fallback {fo.get('fallback')}, attempt count {fo.get('attempt_count')} (a different mechanism, not this drill)")
+    out.append("  evidence line appended to docs/evidence/otari-drills.jsonl; not sealed in the ledger")
+    return out
 
 
 def budget_drill(ask=None, usage=None, end_user_info=None) -> dict:
@@ -141,6 +223,8 @@ def run(which: str, ledger: list[dict], path: Path = EVIDENCE, ask=None) -> list
         out.append(fallback_drill(ledger, ask=ask))
     if which in ("budget", "all"):
         out.append(budget_drill(ask=ask))
+    if which in ("role-fallback", "all"):
+        out.append(role_fallback_drill())
     if which in ("mcp", "all"):
         out.append(mcp_drill())
     if which in ("users", "all"):

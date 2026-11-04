@@ -490,6 +490,13 @@ def served_receipt() -> dict | None:
     return receipt
 
 
+def refused_receipts() -> list[dict]:
+    """The full refusal receipts of the chain entries the last call on this thread passed over, read once (empty when none were)."""
+    out = list(getattr(_served, "refused", None) or [])
+    _served.refused = []
+    return out
+
+
 EXTRA_FIELDS = ("tools", "mcp_servers", "max_tool_iterations", "guardrails")  # request fields an app may add for Otari's tools
 
 
@@ -525,6 +532,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
     chain = [first] + ([m for m in role_fallbacks(role, cfg) if m != first] if (model is None if role_fallbacks_on is None else role_fallbacks_on) else [])
     started_ms = _offset_ms()
     skipped: list[dict] = []
+    _served.refused = []  # the full receipts of the entries passed over, for a drill to keep (`refused_receipts`); the dossier keeps only `role_fallback`
     for index, entry in enumerate(chain):
         try:
             text = _otari_chat_once(system, user, timeout, max_tokens, role, entry, end_user, end_user_budget, extra, cfg, started_ms)
@@ -533,6 +541,7 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
             receipt = getattr(_served, "receipt", None)
             if reason and index < len(chain) - 1 and isinstance(receipt, dict):
                 skipped.append(_skip_entry(entry, err, receipt, reason))
+                _served.refused.append(dict(receipt))
                 continue
             if skipped and isinstance(receipt, dict):  # the call went down the chain and stopped here
                 _note_role_fallback(receipt, chain, skipped, None, stopped=None if reason else (err.code or f"HTTP {err.status}"), exhausted=bool(reason))

@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.test_otari import BODY, HEADERS, FakeResponse, message, served_spelling
+from tests.test_role_fallbacks import Transport
 from verdict_desk import __main__ as cli
 from verdict_desk import llm, otari_drill
 
@@ -180,6 +181,77 @@ class FallbackDrillTest(Env):
         record = otari_drill.fallback_drill(ledger_of(8), ask=ask, usage=lambda rid: None)
         self.assertFalse(record["pass"])
         self.assertEqual(record["receipt"]["request_id"], "req-x")
+
+
+class RoleFallbackDrillTest(Env):
+    """The app's own chain, driven by a scripted gateway: the first candidate does not exist, the first real entry of the bull chain answers."""
+    MISSING = otari_drill.MISSING_MODEL
+    INVALID = (400, {"Otari-Error-Code": "invalid_model"})
+
+    def run_drill(self, script, usage=None):
+        gateway = Transport(script)
+        usage = usage or (lambda rid: {"request_id": rid, "status": "error" if rid == "req-1" else "success", "cost_usd": None if rid == "req-1" else "0.000009", "row_count": 1})
+        with mock.patch.object(urllib.request, "urlopen", gateway):
+            return gateway, otari_drill.role_fallback_drill(usage=usage)
+
+    def test_an_unknown_first_model_is_refused_without_charge_and_the_first_real_entry_answers(self):
+        gateway, r = self.run_drill({self.MISSING: self.INVALID})
+        bull = llm.role_fallbacks("bull")
+        self.assertEqual(gateway.models, [self.MISSING, bull[0]], "two requests: the refused one and the answering one, and no third")
+        self.assertTrue(r["pass"], r)
+        self.assertEqual((r["drill"], r["role"], r["chain"], r["end_user"]), ("role-fallback", "bull", [self.MISSING, *bull], "vd-drill-role"))
+        self.assertNotEqual(r["end_user"], llm._end_user("bull", llm.otari_config()), "the drill must not bill the production bull")
+        self.assertEqual({q["user"] for q in gateway.requests}, {"vd-drill-role"})
+        note = r["role_fallback"]
+        self.assertEqual((note["answered"], note["answered_index"]), (bull[0], 1))
+        self.assertEqual(note["skipped"], [{"model": self.MISSING, "reason": "invalid_model", "status": 400, "code": "invalid_model", "request_id": "req-1", "request_id_source": "otari"}])
+        self.assertEqual((r["receipt"]["request_id"], r["receipt"]["sent_model"], r["receipt"]["role_fallback"]), ("req-2", bull[0], note))
+        self.assertEqual((r["refused_receipt"]["request_id"], r["refused_receipt"]["refusal"]["status"], r["refused_receipt"]["refusal"]["code"]), ("req-1", 400, "invalid_model"))
+        self.assertEqual(r["cost_usd"], {"refused": "0 (no cost on the usage row)", "answered": "0.000009"})
+        self.assertEqual((r["otari_failover"]["fallback"], r["otari_failover"]["attempt_count"]), (False, 1), "Otari's own failover is a separate mechanism")
+        json.dumps(r)
+        self.assertNotIn(KEY, json.dumps(r))
+
+    def test_a_refusal_the_app_does_not_move_on_from_is_reported_not_worked_around(self):
+        gateway, r = self.run_drill({self.MISSING: (400, {})})  # a bare 400 with no error code is not a model-side refusal
+        self.assertFalse(r["pass"])
+        self.assertEqual(len(gateway.models), 1)
+        self.assertIn("does not treat as a model-side refusal", r["error"])
+        self.assertEqual(r["receipt"]["refusal"]["status"], 400)
+
+    def test_a_billed_refusal_does_not_pass(self):
+        _, r = self.run_drill({self.MISSING: self.INVALID}, usage=lambda rid: {"request_id": rid, "cost_usd": "0.000100", "row_count": 1})
+        self.assertFalse(r["pass"])
+        self.assertEqual(r["cost_usd"]["refused"], "0.000100")
+
+    def test_a_first_model_that_answers_is_not_a_fallback(self):
+        _, r = self.run_drill({})
+        self.assertFalse(r["pass"])
+
+    def test_the_summary_says_which_entry_was_refused_and_why_which_answered_and_what_it_cost(self):
+        _, r = self.run_drill({self.MISSING: self.INVALID})
+        text = "\n".join(otari_drill.summary_lines(r))
+        for part in ("PASS", f"REFUSED  {self.MISSING}: HTTP 400 invalid_model", "request req-1", "no model was called", "ANSWERED", "request req-2", "refused entry 0", "answering entry USD 0.000009",
+                     "Otari-Fallback False", "not sealed"):
+            self.assertIn(part, text)
+        self.assertNotIn("\u2014", text)
+
+    def test_run_appends_the_line_to_the_evidence_file_and_the_audit_keeps_it_apart_from_sealed_proof(self):
+        from verdict_desk import dossier, otari_report
+        path = Path(tempfile.mkdtemp()) / "otari-drills.jsonl"
+        gateway = Transport({self.MISSING: self.INVALID})
+        with mock.patch.object(urllib.request, "urlopen", gateway), mock.patch.object(llm, "usage_for", lambda rid: {"request_id": rid, "cost_usd": None if rid == "req-1" else "0.000009", "row_count": 1}):
+            records = otari_drill.run("role-fallback", [], path)
+        self.assertEqual([json.loads(l)["drill"] for l in path.read_text().splitlines()], ["role-fallback"])
+        self.assertEqual(len(records), 1)
+        ledger = dossier.read_ledger(Path(__file__).resolve().parent.parent / "ledger" / "ledger.jsonl")
+        before = {r["n"]: r for r in otari_report.audit(ledger, [])}
+        after = {r["n"]: r for r in otari_report.audit(ledger, otari_report.read_evidence(path))}
+        self.assertEqual((after[2]["status"], after[2]["source"], after[2]["proof"]), (before[2]["status"], before[2]["source"], before[2]["proof"]), "a drill changes neither status nor sealed proof")
+        self.assertEqual(after[2]["drill_proof"], before[2]["drill_proof"] + ["req-1", "req-2"])
+        self.assertIn("role-fallback drill", after[2]["note"])
+        self.assertIn("not Otari's provider failover", after[2]["note"])
+        self.assertEqual(otari_report.summary_line(list(after.values())), otari_report.summary_line(list(before.values())), "the sealed and drill counts do not move")
 
 
 class BudgetDrillTest(Env):

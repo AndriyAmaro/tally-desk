@@ -124,6 +124,20 @@ def role_fallback_note(dossiers: list[dict]) -> str:
             f"in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs))}; {tail}. That is the app's own fallback, not Otari's provider failover, and it is not counted in the proof above")
 
 
+def role_fallback_drill_of(evidence: list[dict]) -> dict | None:
+    """The newest passing `role-fallback` drill line of the evidence file as {"ids": [refused, answering], "line": a sentence}, or None.
+    A drill is a deliberate test, not traffic: the sentence says so, and says it is the app's chain and not Otari's provider failover."""
+    rf = next((e for e in reversed(evidence) if e.get("drill") == "role-fallback" and e.get("pass")), None)
+    note = (rf or {}).get("role_fallback") or {}
+    skipped = (note.get("skipped") or [{}])[0]
+    if not rf or not note.get("answered"):
+        return None
+    line = (f"Drill, not sealed in the ledger: on {str(rf.get('at'))[:10]} the role-fallback drill asked the {rf.get('role')} role with a first model the gateway does not know ({skipped.get('model')}); "
+            f"it was refused with HTTP {skipped.get('status')} {skipped.get('code')} before any model ran and without charge, and the app moved to {note['answered']}, which answered. "
+            "That is the app's own role chain, not Otari's provider failover, and it is not counted in the proof above")
+    return {"ids": [skipped.get("request_id"), (rf.get("receipt") or {}).get("request_id")], "line": line}
+
+
 def _rid(r: dict) -> str | None:
     return r.get("request_id") if r.get("request_id_source") == "otari" else None
 
@@ -202,6 +216,10 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     own = role_fallback_note(newest)
     if own:  # the app's own role chain is told apart from Otari's failover, and neither the status nor the request ids of the row depend on it
         rows[-1]["note"] += ". " + own
+    rf = role_fallback_drill_of(evidence)
+    if rf:  # the live drill of the app's own chain: its two request ids and one sentence, kept apart from the sealed proof and from Otari's failover
+        rows[-1]["drill_proof"] += [i for i in rf["ids"] if i and i not in rows[-1]["drill_proof"]]
+        rows[-1]["note"] += ". " + rf["line"]
     # 3 budgets and spend limits: Otari's spend state sealed with the verdict and used by the router (sealed); the 403 refusal itself is a drill
     bd = next((e for e in reversed(evidence) if e.get("drill") == "budget" and e.get("pass")), None)
     capped = next((d["seq"] for d in newest if (d["llm"]["otari"].get("cycle") or {}).get("cap_usd")), None)

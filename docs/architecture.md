@@ -71,7 +71,7 @@ This is the Otari-specific part. It lives mostly in `verdict_desk/llm.py` (the O
 | `otari_report.py` | `audit` proves the eight Otari resources from sealed receipts, `reconcile` compares receipts with Otari's usage log by request id, `board` groups every call by the model that answered | Nothing: it reads the ledger, prints, and refreshes the README blocks |
 | `source_drift.py` | Reads again, through the fetch tool, the page an earlier dossier cited (at least two hours old) and compares the normalized passage (`collect`, `recheck`) | `drift`: unchanged, changed, unavailable or none, with both hashes. It is a freshness receipt that no rule reads, so it cannot move a verdict |
 | `closure.py` | The closure gate: deterministic checks on the finished candidate before it is appended (`seal`, `recheck`) | `closure`: nine checks, six hard and three soft. A failed hard check (`analysts_answered`, `receipts`, `evidence_frozen`, `verdict_replays`, `checker_gate`, `narrative_flagged`) appends nothing and writes `ledger/closure-refusals.jsonl`; a soft one is sealed as a warning |
-| `otari_drill.py` | Real requests that show a fallback and a budget refusal | Written to `docs/evidence/otari-drills.jsonl`, not to the ledger |
+| `otari_drill.py` | Real requests that show a fallback, the app's own role chain (`otari-drill role-fallback`) and a budget refusal | Written to `docs/evidence/otari-drills.jsonl`, not to the ledger |
 
 `web/cycle.html` (with `web/cycle.js`) draws one cycle from these receipts as a timeline.
 

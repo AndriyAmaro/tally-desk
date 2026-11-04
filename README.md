@@ -202,7 +202,7 @@ Code: `llm.read_headroom`, `llm.route_decision`
 
 **PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 800
 
-> 10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts
+> 10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (vd-bull, vd-bear, vd-judge, vd-checker, vd-narrator, vd-searcher, vd-sandbox, vd-mcp, vd-fetcher, vd-canary) (read back from Otari, sealed in the dossier). The newest read (dossier 812) found 8 of 10, without a row for vd-sandbox, vd-mcp; Otari echoed the budget on the receipts
 
 Request ids:
 
