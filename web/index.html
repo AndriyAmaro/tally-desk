@@ -13,6 +13,7 @@
 .hero h1{font-size:var(--text-display);letter-spacing:var(--tracking-display);max-width:16ch;margin:0 0 var(--space-4)}
 .hero .lede{margin-bottom:var(--space-5)}
 .hero .actions{margin:0 0 var(--space-3)}
+.hero .try{font-size:var(--text-base);max-width:60ch;margin:0 0 var(--space-3)}
 .hero .fine{font-size:var(--text-sm);color:var(--color-text-subtle);max-width:60ch;margin:0}
 .peek{display:block;text-decoration:none;color:inherit;margin-top:var(--space-7);padding:var(--space-4) var(--space-5) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);transition:border-color var(--dur-fast) var(--ease)}
 .peek:hover{border-color:var(--color-text-subtle)}
@@ -76,6 +77,7 @@
     <a class="btn lg" href="verify.html">Verify a record in your browser</a>
     <a class="btn lg quiet" href="https://github.com/AndriyAmaro/tally-desk/tree/otari#proofs-resource-by-resource" rel="noopener">Read the audit</a>
   </div>
+  <p class="try">Think a sealed record cannot be faked? <a href="verify.html?real=1#cheat">Try to cheat it</a>: change one thing in the newest real dossier, watch the check name what broke, then undo it.</p>
   <p class="fine">Nothing to install and no account: these pages read the public ledger file and check it in your browser. No real-money order is ever placed. The trading agent is the reference workload: the receipts, the hash chain and the verifier work for any agent that calls models through a gateway (<a href="https://github.com/AndriyAmaro/tally-desk/blob/otari/docs/architecture.md#bring-your-own-agent" rel="noopener">what a second agent plugs in</a>).</p>
 
   <a class="peek" id="peek" href="cycle.html" hidden aria-label="Open the latest cycle, call by call">

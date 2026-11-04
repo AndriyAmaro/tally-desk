@@ -128,10 +128,12 @@ Python 3 and its standard library are enough; there is no install step. To see a
 
 ## Verify without trusting us
 
-You need no key, no account and none of our word for the first three.
+You need no key, no account and none of our word for the first four.
 
 - **Offline, from a clone:** `python3 -m verdict_desk verify` recomputes every hash and link of the chain, and `python3 -m verdict_desk replay` re-derives each verdict from its frozen evidence. An edited or forged dossier fails one of the two.
 - **In your browser:** [`web/verify.html`](web/verify.html) takes a dossier, recomputes its hash, checks its link in the chain and re-derives the verdict, with JavaScript that is tested against the Python implementation.
+- **Try to cheat it:** [`web/verify.html?real=1#cheat`](web/verify.html?real=1#cheat) loads the newest dossier and lets you change one thing in an in-memory copy: a call's cost, the verdict, a sentence of a claim, or the link to the previous record.
+  The same three checks run again and name which one failed, with the recomputed hash beside the stored one; Undo puts the original back and it verifies again. Nothing is uploaded or saved.
 - **Call by call:** [`web/cycle.html`](web/cycle.html) shows one cycle as a timeline of receipts: the model asked for and the model that answered, provider, cost, latency, fallback, request id, budget headroom and who saw each prompt. [`web/index.html`](web/index.html) is the landing page.
 - **Against Otari:** `python3 -m verdict_desk otari-audit --reconcile` compares each receipt with Otari's own usage record by request id (free GET calls, a key is required).
 
