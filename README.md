@@ -421,7 +421,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 
 ## More
 
-[Architecture of the code](docs/architecture.md) (with a section on bringing another agent), [lineage of the project](docs/HISTORY.md) and [evidence files](docs/evidence/).
+[Case study](docs/CASE_STUDY.md) (one page: what it does, five numbers, what was hard), [architecture of the code](docs/architecture.md) (with a section on bringing another agent), [lineage of the project](docs/HISTORY.md) and [evidence files](docs/evidence/).
 
 <img src="docs/readme/icons/about.svg" width="44" height="44" alt="">
 
