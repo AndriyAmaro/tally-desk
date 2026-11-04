@@ -42,8 +42,14 @@ class OtariCardsTest(unittest.TestCase):
         self.assertNotEqual(otari_cards.header_svg(), (ROOT / "docs" / "readme" / "header.svg").read_text(encoding="utf-8"))
         self.assertIn("Verdict Desk on Otari", otari_cards.header_svg())
 
+    def test_the_cycle_diagram_is_committed_current_and_shown_in_the_readme(self):
+        self.assertEqual(otari_cards.FLOW.read_text(encoding="utf-8"), otari_cards.flow_svg(), "run scripts/otari_cards.py")
+        self.assertIn("docs/readme/otari-flow.svg", (ROOT / "README.md").read_text(encoding="utf-8"))
+        for step in ("Evidence", "Bull and bear", "Citation checker", "Judge", "Rules engine", "Sealed dossier", "Outside witnesses"):
+            self.assertIn(step, otari_cards.flow_svg())
+
     def test_no_dash_in_the_cards_or_the_readme(self):
-        for path in [ROOT / "README.md", otari_cards.HEADER, otari_cards.FIGURES]:
+        for path in [ROOT / "README.md", otari_cards.HEADER, otari_cards.FIGURES, otari_cards.FLOW]:
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("—", text, path.name)
             self.assertNotIn("–", text, path.name)

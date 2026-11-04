@@ -24,6 +24,7 @@ OUT = ROOT / "docs" / "readme"
 HEADER = OUT / "otari-header.svg"
 FIGURES = OUT / "otari-figures.svg"
 FIGURES_JSON = ROOT / "web" / "otari-figures.json"
+FLOW = OUT / "otari-flow.svg"
 # (slug, label, icon, style): the first button is the primary action, the others are quiet
 BUTTONS = [
     ("cycle", "Call-by-call view", "play", "primary"),
@@ -109,6 +110,64 @@ def header_svg() -> str:
     return _svg(width, height, body, defs)
 
 
+# One cycle, step by step. Each step names what it does, and a chip says whether it goes through Otari (and which feature) or runs in our own code.
+FLOW_STEPS = [
+    ("1", "Evidence", ["Market data and news:", "Binance, OKX, GDELT, RSS,", "Telegram previews, frozen."], [("otari", "Web search and fetch")]),
+    ("2", "Bull and bear", ["Two analysts on two", "open-weight models argue", "from the same evidence."], [("otari", "Routing, fallback"), ("otari", "Budget per user")]),
+    ("3", "Citation checker", ["A third model re-reads", "each claim against the", "evidence it cites."], [("otari", "Routing, fallback")]),
+    ("4", "Judge", ["Weighs only the claims", "that were validated.", "Guardrails: NOT PROVEN."], [("otari", "Routing policy"), ("otari", "Budgets")]),
+    ("5", "Rules engine", ["Deterministic code turns", "the judge's lean into a", "paper-trade verdict."], [("local", "Our code, no model")]),
+    ("6", "Re-derive and check", ["The verdict is re-run in a", "sandbox, and prices are", "read through MCP."], [("otari", "Code execution"), ("otari", "MCP")]),
+    ("7", "Sealed dossier", ["Evidence, verdict and a", "receipt per call, hashed", "into the ledger chain."], [("local", "Hash chain, replayable")]),
+    ("8", "Outside witnesses", ["OpenTimestamps each cycle.", "Sigstore head lookup.", "Sepolia: earlier era only."], [("local", "Third parties")]),
+]
+
+
+def flow_svg() -> str:
+    """The cycle as two rows of four steps. Static: the words come from FLOW_STEPS, there is no figure on it."""
+    width, bw, bh, gap, left = 860, 182, 178, 30, 21
+    rows_y = (62, 290)
+    parts = [f'<rect x="1" y="1" width="{width - 2}" height="514" rx="16" class="bg"/><rect x="1" y="1" width="{width - 2}" height="514" rx="16" class="bd" stroke-width="1.5"/>',
+             _mark(22, 18, 24), _text(54, 36, "One cycle, end to end", "tx", 15, 650, spacing="-0.1"),
+             _text(width - 22, 36, "Every model call and tool call below leaves a receipt", "su", 12, 400, "end")]
+    centers = []
+    for i, (num, title, lines, chips) in enumerate(FLOW_STEPS):
+        col, row = i % 4, i // 4
+        x, y = left + col * (bw + gap), rows_y[row]
+        centers.append((x, y))
+        parts.append(f'<rect x="{x}" y="{y}" width="{bw}" height="{bh}" rx="12" class="pn"/><rect x="{x + .5}" y="{y + .5}" width="{bw - 1}" height="{bh - 1}" rx="11.5" class="bd" stroke-width="1.2"/>')
+        parts.append(f'<circle cx="{x + 20}" cy="{y + 24}" r="11" class="ac"/>' + _text(x + 20, y + 28.5, num, "onac", 12, 700, "middle"))
+        parts.append(_text(x + 38, y + 29, title, "tx", 14, 650))
+        for k, line in enumerate(lines):
+            parts.append(_text(x + 16, y + 58 + k * 17, line, "mu", 11.5))
+        cy = y + bh - 16 - 27 * (len(chips) - 1)
+        for kind, label in chips:
+            w = rc.text_width(label, 11, bold=True) + 18
+            if kind == "otari":
+                parts.append(f'<rect x="{x + 14}" y="{cy - 15}" width="{w:.1f}" height="21" rx="10.5" class="ac" style="fill-opacity:.16"/><rect x="{x + 14.5}" y="{cy - 14.5}" width="{w - 1:.1f}" height="20" rx="10" class="sa" stroke-width="1"/>'
+                             + _text(f"{x + 14 + w / 2:.1f}", cy, label, "ac", 11, 600, "middle"))
+            else:
+                parts.append(f'<rect x="{x + 14}" y="{cy - 15}" width="{w:.1f}" height="21" rx="10.5" class="bd" stroke-width="1" stroke-dasharray="3 3"/>'
+                             + _text(f"{x + 14 + w / 2:.1f}", cy, label, "su", 11, 500, "middle"))
+            cy += 27
+    # arrows: along each row, and one elbow from step 4 down and back to step 5
+    for row in range(2):
+        y = rows_y[row] + bh / 2
+        for col in range(3):
+            x1 = left + col * (bw + gap) + bw
+            parts.append(f'<path d="M{x1 + 3} {y} H{x1 + gap - 5}" class="sa" stroke-width="1.6"/><path d="M{x1 + gap - 9} {y - 4} L{x1 + gap - 4} {y} L{x1 + gap - 9} {y + 4}" class="sa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>')
+    x4, y4 = centers[3][0] + bw / 2, rows_y[0] + bh
+    x5, y5 = centers[4][0] + bw / 2, rows_y[1]
+    mid = (y4 + y5) / 2
+    parts.append(f'<path d="M{x4} {y4 + 2} V{mid} H{x5} V{y5 - 7}" class="sa" stroke-width="1.6" stroke-linejoin="round"/><path d="M{x5 - 4} {y5 - 9} L{x5} {y5 - 4} L{x5 + 4} {y5 - 9}" class="sa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>')
+    ly = 496
+    parts.append(f'<rect x="22" y="{ly - 13}" width="16" height="16" rx="8" class="ac" style="fill-opacity:.16"/><rect x="22.5" y="{ly - 12.5}" width="15" height="15" rx="7.5" class="sa" stroke-width="1"/>'
+                 + _text(46, ly, "Goes through the Otari gateway, and the feature it exercises", "mu", 11.5)
+                 + f'<rect x="438" y="{ly - 13}" width="16" height="16" rx="8" class="bd" stroke-width="1" stroke-dasharray="3 3"/>'
+                 + _text(462, ly, "Runs in our own code or outside parties, not through Otari", "mu", 11.5))
+    return _svg(width, 516, "\n".join(parts))
+
+
 def figures(ledger: list[dict], evidence: list[dict] | None = None) -> list[tuple[str, str, str]]:
     """The five figures of the card, each counted from the ledger (and the drill file for the audit)."""
     dossiers = otari_report.era(ledger)
@@ -176,7 +235,7 @@ def load() -> tuple[list[dict], list[dict]]:
 
 def write_static() -> list[Path]:
     OUT.mkdir(parents=True, exist_ok=True)
-    files = {HEADER: header_svg()}
+    files = {HEADER: header_svg(), FLOW: flow_svg()}
     for slug, label, icon, style in BUTTONS:
         files[OUT / f"otari-button-{slug}.svg"] = button_svg(label, icon, style)
     for path, text in files.items():

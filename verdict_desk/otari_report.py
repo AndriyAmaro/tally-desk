@@ -381,7 +381,46 @@ def hosts_markdown(cfg: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-MARKERS = {"proofs": "otari:proofs", "board": "otari:board", "hosts": "otari:hosts"}
+# Role groups of the "Models and roles" table: (name, what it does, roles of config/otari.json that share a row, why this model).
+# The words are ours; the model ids come from the config and the answers from the sealed receipts.
+ROLE_ROWS = [
+    ("Bull analyst", "argues the long case", ("bull",), "an open-weight 120B model from a different vendor than the bear, so the two sides do not echo one model"),
+    ("Bear analyst", "argues the short case", ("bear",), "an open-weight 120B model from another vendor, so a claim's side can be traced to one model"),
+    ("Judge", "weighs the validated claims", ("judge",), "a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget"),
+    ("Citation checker", "re-reads each claim against the evidence it cites", ("checker",), "small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1)"),
+    ("Narrator", "reads news headlines in batches", ("narrator",), "a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies"),
+    ("Tool drivers", "search, fetch, sandbox, MCP", ("searcher", "fetcher", "sandbox", "mcp"), "the tool does the work and the model only drives it, so a small fast model is enough"),
+]
+
+
+def models_markdown(ledger: list[dict], cfg: dict | None = None) -> str:
+    """The roles and the open-weight model each is asked for (config/otari.json), next to the provider:model routes that really answered
+    (counted from the sealed receipts of the Otari era)."""
+    cfg = cfg or json.loads(CONFIG.read_text(encoding="utf-8"))
+    answered: dict[str, dict[str, int]] = {}
+    for d in era(ledger):
+        for c in calls_of(d):
+            r = c["receipt"]
+            if r.get("served_by") and not _failed(r):
+                bucket = answered.setdefault(c["label"], {})
+                bucket[r["served_by"]] = bucket.get(r["served_by"], 0) + 1
+    lines = ["| Role | Asked for (open weights) | Answered by, from the receipts | Why this model |", "|---|---|---|---|"]
+    for name, job, roles, why in ROLE_ROWS:
+        specs = [cfg["roles"][r] for r in roles if r in cfg.get("roles", {})]
+        asked = sorted({s["model"] for s in specs})
+        vendors = sorted({s.get("vendor", "") for s in specs if s.get("vendor")})
+        merged: dict[str, int] = {}
+        for r in roles:
+            for key, n in answered.get(r, {}).items():
+                merged[key] = merged.get(key, 0) + n
+        top = sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))
+        shown = "<br>".join(f"`{k}` ({n})" for k, n in top[:3]) + (f"<br>and {len(top) - 3} more" if len(top) > 3 else "")
+        asked_cell = "<br>".join(f"`{m}`" for m in asked) + (f"<br>{', '.join(vendors)}" if vendors else "")
+        lines.append(f"| **{name}**<br>{job} | {asked_cell or '-'} | {shown or '-'} | {why} |")
+    return "\n".join(lines)
+
+
+MARKERS = {"proofs": "otari:proofs", "board": "otari:board", "hosts": "otari:hosts", "models": "otari:models"}
 
 
 def replace_block(text: str, name: str, body: str) -> str:
@@ -393,4 +432,5 @@ def replace_block(text: str, name: str, body: str) -> str:
 def refresh_readme(text: str, ledger: list[dict], evidence: list[dict] | None = None) -> str:
     text = replace_block(text, "proofs", proofs_markdown(audit(ledger, evidence)))
     text = replace_block(text, "board", board_markdown(board(ledger)))
+    text = replace_block(text, "models", models_markdown(ledger))
     return replace_block(text, "hosts", hosts_markdown())

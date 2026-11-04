@@ -225,6 +225,16 @@ class ReadmeBlocksTest(unittest.TestCase):
         self.assertIn("| `otari.ai` |", out)
         self.assertEqual(rep.refresh_readme(out, LEDGER, EVIDENCE), out, "refreshing twice changes nothing")
 
+    def test_the_models_table_counts_answers_from_the_receipts_and_asks_only_open_weights(self):
+        table = rep.models_markdown(LEDGER)
+        cfg = json.loads(rep.CONFIG.read_text(encoding="utf-8"))
+        for role in ("bull", "bear", "judge", "checker", "narrator"):
+            self.assertIn(f"`{cfg['roles'][role]['model']}`", table)
+        answered = {k: sum(1 for d in rep.era(LEDGER) for c in rep.calls_of(d) if c["receipt"].get("served_by") == k and not rep._failed(c["receipt"])) for k in
+                    {c["receipt"]["served_by"] for d in rep.era(LEDGER) for c in rep.calls_of(d) if c["receipt"].get("served_by") and c["label"] == "checker"}}
+        for key, n in answered.items():
+            self.assertIn(f"`{key}` ({n})", table)
+
     def test_the_readme_has_the_three_blocks_and_every_proof_id_in_it_is_in_the_ledger_or_evidence(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
         for m in rep.MARKERS.values():

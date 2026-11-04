@@ -11,35 +11,81 @@
   <a href="docs/FEEDBACK_LOG.md"><img src="docs/readme/otari-button-feedback.svg" height="40" alt="Feedback to Otari"></a>
 </p>
 
-**Verdict Desk decides on paper trades and answers for every model call it makes.** Each call goes through the [Otari](https://otari.ai) gateway, each role runs on an open-weight model, and each call leaves a receipt (who asked, which model answered through which provider, what it cost, how it stopped) sealed in a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
+**Verdict Desk decides on paper trades and answers for every model call it makes.** It is an autonomous trading agent that runs on [Otari](https://otari.ai), the gateway that sits between an app and its model providers. Each of its four decision roles (a bull analyst, a bear analyst, a citation checker and a judge) runs on a different open-weight model, and every call, to a model or to a tool, leaves a receipt: who asked, which model answered through which provider, what it cost, how it stopped. The receipts are sealed into a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
+
+## Why it matters
+
+An agent that acts alone has to be able to answer for each thing it asked a model to do. Logs written by the agent itself are not an answer, because the agent wrote them. Here the gateway's own response headers and usage records are captured on every call, the verdict is recomputed from frozen evidence by plain code, and the whole record is checked by a script or a browser tab with nothing to trust but a hash. A judge, an auditor or a stranger can read one cycle call by call and confirm that the model it names is the model that answered.
+
+## How it works
+
+<p align="center">
+  <img src="docs/readme/otari-flow.svg" width="100%" alt="One cycle in eight steps: evidence, bull and bear analysts, citation checker, judge, rules engine, sandbox re-derivation and MCP price check, sealed dossier in the hash chain, outside witnesses. Chips mark which steps go through which Otari feature.">
+</p>
+
+1. **Evidence** is gathered from public market data and news, then frozen. Otari's web search and fetch tools add one sourced page.
+2. **Bull and bear** argue from the same evidence, each on its own open-weight model.
+3. **The citation checker** re-reads every claim against the evidence it cites. From rules v7 its marks have a consequence for the verdict (see the details below).
+4. **The judge** weighs only the claims that were validated. A guardrail is attached to its policy, but Otari never reported a result, so that feature is **NOT PROVEN** and not claimed.
+5. **The rules engine** is ordinary deterministic code. It turns the judge's lean into a paper-trade verdict, and `replay` recomputes it from the frozen evidence.
+6. **Two independent checks** run through Otari: the verdict is re-derived in Otari's code sandbox and compared with the local run, and prices are read through an MCP server and compared with the market data.
+7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
+8. **Outside witnesses** let a reader check the head of the chain without trusting the operator: OpenTimestamps (Bitcoin) on each cycle, the public Sigstore log for published heads, and, in the earlier era only, an anchor on the Sepolia testnet.
 
 ## Score map
 
 | Rubric line | What we did | Where to verify |
 |---|---|---|
-| Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard) |
+| Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard), [models and roles](#models-and-roles) |
 | Otari features, 10 each, max 6 (60) | Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP | [Proofs](#proofs-resource-by-resource) rows 2, 3, 4, 6, 7, 8, each with request ids |
 | Guardrails | **NOT PROVEN, and not claimed.** Attached to the `vd-judge` policy, but Otari reported `valid: null` on every call, so nothing was evaluated | [Proofs](#proofs-resource-by-resource) row 5 |
 | Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](web/cycle.html) |
 | Our feedback to Otari | Every real snag met with the gateway, with symptom, steps to reproduce and status | [`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md) |
 
-Receipts are also checked against Otari's own usage log with free GET calls: the latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows. The 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key.
+Receipts are also checked against Otari's own usage log with free GET calls. The latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows. The 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key.
+
+## Models and roles
+
+Each role is billed to its own end user and asked for one open-weight catalog id. The "Answered by" column is not the config: it is counted from the sealed receipts, so a route that really answered, and the provider that carried it, shows up whatever the config says.
+
+<!-- otari:models:start -->
+| Role | Asked for (open weights) | Answered by, from the receipts | Why this model |
+|---|---|---|---|
+| **Bull analyst**<br>argues the long case | `openai/gpt-oss-120b`<br>OpenAI | `deepinfra:openai/gpt-oss-120b` (16)<br>`ovhcloud:gpt-oss-120b` (1) | an open-weight 120B model from a different vendor than the bear, so the two sides do not echo one model |
+| **Bear analyst**<br>argues the short case | `nvidia/nemotron-3-super-120b-a12b`<br>NVIDIA | `bedrock:nvidia.nemotron-super-3-120b` (17) | an open-weight 120B model from another vendor, so a claim's side can be traced to one model |
+| **Judge**<br>weighs the validated claims | `deepseek/deepseek-v4-flash-0731`<br>DeepSeek | `deepinfra:deepseek-ai/DeepSeek-V4-Pro` (10)<br>`deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (7) | a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget |
+| **Citation checker**<br>re-reads each claim against the evidence it cites | `google/gemma-3-27b-it`<br>Google | `nebius:google/gemma-3-27b-it` (17) | small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1) |
+| **Narrator**<br>reads news headlines in batches | `alibaba/qwen3-235b-a22b-instruct-2507`<br>Alibaba | `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` (165)<br>`bedrock:qwen.qwen3-235b-a22b-2507-v1:0` (27) | a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies |
+| **Tool drivers**<br>search, fetch, sandbox, MCP | `deepseek/deepseek-v4-flash-0731`<br>DeepSeek | `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (59) | the tool does the work and the model only drives it, so a small fast model is enough |
+<!-- otari:models:end -->
 
 ## Quickstart
 
 ```bash
 export OTARI_API_KEY=...   # from the Otari dashboard; never commit it
-VERDICT_DESK_APPEND_PUBLIC=1 python3 -m verdict_desk decide-v7 BTCUSDT --config config/voices.json   # one cycle, every call through Otari
-python3 -m verdict_desk verify && python3 -m verdict_desk replay   # the chain is intact and every verdict is re-derived offline
-python3 -m verdict_desk otari-audit --reconcile   # the eight resources, and each receipt against Otari's usage log
-python3 -m http.server   # then open http://localhost:8000/web/cycle.html
+
+# 1. record one cycle, every call through Otari
+VERDICT_DESK_APPEND_PUBLIC=1 python3 -m verdict_desk decide-v7 BTCUSDT --config config/voices.json
+
+# 2. the chain is intact, and every verdict is re-derived offline
+python3 -m verdict_desk verify && python3 -m verdict_desk replay
+
+# 3. the eight resources, and each receipt against Otari's usage log
+python3 -m verdict_desk otari-audit --reconcile
 ```
 
-[`web/index.html`](web/index.html) is the landing page (live figures, the score map, the latest cycle as one strip). [`web/cycle.html`](web/cycle.html) shows one cycle call by call: a timeline of every call with its receipt, the canary, the budget headroom, who saw each prompt, and a scoreboard of the open models. It is a static page, so serve the repository as above to see it rendered.
+Python 3 and its standard library are enough; there is no install step. To see a cycle rendered, run `python3 -m http.server` in the repository root and open `http://localhost:8000/web/cycle.html`.
 
-## One ledger, two eras
+## Verify without trusting us
 
-`ledger/ledger.jsonl` is a single hash chain. Dossiers 1 to 791 were recorded by the earlier version of this project, before it ran on Otari (models behind other providers, no gateway receipts). **The Otari era starts at dossier 792**: its `prev_hash` is the hash of dossier 791, so the chain was continued, not restarted, and `python3 -m verdict_desk verify` checks all of it. Every dossier from 792 carries the Otari run summary and a receipt for each call; the audit, the scoreboard and `web/cycle.html` read only those. Dossiers 792 to 800 were recorded from a local machine (by hand or by the local runner); from dossier 801 on, a scheduled GitHub Actions job (the workflow `otari-cycle`, hourly) records the cycles.
+You need no key, no account and none of our word for the first three.
+
+- **Offline, from a clone:** `python3 -m verdict_desk verify` recomputes every hash and link of the chain, and `python3 -m verdict_desk replay` re-derives each verdict from its frozen evidence. An edited or forged dossier fails one of the two.
+- **In your browser:** [`web/verify.html`](web/verify.html) takes a dossier, recomputes its hash, checks its link in the chain and re-derives the verdict, with JavaScript that is tested against the Python implementation.
+- **Call by call:** [`web/cycle.html`](web/cycle.html) shows one cycle as a timeline of receipts: the model asked for and the model that answered, provider, cost, latency, fallback, request id, budget headroom and who saw each prompt. [`web/index.html`](web/index.html) is the landing page.
+- **Against Otari:** `python3 -m verdict_desk otari-audit --reconcile` compares each receipt with Otari's own usage record by request id (free GET calls, a key is required).
+
+The pages are static: serve the repository as shown in the quickstart to see them rendered.
 
 ## Proofs, resource by resource
 
@@ -83,7 +129,26 @@ Every call of every Otari-era dossier, grouped by the model that answered. The f
 
 </details>
 
+## What we learned about Otari
+
+Putting a real agent behind the gateway turned up friction worth reporting. Every instance is written down in the [feedback log](docs/FEEDBACK_LOG.md) with the symptom, the steps to reproduce, what the docs say and what we did about it. A few entries an Otari engineer may want first:
+
+- a slow model answers with an edge 504 and an HTML page, with no Otari request id (entry 1);
+- the `user` field with an ordinary key is refused with a message that does not name the cause (entry 2);
+- `usage.cost_usd` is rounded to six decimals, which erases the cost of small calls (entry 3);
+- the `Otari-Guardrails` header says a guardrail is attached but not whether it ran, and `valid` stays null (entries 11 and 13);
+- MCP activity is invisible on Chat Completions, so the proof needs a streamed Messages request (entry 16).
+
+The log also records what worked on the first try (entry 19), since that is feedback too. No GitHub issue has been opened for these yet, so the log is the one place to read them.
+
 ## Details
+
+<details>
+<summary>One ledger, two eras</summary>
+
+`ledger/ledger.jsonl` is a single hash chain. Dossiers 1 to 791 were recorded by the earlier version of this project, before it ran on Otari (models behind other providers, no gateway receipts). **The Otari era starts at dossier 792**: its `prev_hash` is the hash of dossier 791, so the chain was continued, not restarted, and `python3 -m verdict_desk verify` checks all of it. Every dossier from 792 carries the Otari run summary and a receipt for each call; the audit, the scoreboard and `web/cycle.html` read only those. Dossiers 792 to 800 were recorded from a local machine (by hand or by the local runner); from dossier 801 on, a scheduled GitHub Actions job (the workflow `otari-cycle`, hourly) records the cycles.
+
+</details>
 
 <details>
 <summary>The checker has a consequence (rules v7)</summary>
@@ -133,19 +198,63 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 | `sepolia.gateway.tenderly.co` | a public Sepolia RPC (fallback) | read calls | not used on the otari branch (no key) |
 | `sepolia.etherscan.io` | a block explorer link | nothing from us: it is a link a reader may open | never contacted by the code |
 | `api.mistral.ai` | the original, pre-Otari LLM provider (the default when OTARI_API_KEY is not set) | prompts, only when MISTRAL_API_KEY is set and OTARI_API_KEY is not | never in Otari mode |
-| `api.anthropic.com` | the optional native Claude provider (LLM_PROVIDER=anthropic) | prompts, only when that provider is selected | never in Otari mode |
+| `api.anthropic.com` | the optional native Anthropic provider (LLM_PROVIDER=anthropic) | prompts, only when that provider is selected | never in Otari mode |
 <!-- otari:hosts:end -->
+
+</details>
+
+<details>
+<summary>Architecture and file map</summary>
+
+| Path | What lives there |
+|---|---|
+| `verdict_desk/` | the Python package: `llm.py` (the gateway client, receipts, routing, budgets), `agents_v7.py` (rules v7), `otari_*.py` (web tools, MCP, canary, drill, audit and report), `sandbox_rederive.py`, `dossier.py` and `canonical.py` (the hash chain) |
+| `config/` | `otari.json` (roles, models, policies, caps), `voices.json` (news sources), `external_hosts.json` (every host the code names) |
+| `ledger/` | `ledger.jsonl` (the chain), the head files, OpenTimestamps proofs in `timestamps/`, Sigstore bundles in `rekor/` |
+| `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, and the earlier-era pages |
+| `tools/` | `otari_runner.py` (the cycle runner the scheduled job calls) and `otari_catalog_check.py` |
+| `scripts/` | generators for the README blocks and the cards in `docs/readme/` |
+| `docs/` | the [feedback log](docs/FEEDBACK_LOG.md), [architecture](docs/architecture.md), the [history of the earlier chain](docs/HISTORY.md) and the [evidence files](docs/evidence/) |
+| `tests/` | the Python and Node suites |
+
+The README blocks (proofs, models, scoreboard, hosts) and the figures card are rewritten from the ledger by `python3 scripts/refresh_otari_readme.py` on every cycle. The header, the buttons and the cycle diagram are drawn by `python3 scripts/otari_cards.py`. Nothing generated is edited by hand.
+
+</details>
+
+<details>
+<summary>Tests and how to run them</summary>
+
+```bash
+env -u OTARI_API_KEY python3 -m unittest discover -s tests -q   # the Python suite, no network, no key
+node --test tests/*.test.js                                      # the browser code (verifier, cycle page, stats)
+python3 scripts/refresh_otari_readme.py --check                  # the README blocks and the figures card match the ledger
+```
+
+The suite guards the chain (edit, delete, swap, forge and truncate attacks must be caught), the Python and JavaScript parity of the verifier and the scoreboard, the audit, and these README blocks. No test spends on Otari or sends a transaction.
+
+</details>
+
+<details>
+<summary>Limits and honest caveats</summary>
+
+- **Paper trading only.** No order is routed anywhere and there is no key with trading rights. The verdicts are simulated positions, not advice.
+- **Guardrails are NOT PROVEN.** The policy has one attached, but Otari reported `valid: null` on every call and the hosted gateway has no guardrails service we could find (feedback log, entry 13). It is not counted anywhere.
+- **Otari's budget refusal was seen once, in a drill.** No production cycle has been refused by an Otari budget; the per-cycle caps are our own code, not an Otari feature.
+- **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
+- **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.
+- **Earlier era.** Dossiers before 792 have no gateway receipts and are not part of the Otari audit.
+- **Sepolia is not used on this branch** (no key); the anchor belongs to the earlier era.
 
 </details>
 
 ## More
 
-[Friction log: every real snag met with the gateway](docs/FEEDBACK_LOG.md) · [architecture of the code](docs/architecture.md) · evidence files in [`docs/evidence/`](docs/evidence/).
-
-Background, not part of the Otari work: the earlier chain and its tooling (hash-chained dossiers, the citation validator, a Chainlink CRE anchor on Sepolia) are described in [`docs/HISTORY.md`](docs/HISTORY.md).
+[Architecture of the code](docs/architecture.md), [evidence files](docs/evidence/), and, as background that is not part of the Otari work, the earlier chain and its tooling (hash-chained dossiers, the citation validator, a Chainlink CRE anchor on Sepolia) in [`docs/HISTORY.md`](docs/HISTORY.md).
 
 ## About this repository
 
 It started as a snapshot of [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9` (the state of that project when the BLI Legal Tech Hackathon 2 closed), which is kept as it was. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` is defined on `main` and runs `tools/otari_runner.py` against the `otari` branch. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
 
-MIT, see [`LICENSE`](LICENSE). Built by Andri Amaro with the help of an AI coding agent (Claude Code). The AI assistance is disclosed here on purpose.
+## License and credits
+
+MIT, see [`LICENSE`](LICENSE). Built by Andri Amaro with the help of an AI coding agent. The AI assistance is disclosed here on purpose.
