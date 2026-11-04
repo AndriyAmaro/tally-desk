@@ -61,8 +61,19 @@ test("no text of the ledger even half-fires: the highest score over the ledger s
 test("the app's own system prompts pass: a mandated guardrail may screen the whole input, system prompt included", (t) => {
   const run = spawnSync("python3", [path.join(__dirname, "guardrail_prompts_dump.py")], { cwd: ROOT, encoding: "utf8", env: { ...process.env, OTARI_API_KEY: "" } });
   if (run.status !== 0) return t.skip("python3 could not import the app here: " + String(run.stderr).slice(-200));
-  const prompts = JSON.parse(run.stdout);
+  const { prompts, drill } = JSON.parse(run.stdout);
   assert.ok(prompts.length >= 10, `${prompts.length} prompts captured`);
   const flagged = prompts.filter((p) => D.analyze(p).score >= D.THRESHOLD).map((p) => ({ score: D.analyze(p).score, rules: D.analyze(p).findings.map((f) => f.id), text: p.slice(0, 120) }));
   assert.deepEqual(flagged, []);
+});
+
+test("the inputs of the guardrail drill: the benign headline passes, the malicious one is refused (and the drill's own system prompt passes)", (t) => {
+  const run = spawnSync("python3", [path.join(__dirname, "guardrail_prompts_dump.py")], { cwd: ROOT, encoding: "utf8", env: { ...process.env, OTARI_API_KEY: "" } });
+  if (run.status !== 0) return t.skip("python3 could not import the app here");
+  const { drill } = JSON.parse(run.stdout);
+  assert.equal(D.validate(drill.system).valid, true);
+  assert.equal(D.validate(drill.benign).valid, true);
+  const bad = D.validate(drill.injection);
+  assert.equal(bad.valid, false);
+  console.log(`# drill: malicious headline scores ${bad.score}, benign ${D.validate(drill.benign).score}`);
 });

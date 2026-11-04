@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from verdict_desk import llm, narrative, otari_canary, otari_mcp, otari_web, sandbox_rederive, source_drift  # noqa: E402
+from verdict_desk import llm, narrative, otari_canary, otari_drill, otari_mcp, otari_web, sandbox_rederive, source_drift  # noqa: E402
 
 seen: list[str] = []
 
@@ -28,4 +28,6 @@ for call in (lambda: llm.rule(labels, items, ask=ask), lambda: llm.check_claims(
     except (ValueError, KeyError, TypeError):
         pass  # the stub answers an empty list; only the prompt matters here
 seen.extend([narrative.SYSTEM, otari_web.SEARCH_SYSTEM, otari_web.FETCH_SYSTEM, source_drift.SYSTEM, sandbox_rederive.SYSTEM, otari_mcp.SYSTEM, otari_canary.SYSTEM])
-print(json.dumps(sorted(set(seen))))
+drill = {"system": otari_drill.GUARDRAIL_SYSTEM, "benign": otari_drill._headline_prompt(otari_drill.BENIGN_HEADLINE),
+         "injection": otari_drill._headline_prompt(otari_drill.MALICIOUS_HEADLINE)}  # the inputs of `otari-drill guardrail`
+print(json.dumps({"prompts": sorted(set(seen)), "drill": drill}))

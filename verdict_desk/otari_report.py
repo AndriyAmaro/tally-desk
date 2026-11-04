@@ -344,6 +344,14 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
         first = (f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated ({why}); not counted. " if seen
                  else "no sealed receipt carries an Otari-Guardrails header; ")
         row(5, False, [_rid(r) for _, r in seen[:2]], seen[0][0] if seen else None, first + custom[0].upper() + custom[1:])
+    gd = next((e for e in reversed(evidence) if e.get("drill") == "guardrail" and e.get("pass")), None)
+    if gd:  # the live block drill is named beside the row, apart from the sealed proof and never counted
+        inj = gd.get("injection") or {}
+        ids = [(gd.get("benign") or {}).get("receipt", {}).get("request_id"), (inj.get("error") or {}).get("request_id")]
+        rows[-1]["drill_proof"] += [i for i in ids if i and i not in rows[-1]["drill_proof"]]
+        score = (inj.get("flagged") or [{}])[0].get("score")
+        rows[-1]["note"] += (f". The guardrail drill (block mode, not sealed, not counted) served a benign headline with an evaluated verdict and refused a malicious one with "
+                             f"{(inj.get('error') or {}).get('status')} {(inj.get('error') or {}).get('code')} (score {score})")
     # 6 web search and fetch: the newest dossier with a completed search and fetch; among those, the newest where the analysts really
     # cited what was found (the page excerpt first, then a source title), so the proof shows the evidence used and not only fetched
     cands = []

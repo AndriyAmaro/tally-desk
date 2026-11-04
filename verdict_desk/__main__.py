@@ -175,6 +175,9 @@ def cmd_otari_drill(opts) -> int:
         if r["drill"] == "role-fallback":
             print("\n".join(otari_drill.summary_lines(r)))
             continue
+        if r["drill"] == "guardrail":
+            print("\n".join(otari_drill.guardrail_summary_lines(r)))
+            continue
         if r["drill"] == "mcp":
             b = r["block"]
             print(f"drill mcp: {'PASS' if r['pass'] else 'FAIL'} request {(b.get('receipt') or {}).get('request_id')} prices {b.get('prices')} cost ${(b.get('receipt') or {}).get('cost_usd')}")
@@ -535,8 +538,8 @@ def main() -> int:
     p.add_argument("--recent", type=int, default=24, metavar="N", help="how many of the newest dossiers (default 24)")
     p.add_argument("--outdir", required=True, metavar="DIR", help="where to write <seq>.json")
     p.set_defaults(func=cmd_packs)
-    p = sub.add_parser("otari-drill", help="real Otari requests that prove a routing fallback, the app's role fallback chain and a budget refusal; receipts go to an evidence file, not to the ledger")
-    p.add_argument("which", choices=["fallback", "role-fallback", "budget", "mcp", "users", "all"])
+    p = sub.add_parser("otari-drill", help="real Otari requests that prove a routing fallback, the app's role fallback chain, a budget refusal and a guardrail block (guardrail needs the service deployed and the mandate created; it is not part of all); receipts go to an evidence file, not to the ledger")
+    p.add_argument("which", choices=["fallback", "role-fallback", "budget", "mcp", "users", "guardrail", "all"])
     p.add_argument("--evidence", type=Path, default=None, help="evidence file to append to (default docs/evidence/otari-drills.jsonl)")
     p.set_defaults(func=cmd_otari_drill)
     p = sub.add_parser("otari-audit", help="the eight Otari resources proven from the sealed receipts, with the request id of each proof; --reconcile compares receipts with Otari's own usage records")
