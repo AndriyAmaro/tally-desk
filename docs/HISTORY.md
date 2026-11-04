@@ -8,7 +8,7 @@ Until 4 November 2026 this project was also called Verdict Desk. It was renamed 
 
 The earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk), was written for a legal-tech hackathon and pitched as evidence a lawyer could file. This repository was imported from it at commit `c65bab9`, and the original stays exactly as it was. The pages written for that pitch, the printable exhibits, the self-hosted model gateway and the research tools stay in that frozen repository and are not carried here. That pitch is not the product described in this repository.
 
-The first commit of the Otari era is [`2bdfe40`](https://github.com/AndriyAmaro/verdict-desk-otari/commit/2bdfe40cfdd124f9997dbb617f797870630bcf1b): every model call goes through the gateway, one open-weight model per role, one receipt per call.
+The first commit of the Otari era is [`2bdfe40`](https://github.com/AndriyAmaro/tally-desk/commit/2bdfe40cfdd124f9997dbb617f797870630bcf1b): every model call goes through the gateway, one open-weight model per role, one receipt per call.
 
 ## What carried over
 
