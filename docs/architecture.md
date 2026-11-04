@@ -41,9 +41,9 @@ Nothing here knows about markets or models. It is the part a second agent reuses
 | Replay | `dossier.replay(dossier, rules_version)`, `python3 -m verdict_desk replay` | Recomputes features and the verdict from the evidence frozen in the record and compares them with what was recorded. It also rechecks what can be recomputed without a network: that every accepted claim still validates against the frozen evidence, the judge route, the canary verdict, the web excerpt check, the MCP price check and the local half of the sandbox check. |
 | Attack battery | `verdict_desk/battery.py`, `python3 -m verdict_desk battery` | Edits, deletes, swaps, forges, truncates and re-hashes a copy of the ledger and counts what the verifier misses. |
 
-A record is `{seq, prev_hash, ...fields, hash}`. Which fields exist is the workload's business. The only fields the core itself reads are `seq`, `prev_hash` and `hash`, plus `evidence.symbol` in `dossier.head`.
+A record is `{seq, prev_hash, ...fields, hash}`. Which fields exist is the workload's business. The only fields the core itself reads are `seq`, `prev_hash` and `hash`, plus `evidence.symbol` in `dossier.head` (or `workload.name` for a `receipts/1` record, see "Bring your own agent").
 
-Three functions in `dossier.py` are tied to the workload today: `build` and `append` (they run the trading steps of section 3) and `replay` (it dispatches by `rules_version` to the trading modules).
+Three functions in `dossier.py` are tied to the trading workload: `build` and `append` (they run the trading steps of section 3) and `replay` (it dispatches by `rules_version` to the trading modules). A record of kind `receipts/1` skips all three: `verdict_desk/seal.py` builds and appends it, and `replay` hands it to `seal.replay`.
 
 ## 2. Gateway adapter
 
@@ -151,53 +151,23 @@ Each part of the repository is either **integrated** (it runs in the Otari cycle
 
 ## Bring your own agent
 
-Today a second agent can reuse the gateway adapter and the chain check as they are, and has to write a small amount of glue and its own replay. There is no `seal()` function to call yet. This is exactly what a second workload touches.
+A second agent can seal its Otari calls with `verdict_desk/seal.py`. [`docs/bring-your-own-agent.md`](bring-your-own-agent.md) has the short sketch (it runs in the test suite), the guarantees, the generic closure checks and the limits; [`examples/`](../examples/README.md) has a complete agent that is not about trading. What follows is how the parts fit and what a second workload still touches.
 
-**1. Roles.** Add its roles to `config/otari.json` under `roles`, each with a catalog `model`. `llm.otari_config` refuses a role without one, and `llm.chat` refuses a role that is not listed. `tools/otari_catalog_check.py` checks that the ids are real and open-weight.
+**1. Roles.** The agent's roles live in a role config like `config/otari.json` (`examples/otari_roles.json` is a minimal one) and are passed as `Session(config=...)`. Each role has a catalog `model`; `llm.otari_config` refuses a role without one and `llm.chat` refuses a role that is not listed. `tools/otari_catalog_check.py` checks that ids are real and open-weight. Adding roles to `config/otari.json` itself changes the config hash every trading dossier seals, so a foreign agent uses a file of its own.
 
-**2. Calls.** Call `llm.chat(..., role=...)` and read `llm.served_receipt()` straight after, on the same thread. Call `llm.reset_cycle()` before a cycle and `llm.cycle_status()` after it. Receipts, per-role end users, the budget header, idempotent retries and the cycle caps come with it.
+**2. Calls.** `Session.ask(role, system, user, ...)` calls `llm.chat` and keeps `llm.served_receipt()` for that call, failures included. Receipts, per-role end users, the budget header, idempotent retries, role fallbacks and the cycle caps come with it. A session starts with `llm.reset_cycle()` and seals `llm.cycle_status()`.
 
-**3. A deterministic decision.** The agent needs a function from its frozen evidence to its decision, which is what `agents_v2.decide` is for trading. If its claims should cite evidence, `citations.validate(claims, items)` works on any `{id: text}` dict, but `citations.index` reads `packet["market"]` and the prompts in `llm.argue` and `llm.rule` are about a market debate, so the agent writes its own index and prompts.
+**3. A deterministic decision.** If the agent has one, it is the agent's own function from its frozen outputs to its decision, which is what `agents_v2.decide` is for trading. If its claims should cite evidence, `citations.validate(claims, items)` works on any `{id: text}` dict, but `citations.index` reads `packet["market"]` and the prompts in `llm.argue` and `llm.rule` are about a market debate, so the agent writes its own index and prompts.
 
-**4. Sealing.** `dossier.build` and `dossier.append` are wired to the trading steps, so a second agent seals its own record. This sketch of the glue uses only functions that exist. It is what `dossier.append` does without the trading parts:
+**4. Sealing.** `Session.seal()` builds a record of kind `receipts/1`: the workload name and mode, the frozen input and its sha256, the outputs, the receipts of every call, `llm.otari_summary()` and the cycle spend. It runs the generic closure (`seal.CHECKS`: calls accounted, receipts schema, input frozen, priced within the cap, and two soft checks) and appends the record, in the same chain format `dossier.verify` reads, to the ledger the caller named. If a hard check fails nothing is appended and the reasons are returned. The API refuses `ledger/ledger.jsonl` and any ledger that holds a record that is not `receipts/1`.
 
-```python
-import json
-from pathlib import Path
-from verdict_desk import dossier, llm
+**5. Replay.** `dossier.replay` hands a `receipts/1` record to `seal.replay`: it recomputes the hash, the shape of the record, the schema of every receipt and the closure, and reports `no rules to re-derive (receipts record)` with `replayed` set to `None`. No verdict is re-derived, because a foreign workload has no rules here; an agent whose decision is deterministic ships its own replay. Trading dossiers take the same path as before. In the browser, `web/receipts.js` does the same recomputation (`tests/test_seal.py` compares it with Python), and `web/verify.html` shows the record as verified for integrity and linkage and says there is no verdict to re-derive. It checks the link among the pasted records, never against the published trading ledger.
 
-def seal(path: Path, evidence: dict, decision: dict, receipts: dict[str, dict]) -> dict:
-    ledger = dossier.read_ledger(path)
-    prev = ledger[-1]["hash"] if ledger else dossier.GENESIS
-    body = {
-        "seq": len(ledger) + 1,
-        "prev_hash": prev,
-        "evidence": evidence,                     # must hold "symbol" for dossier.head
-        "decision": decision,
-        "llm": {"otari": llm.otari_summary(),     # marks the record as an Otari-era dossier
-                **{role: {"receipt": r} for role, r in receipts.items()}},
-    }
-    record = {**body, "hash": dossier.digest(body)}
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    return record
+**6. Audit and the call-by-call page.** `otari_report.calls_of` and `callsOf` in `web/cycle.js` look for receipts only in the fixed places of a trading dossier (`evidence.narrative.receipts`, `evidence.web.receipt`, `evidence.web.page.receipt`, `evidence.market_mcp.receipt`, `llm.bull`, `llm.bear`, `llm.checker`, `llm.judge`, `llm.otari.canary.receipt` and `sandbox.receipt`). A `receipts/1` record keeps its receipts in `calls`, so the audit (`otari_report.audit`, written for the nine trading roles) and the cycle page do not read it. A second agent that wants them extends both functions together (`tests/test_otari_report.py` and `tests/cycle.test.js` compare the Python and JavaScript sides).
 
-llm.reset_cycle()
-answer = llm.chat(SYSTEM, case_text, role="judge", max_tokens=400)
-receipt = llm.served_receipt()
-seal(Path("ledger/ledger.jsonl"), {"symbol": case_id, "case": case_text},
-     decide(answer), {"judge": receipt})
-```
+**7. Witnesses.** `dossier.head` gives the head of a receipts ledger too (the workload name stands in for the symbol) and `ots stamp` can stamp it, but the loop that does this every cycle is `tools/otari_runner.py`, which is written for `decide-v7` and three symbols. A second agent needs its own loop or a runner generalized to take a command.
 
-That is about a dozen lines. I ran the sketch on a scratch ledger with a receipt built by `llm.parse_receipt` from made-up headers: `dossier.verify` returned no problems, `dossier.head` returned the head, `python3 -m verdict_desk --ledger PATH verify` printed `Chain intact`, and `otari_report.calls_of` found the receipt. It was not run against the live gateway.
-
-**5. Replay.** The agent ships its own `replay(record)` that recomputes its decision from `record["evidence"]` and compares. `dossier.replay` and `python3 -m verdict_desk replay` cannot do it: on the scratch ledger the command stops with `KeyError: 'market'`. In the browser, `web/verify.html` still recomputes the hash and checks the link for such a record, but the re-derivation step (`web/policy.js`) is the trading policy and returns no result for it.
-
-**6. Audit and the call-by-call page.** `otari_report.calls_of` and `callsOf` in `web/cycle.js` look for receipts only in fixed places: `evidence.narrative.receipts`, `evidence.web.receipt`, `evidence.web.page.receipt`, `evidence.market_mcp.receipt`, `llm.bull`, `llm.bear`, `llm.checker` and `llm.judge` (each as `.receipt`), `llm.otari.canary.receipt` and `sandbox.receipt`. A dossier counts as Otari-era when `llm.otari` is an object. A second agent either names its roles and places its receipts in those slots, as the sketch does with `judge`, or extends both functions together (`tests/test_otari_report.py` and `tests/cycle.test.js` compare the Python and JavaScript sides). The eight-resource audit, `otari_report.audit`, is written for the nine roles above and would need the same treatment.
-
-**7. Witnesses.** `dossier.head` gives the head and `ots stamp` can stamp it, but the loop that does this every cycle is `tools/otari_runner.py`, which is written for `decide-v7` and three symbols. A second agent needs its own loop or a runner generalized to take a command.
-
-What stands between this and an API, in short: a `seal` function and a `replay` hook in `dossier.py` that take the workload's body and decision function instead of importing the trading modules, and a receipt location that is not fixed.
+What still stands between this and a full second product: a per-workload replay hook (`seal.replay` stops at the record), a receipt reader for the audit and the cycle page that is not tied to fixed places, and a generalized runner. The API has not been run against the live gateway yet; the tests use a fake transport.
 
 ## Trust model and limits
 
