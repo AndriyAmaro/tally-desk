@@ -137,10 +137,16 @@ class AuditTest(unittest.TestCase):
         rows = {r["n"]: r["status"] for r in rep.audit([], [])}
         self.assertEqual(set(rows.values()), {"NOT PROVEN"})
         d = synthetic()
-        d["llm"]["judge"]["receipt"]["guardrail_result"] = {"prompt-injection": "pass"}
+        entry = {"profile": "tally-web-injection", "mode": "monitor", "valid": True, "score": 0.0, "status": "evaluated"}
+        d["llm"]["judge"]["receipt"]["guardrails"] = [entry]
+        d["llm"]["judge"]["receipt"]["guardrail_result"] = {"tally-web-injection": "pass"}
         self.assertEqual(rep.audit([d], [])[4]["status"], "PASS")
-        d["llm"]["judge"]["receipt"]["guardrail_result"] = {"prompt-injection": "not_evaluated"}
+        d["llm"]["judge"]["receipt"]["guardrails"] = [{**entry, "valid": None, "status": "unavailable", "reason": "not_configured"}]
+        d["llm"]["judge"]["receipt"]["guardrail_result"] = {"tally-web-injection": "not_evaluated"}
         self.assertEqual(rep.audit([d], [])[4]["status"], "NOT PROVEN")
+        d["llm"]["judge"]["receipt"]["guardrails"] = [{**entry, "profile": "prompt-injection"}]
+        d["llm"]["judge"]["receipt"]["guardrail_result"] = {"prompt-injection": "pass"}
+        self.assertEqual(rep.audit([d], [])[4]["status"], "NOT PROVEN", "an evaluated verdict of the policy's own profile is not the custom profile")
 
     def test_two_roles_on_the_same_model_do_not_prove_distinct_roles(self):
         d = synthetic()
