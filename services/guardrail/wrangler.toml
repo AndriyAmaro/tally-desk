@@ -1,0 +1,6 @@
+# Cloudflare Workers deployment of the Tally guardrails service. No secret lives here:
+# the token is set once with `npx wrangler secret put GUARD_TOKEN` and is read as env.GUARD_TOKEN.
+name = "tally-desk-guardrail"
+main = "worker.js"
+compatibility_date = "2026-11-04"
+workers_dev = true

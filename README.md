@@ -35,7 +35,7 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 1. **Evidence** is gathered from public market data and news, then frozen. Otari's web search and fetch tools add one sourced page.
 2. **Bull and bear** argue from the same evidence, each on its own open-weight model.
 3. **The citation checker** re-reads every claim against the evidence it cites. From rules v7 its marks have a consequence for the verdict (see the details below).
-4. **The judge** weighs only the claims that were validated. A guardrail is attached to its policy, but Otari never reported a result, so that feature is **NOT PROVEN** and not claimed.
+4. **The judge** weighs only the claims that were validated. A guardrail is attached to its policy, but Otari never reported a result, so that feature is **NOT PROVEN** and not claimed. A guardrail service of our own is built for it (see the details below) but is not deployed, so nothing changes in the audit until live receipts exist.
 5. **The rules engine** is ordinary deterministic code. It turns the judge's lean into a paper-trade verdict, and `replay` recomputes it from the frozen evidence.
 6. **Two independent checks** run through Otari: the verdict is re-derived in Otari's code sandbox and compared with the local run, and prices are read through an MCP server and compared with the market data.
 7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
@@ -55,7 +55,7 @@ Three safeguards sit around those steps, each with its own receipts or sealed fi
 |---|---|---|
 | Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard), [models and roles](#models-and-roles) |
 | Otari features, 10 each, max 6 (60) | Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP | [Proofs](#proofs-resource-by-resource) rows 2, 3, 4, 6, 7, 8, each with request ids |
-| Guardrails | **NOT PROVEN, and not claimed.** Attached to the `vd-judge` policy, but Otari reported `valid: null` on every call, so nothing was evaluated | [Proofs](#proofs-resource-by-resource) row 5 |
+| Guardrails | **NOT PROVEN, and not claimed.** Attached to the `vd-judge` policy, but Otari reported `valid: null` on every call, so nothing was evaluated. A service of our own for the prompt-injection screen is built ([`services/guardrail/`](services/guardrail/README.md)) and switched off until it is deployed | [Proofs](#proofs-resource-by-resource) row 5 |
 | Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](web/cycle.html) |
 | Our feedback to Otari | Every real snag met with the gateway, with symptom, steps to reproduce and status | [`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md) |
 
@@ -219,14 +219,14 @@ Code: `llm._end_user`, `llm.read_headroom`
 
 **NOT PROVEN** &nbsp;|&nbsp; No proof &nbsp;|&nbsp; dossier 815
 
-> attached to the vd-judge policy, but Otari reported valid null on 6 calls: nothing was evaluated (from dossier 805 the header says why: status unavailable, reason not_configured); not counted
+> attached to the vd-judge policy, but Otari reported valid null on 6 calls: nothing was evaluated (from dossier 805 the header says why: status unavailable, reason not_configured); not counted. The custom profile tally-web-injection appears in no sealed receipt yet: it needs the service deployed (services/guardrail), the Otari organization mandate, and guardrails.enabled true in config/otari.json
 
 Request ids:
 
 - `553b223e-b7f0-45f9-8538-7ef80ae0512b`
 - `214591ee-0f32-4521-92f8-86a7445b93f1`
 
-Code: `llm.parse_receipt`
+Code: `llm.guardrail_request`, `llm.parse_receipt`, `services/guardrail/`
 
 #### 6. Web search and fetch
 
@@ -266,7 +266,7 @@ Request ids:
 Code: `otari_mcp.py`
 <!-- otari:proofs:end -->
 
-`otari-audit` prints this table from the ledger. A proof "sealed" lives in the hash-chained ledger and is replayed offline; a "drill" proof lives in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) and is not sealed. The guardrail row is NOT PROVEN on purpose: it is attached to the `vd-judge` policy, but Otari reported no verdict (`valid: null`) on every call; since dossier 805 the header also says why (`status: unavailable`, `reason: not_configured`).
+`otari-audit` prints this table from the ledger. A proof "sealed" lives in the hash-chained ledger and is replayed offline; a "drill" proof lives in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) and is not sealed. The guardrail row is NOT PROVEN on purpose: it is attached to the `vd-judge` policy, but Otari reported no verdict (`valid: null`) on every call; since dossier 805 the header also says why (`status: unavailable`, `reason: not_configured`). It turns to PASS only when sealed receipts carry an `Otari-Guardrails` entry with `status: evaluated` for the custom profile `tally-web-injection`; a header with status `unavailable` or `inconclusive`, or an evaluated verdict of another profile, is never counted, and a drill is named beside the row but not counted.
 
 <img src="docs/readme/icons/board.svg" width="44" height="44" alt="">
 
@@ -324,6 +324,18 @@ The log also records what worked on the first try (entry 19), since that is feed
 <summary>The checker has a consequence (rules v7)</summary>
 
 Four models take part in every decision: a bull and a bear analyst, a judge, and a **citation checker** that re-reads each validated claim against the evidence it cites. Through dossier 801 (rules v6) the checker was advisory. From rules v7 its marks are part of the verdict: if the judge's lean rests on a claim the checker marked unsupported, that lean carries no weight (the judge only breaks ties, so this can send a close call back to no position and never opens one). The marks are frozen in the dossier, the rule is written in the verdict's `policy`, the outcome is sealed as `verdict.checker_gate`, and the replay recomputes it, so editing a mark fails the replay. A missing or failed checker changes nothing. Dossiers recorded by the scheduled job after this change use `decide-v7`; dossiers 792 to 801 stay v6 and still replay to the same verdicts.
+
+</details>
+
+<details>
+<summary>Guardrails: the screen we built, and what is not proven yet</summary>
+
+Our agents put untrusted text in prompts: news headlines, fetched web pages, Telegram previews. A prompt-injection screen on that text is a real need. The hosted Otari gateway has no guardrails service of its own (feedback log, entries 11 and 13), but Otari lets an organization mandate a profile that points at a service of its own, with a bearer credential, so we wrote one.
+
+- **The service** is [`services/guardrail/`](services/guardrail/README.md): a zero-dependency JavaScript service for Cloudflare Workers (Vercel functions also work) that speaks Otari's `POST /validate` contract with the profile `tally-web-injection`. It is **rules, not a model**: weighted patterns for instruction override, system prompt exfiltration, role or format hijack, requests to send data to a URL, and hidden characters, with a score from 0 to 1 and `valid: false` at 0.7 or more. It is tested on 48 injection samples and 80 benign ones, and on every text of this repository's ledger (news titles, page excerpts, the evidence the analysts read, narrative voices, claims; 20,252 distinct texts) where it flags none, because a false positive blocks a cycle. It misses rephrased and translated attacks, and says so.
+- **The switch** is `guardrails.enabled` in `config/otari.json`, and it is **false**. When it is true, the requests of the analysts, the checker, the judge, the narrator and the search and fetch tools carry `guardrails: [{"profile": "tally-web-injection", "mode": "monitor", "on_unavailable": "monitor"}]`, so a service outage never stops a cycle. The endpoint and the credential live in an organization mandate in the Otari dashboard, never in this repository. Each receipt records the `Otari-Guardrails` entry (profile, mode, valid, score, status, reason), the cycle page shows a chip per call, and a soft closure check `guardrail_ran` exists only for a cycle run with the switch on.
+- **The drill** `python3 -m verdict_desk otari-drill guardrail` sends a benign and a deliberately malicious headline through the narrator in `block` mode and writes an evidence line. Nothing has been run yet, so there is no result to report.
+- **What the audit says** stays **NOT PROVEN** until live receipts exist. It turns to PASS only from sealed receipts whose header says `status: evaluated` for the custom profile, and it names the dossier and request ids then. Until the owner deploys the service, sets the token as a Worker secret and pastes it into the Otari dashboard, and sets the switch, no receipt can show that.
 
 </details>
 
@@ -411,7 +423,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 <summary>Limits and honest caveats</summary>
 
 - **Paper trading only.** No order is routed anywhere and there is no key with trading rights. The verdicts are simulated positions, not advice.
-- **Guardrails are NOT PROVEN.** The policy has one attached, but Otari reported `valid: null` on every call; since dossier 805 the header says `unavailable, not_configured` (the hosted gateway has no guardrails service we could find; feedback log, entries 11 and 13). It is not counted anywhere.
+- **Guardrails are NOT PROVEN, and the service we built for them is not deployed.** The policy has one attached, but Otari reported `valid: null` on every call; since dossier 805 the header says `unavailable, not_configured` (the hosted gateway has no guardrails service we could find; feedback log, entries 11 and 13). It is not counted anywhere.
 - **Otari's budget refusal was seen once, in a drill.** No production cycle has been refused by an Otari budget; the per-cycle caps are our own code, not an Otari feature.
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.

@@ -54,14 +54,19 @@ test("the bearer scheme is case-insensitive and extra spaces around the token ar
   assert.equal(post({ profile: "tally-web-injection", input_text: "x" }, { authorization: `Bearer   ${TOKEN}  ` }).status, 200);
 });
 
-test("the token comparison hashes both sides and uses timingSafeEqual", () => {
+test("the token comparison is a constant-width loop in Web-standard JavaScript, with no plain string comparison and no Node API", () => {
   const src = fs.readFileSync(path.join(ROOT, "lib", "auth.js"), "utf8");
-  assert.match(src, /timingSafeEqual/);
   assert.ok(!/===\s*expected|expected\s*===|!==\s*expected/.test(src), "no plain string comparison with the token");
+  assert.ok(!/require\(|process\.|Buffer/.test(src), "auth.js runs unchanged in Cloudflare Workers");
+  assert.equal(A.sameString(TOKEN, TOKEN), true);
+  assert.equal(A.sameString(TOKEN, TOKEN + "0"), false);
+  assert.equal(A.sameString("", TOKEN), false);
+  assert.equal(A.sameString("a".repeat(600), "a".repeat(600)), false, "a token longer than the compared width is never accepted");
   assert.equal(A.bearerMatches(`Bearer ${TOKEN}`, TOKEN), true);
   assert.equal(A.bearerMatches(`Bearer ${TOKEN}0`, TOKEN), false);
   assert.equal(A.bearerMatches(undefined, TOKEN), false);
   assert.equal(A.expectedToken({}), null);
+  assert.equal(A.expectedToken(undefined), null);
   assert.equal(A.expectedToken({ GUARD_TOKEN: "abc" }), "abc");
 });
 
@@ -132,7 +137,7 @@ test("the service logs nothing: neither the text nor the token reaches the conso
     process.stderr.write = err;
   }
   assert.deepEqual([...lines, ...written], []);
-  const sources = ["lib/service.js", "lib/auth.js", "lib/vercel.js", "lib/detector.js", "api/validate.js", "api/profiles.js", "api/health.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
+  const sources = ["lib/service.js", "lib/auth.js", "lib/vercel.js", "lib/detector.js", "worker.js", "api/validate.js", "api/profiles.js", "api/health.js"].map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n");
   assert.ok(!/console\.|process\.std(out|err)/.test(sources), "no logging call exists in the service");
 });
 
@@ -196,7 +201,12 @@ test("an adapter failure answers 500 without echoing the request", async () => {
   assert.ok(!res.sent.includes("secret") && !res.sent.includes("Ignore"));
 });
 
-test("the deployment files: vercel.json rewrites the three paths, the functions exist, package.json has no dependency", () => {
+test("the deployment files: wrangler.toml names the Worker and holds no secret, vercel.json rewrites the paths, the functions exist, package.json has no dependency", () => {
+  const toml = fs.readFileSync(path.join(ROOT, "wrangler.toml"), "utf8");
+  assert.match(toml, /^name = "tally-desk-guardrail"$/m);
+  assert.match(toml, /^main = "worker\.js"$/m);
+  assert.match(toml, /^compatibility_date = "\d{4}-\d{2}-\d{2}"$/m);
+  assert.ok(!/GUARD_TOKEN\s*=|\[vars\]|secret\s*=/i.test(toml.replace(/^#.*$/gm, "")), "the token is a Worker secret, never in the file");
   const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
   assert.deepEqual(cfg.rewrites, [
     { source: "/validate", destination: "/api/validate" },

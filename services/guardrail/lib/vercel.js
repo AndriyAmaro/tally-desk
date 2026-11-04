@@ -1,6 +1,8 @@
 "use strict";
 const { MAX_BODY_BYTES } = require("./service");
 
+const ENV = () => ({ GUARD_TOKEN: process.env.GUARD_TOKEN });
+
 function readBody(req) {
   if (req.body !== undefined && req.body !== null) return Promise.resolve(req.body); // Vercel parses JSON bodies itself
   return new Promise((resolve, reject) => {
@@ -16,13 +18,13 @@ function readBody(req) {
   });
 }
 
-/** Adapts a pure handler (request -> {status, headers, body}) to a Vercel Node function (req, res). */
+/** Adapts a pure handler ((request, env) -> {status, headers, body}) to a Vercel Node function (req, res). */
 function adapt(handler) {
   return async function vercelHandler(req, res) {
     let answer;
     try {
       const body = req.method === "POST" ? await readBody(req) : undefined;
-      answer = handler({ method: req.method, headers: req.headers || {}, body });
+      answer = handler({ method: req.method, headers: req.headers || {}, body: Buffer.isBuffer(body) ? body.toString("utf8") : body }, ENV());
     } catch (_) { // the error text may hold the request, so it is neither logged nor returned
       answer = { status: 500, headers: { "Content-Type": "application/json; charset=utf-8" }, body: { detail: "internal error" } };
     }

@@ -1,7 +1,7 @@
 "use strict";
 /*
  * The three endpoints of the guardrails service as pure functions: request in ({method, headers, body}), answer out ({status, headers, body}).
- * The files in api/ only adapt them to Vercel's (req, res). Nothing here logs: the text under test and the token never reach a log line.
+ * worker.js adapts them to Cloudflare Workers (fetch), the files in api/ to Vercel's (req, res). Web-standard JavaScript only. Nothing here logs: the text under test and the token never reach a log line.
  */
 const { PROFILE, GUARDRAIL_NAME, THRESHOLD, validate } = require("./detector");
 const { expectedToken, bearerMatches } = require("./auth");
@@ -23,26 +23,26 @@ function authorize(request, env) {
 const TOO_LARGE = Symbol("too large");
 
 function parseJson(raw) {
-  if (raw && typeof raw === "object" && !Buffer.isBuffer(raw)) return raw; // the platform already parsed it
-  const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : typeof raw === "string" ? raw : "";
-  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return TOO_LARGE;
+  if (raw && typeof raw === "object") return raw; // the platform already parsed it
+  const text = typeof raw === "string" ? raw : "";
+  if (text.length > MAX_BODY_BYTES || new TextEncoder().encode(text).length > MAX_BODY_BYTES) return TOO_LARGE;
   try { return JSON.parse(text); } catch (_) { return undefined; }
 }
 
-function health(request, env = process.env) {
+function health(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") return fail(405, "use GET", { Allow: "GET, HEAD" });
   const configured = expectedToken(env) !== null;
   return reply(configured ? 200 : 503, { status: configured ? "ok" : "unconfigured", service: "tally-guardrail", profile: PROFILE, threshold: THRESHOLD });
 }
 
-function profiles(request, env = process.env) {
+function profiles(request, env) {
   const denied = authorize(request, env);
   if (denied) return denied;
   if (request.method !== "GET") return fail(405, "use GET", { Allow: "GET" });
   return reply(200, [{ name: PROFILE, guardrail_name: GUARDRAIL_NAME }]);
 }
 
-function validateRequest(request, env = process.env) {
+function validateRequest(request, env) {
   const denied = authorize(request, env);
   if (denied) return denied;
   if (request.method !== "POST") return fail(405, "use POST", { Allow: "POST" });

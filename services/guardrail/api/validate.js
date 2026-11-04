@@ -2,4 +2,4 @@
 const { adapt } = require("../lib/vercel");
 const { validateRequest } = require("../lib/service");
 
-module.exports = adapt((request) => validateRequest(request));
+module.exports = adapt(validateRequest);
