@@ -16,6 +16,8 @@
 
 **Verdict Desk decides on paper trades and answers for every model call it makes.** It is an autonomous trading agent that runs on [Otari](https://otari.ai), the gateway that sits between an app and its model providers. Each of its four decision roles (a bull analyst, a bear analyst, a citation checker and a judge) runs on a different open-weight model, and every call, to a model or to a tool, leaves a receipt: who asked, which model answered through which provider, what it cost, how it stopped. The receipts are sealed into a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
 
+The trading agent is the reference workload. What the project really builds is a tamper-evident receipt layer for an agent that calls models through a gateway: the receipts, the hash chain, the replay and the verifier know nothing about markets. [`docs/architecture.md`](docs/architecture.md) splits the code into four parts and says, function by function, what a second agent would plug in.
+
 <img src="docs/readme/icons/why.svg" width="44" height="44" alt="">
 
 ## Why it matters
@@ -379,10 +381,10 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 | `verdict_desk/` | the Python package: `llm.py` (the gateway client, receipts, routing, budgets), `agents_v7.py` (rules v7), `otari_*.py` (web tools, MCP, canary, drill, audit and report), `sandbox_rederive.py`, `dossier.py` and `canonical.py` (the hash chain) |
 | `config/` | `otari.json` (roles, models, policies, caps), `voices.json` (news sources), `external_hosts.json` (every host the code names) |
 | `ledger/` | `ledger.jsonl` (the chain), the head files, OpenTimestamps proofs in `timestamps/`, Sigstore bundles in `rekor/` |
-| `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, and the earlier-era pages |
+| `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, chain dashboard, witnesses; `web/legacy/` keeps the pages of the earlier project, each with a banner |
 | `tools/` | `otari_runner.py` (the cycle runner the scheduled job calls) and `otari_catalog_check.py` |
 | `scripts/` | generators for the README blocks and the cards in `docs/readme/` |
-| `docs/` | the [feedback log](docs/FEEDBACK_LOG.md), [architecture](docs/architecture.md), the [history of the earlier chain](docs/HISTORY.md) and the [evidence files](docs/evidence/) |
+| `docs/` | the [feedback log](docs/FEEDBACK_LOG.md), [architecture](docs/architecture.md), the [lineage](docs/HISTORY.md) and the [evidence files](docs/evidence/) |
 | `tests/` | the Python and Node suites |
 
 The README blocks (proofs, models, scoreboard, hosts) and the figures card are rewritten from the ledger by `python3 scripts/refresh_otari_readme.py` on every cycle. The header, the buttons and the cycle diagram are drawn by `python3 scripts/otari_cards.py`. Nothing generated is edited by hand.
@@ -417,13 +419,13 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 
 ## More
 
-[Architecture of the code](docs/architecture.md), [evidence files](docs/evidence/), and, as background that is not part of the Otari work, the earlier chain and its tooling (hash-chained dossiers, the citation validator, a Chainlink CRE anchor on Sepolia) in [`docs/HISTORY.md`](docs/HISTORY.md).
+[Architecture of the code](docs/architecture.md) (with a section on bringing another agent), [lineage of the project](docs/HISTORY.md) and [evidence files](docs/evidence/).
 
 <img src="docs/readme/icons/about.svg" width="44" height="44" alt="">
 
 ## About this repository
 
-It started as a snapshot of [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9` (the state of that project when the BLI Legal Tech Hackathon 2 closed), which is kept as it was. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` is defined on `main` and runs `tools/otari_runner.py` against the `otari` branch. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
+It started as a snapshot of the earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9`, which is kept frozen as it was; [`docs/HISTORY.md`](docs/HISTORY.md) says what carried over and what is new. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` is defined on `main` and runs `tools/otari_runner.py` against the `otari` branch. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
 
 ## License and credits
 

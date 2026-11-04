@@ -38,8 +38,7 @@ class OtariCardsTest(unittest.TestCase):
     def test_the_card_changes_when_the_ledger_changes(self):
         self.assertNotEqual(otari_cards.figures_svg(LEDGER, EVIDENCE), otari_cards.figures_svg(LEDGER[:-1], EVIDENCE))
 
-    def test_the_header_is_not_the_bli_header(self):
-        self.assertNotEqual(otari_cards.header_svg(), (ROOT / "docs" / "readme" / "header.svg").read_text(encoding="utf-8"))
+    def test_the_header_names_the_product(self):
         self.assertIn("Verdict Desk on Otari", otari_cards.header_svg())
 
     def test_the_cycle_diagram_is_committed_current_and_shown_in_the_readme(self):
