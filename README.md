@@ -41,6 +41,12 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
 8. **Outside witnesses** let a reader check the head of the chain without trusting the operator: OpenTimestamps (Bitcoin) on each cycle, and the public Sigstore log for the heads published up to dossier 791.
 
+Three safeguards sit around those steps, each with its own receipts or sealed fields:
+
+- **Role fallback chains.** If the gateway refuses the model a role asked for for a model-side reason (HTTP 402 `pricing_required`, an unknown or unavailable model, a 5xx that outlived the retries), the app asks the next open-weight model in that role's list in `config/otari.json`, the last one a DeepSeek model. A budget refusal or the cycle cap never moves on. The receipt records which entry answered and why the earlier ones were skipped, and the audit counts these apart from Otari's own provider failover.
+- **The closure gate.** Before a dossier is appended, nine deterministic checks inspect it: both analysts answered, every call has a receipt, the evidence is the evidence collected, the verdict replays, and so on. If a hard check fails, nothing is appended, the refusal is written to `ledger/closure-refusals.jsonl`, and the next cycle goes on. The outcome is sealed in the dossier and `replay` recomputes it.
+- **The source drift seal.** Each cycle reads again one web page that an earlier dossier cited and records whether the passage it froze has changed. It is a freshness receipt that no rule reads, so it cannot move a verdict.
+
 <img src="docs/readme/icons/score.svg" width="44" height="44" alt="">
 
 ## Score map
@@ -373,7 +379,7 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 
 | Path | What lives there |
 |---|---|
-| `verdict_desk/` | the Python package: `llm.py` (the gateway client, receipts, routing, budgets), `agents_v7.py` (rules v7), `otari_*.py` (web tools, MCP, canary, drill, audit and report), `sandbox_rederive.py`, `dossier.py` and `canonical.py` (the hash chain) |
+| `verdict_desk/` | the Python package: `llm.py` (the gateway client, receipts, fallback chains, budgets), `closure.py` (the closure gate), `source_drift.py`, `agents_v7.py` (rules v7; `agents.py` and `agents_v2` to `agents_v6` replay the older dossiers), `otari_*.py` (web tools, MCP, canary, drill, audit and report), `sandbox_rederive.py`, `dossier.py` and `canonical.py` (the hash chain) |
 | `config/` | `otari.json` (roles, models, policies, caps), `voices.json` (news sources), `external_hosts.json` (every host the code names) |
 | `ledger/` | `ledger.jsonl` (the chain), the head files, OpenTimestamps proofs in `timestamps/`, Sigstore bundles in `rekor/` |
 | `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, chain dashboard, witnesses, the record Q and A, the lab and the market voices |
@@ -408,6 +414,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.
 - **Earlier era.** Dossiers before 792 have no gateway receipts and are not part of the Otari audit.
+- **Role fallback chains are new.** They are tested against a fake gateway; until a live cycle has a receipt with `role_fallback`, no real call has used one. The audit counts them apart from Otari's failover and does not use them as proof of routing.
 - **No on-chain anchor.** The earlier project also anchored heads on the Sepolia testnet; that workflow stays in its frozen repository and nothing here uses a chain.
 
 </details>
