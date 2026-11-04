@@ -10,7 +10,8 @@ const LEDGER = fs.readFileSync(path.join(__dirname, "..", "ledger", "ledger.json
 const latest = (pred) => [...LEDGER].reverse().find(pred);
 const POSITION = latest((d) => ["LONG", "SHORT"].includes(d.verdict.action) && d.llm && d.llm.judge && d.llm.judge.ruling);
 const DECLINED = latest((d) => d.verdict.action === "WATCH_REVERSAL");
-const JUDGED = latest((d) => d.llm && d.llm.judge && d.llm.judge.accepted && d.llm.judge.weight > 0);
+// a ruling the citation checker voided (rules v7) is recorded with its weight but counts for nothing, so it is not a counted vote
+const JUDGED = latest((d) => d.llm && d.llm.judge && d.llm.judge.accepted && d.llm.judge.weight > 0 && !(d.verdict && d.verdict.checker_gate && d.verdict.checker_gate.judge_voided));
 const VOIDED = latest((d) => d.llm && d.llm.judge && d.llm.judge.ruling && !d.llm.judge.accepted);
 const OLD = LEDGER.find((d) => !d.llm);
 const NO_SENSITIVITY = { ...OLD, sensitivity: undefined };
