@@ -1,7 +1,7 @@
 """The closure gate: before a dossier is appended, a deterministic check that does not look at the answer inspects the finished state.
 
-The gate never asks whether the verdict is right. It asks whether the record is in a state that may be sealed: every call it names has a
-receipt, the frozen evidence is the evidence the cycle collected, the verdict replays from that evidence, the checker's consequence is what a
+The gate never asks whether the verdict is right. It asks whether the record is in a state that may be sealed: both analysts answered on
+their last attempt, every call it names has a receipt, the frozen evidence is the evidence the cycle collected, the verdict replays from that evidence, the checker's consequence is what a
 recomputation gives, the headroom read says how each lookup went, the spend is priced and inside the caps, the narrative is not silently
 partial. Two classes:
 
@@ -95,6 +95,32 @@ def _list(names: list[str], limit: int = 4) -> str:
 
 
 # ---------------------------------------------------------------- the checks: each returns (passed, one-line reason)
+
+def analyst_failures(body: dict) -> list[dict]:
+    """The analysts that did not produce an answer on their last attempt: {role, code, status, why}. Empty when there is no LLM layer to judge
+    (a run without a model) and when both answered. A side missing from an Otari run's layer counts as not having answered."""
+    layer = body.get("llm")
+    if not isinstance(layer, dict) or not isinstance(layer.get("otari"), dict):
+        return []
+    out = []
+    for side in ("bull", "bear"):
+        block = layer.get(side)
+        receipt = (block or {}).get("receipt") if isinstance(block, dict) else None
+        bad = (receipt.get("refusal") or receipt.get("error")) if isinstance(receipt, dict) else None
+        if isinstance(block, dict) and not block.get("error") and not bad:
+            continue
+        bad = bad if isinstance(bad, dict) else {}
+        code = bad.get("code") or bad.get("kind") or (str(bad["status"]) if bad.get("status") else None)
+        out.append({"role": side, "code": code, "status": bad.get("status"), "why": str((block or {}).get("error") or "no answer was recorded")[:160]})
+    return out
+
+
+def check_analysts(body: dict, frozen) -> tuple[bool, str]:
+    failed = analyst_failures(body)
+    if failed:
+        return False, "; ".join(f"{f['role']} did not answer ({f['code'] or 'no code'}{', HTTP ' + str(f['status']) if f['status'] else ''})" for f in failed) + ": a dossier with no argument on a side is not a decision"
+    return True, "bull and bear each answered on their last attempt" if (body.get("llm") or {}).get("otari") else "no model layer in this dossier"
+
 
 def check_receipts(body: dict, frozen) -> tuple[bool, str]:
     calls = _named_calls(body)
@@ -204,6 +230,7 @@ def check_narrative_complete(body: dict, frozen) -> tuple[bool, str]:
 
 
 CHECKS = (
+    ("analysts_answered", HARD, check_analysts),
     ("receipts", HARD, check_receipts),
     ("evidence_frozen", HARD, check_evidence),
     ("verdict_replays", HARD, check_replay),
@@ -274,7 +301,8 @@ def refusal_record(error: ClosureRefused, at: str) -> dict:
     body = error.body
     return {"schema": SCHEMA, "at": at, "symbol": (body.get("evidence") or {}).get("symbol"), "seq_not_used": body.get("seq"),
             "prev_hash": body.get("prev_hash"), "candidate_sha256": _digest(body),
-            "failed": [{"name": c["name"], "reason": c["reason"]} for c in error.failed], "closure": error.closure, **spend_of(body)}
+            "failed": [{"name": c["name"], "reason": c["reason"]} for c in error.failed], "roles_failed": analyst_failures(body),
+            "closure": error.closure, **spend_of(body)}
 
 
 def log_refusal(ledger_path: Path, record: dict) -> Path:

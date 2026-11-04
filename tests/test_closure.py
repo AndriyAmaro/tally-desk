@@ -44,7 +44,7 @@ class CleanCycleTest(Gate):
         self.assertTrue(all(x["pass"] and x["reason"] and "\n" not in x["reason"] for x in c["checks"]))
         self.assertEqual({x["class"] for x in c["checks"]}, {"hard", "soft"})
         self.assertEqual(c["evidence_sha256"], dossier.digest(d["evidence"]))
-        self.assertEqual(rep.closure_line(d), "Closure gate: 8 of 8 checks passed")
+        self.assertEqual(rep.closure_line(d), "Closure gate: 9 of 9 checks passed")
 
     def test_the_chain_verifies_and_the_replay_recomputes_the_gate_from_the_dossier_alone(self):
         d = self.clean()
@@ -88,7 +88,9 @@ class PlantedFaultTest(Gate):
         body["llm"]["bear"]["receipt"]["request_id_source"] = "client"
         self.assertEqual(self.refused(body), ["receipts"])
         body["llm"]["bear"]["receipt"]["refusal"] = {"status": None, "code": "cycle_cap_exceeded", "budget_scope": "cycle", "source": "client"}
-        self.assertTrue(closure.seal(body, dossier.digest(body["evidence"]))["checks"][0]["pass"])
+        checks = {c["name"]: c for c in closure.evaluate(body, dossier.digest(body["evidence"]))["checks"]}
+        self.assertTrue(checks["receipts"]["pass"], "a recorded failure is an accounted call")
+        self.assertFalse(checks["analysts_answered"]["pass"], "but the bear did not answer, which is its own hard check")
 
     def test_the_drift_fetch_is_a_call_too_and_needs_its_receipt(self):
         body = self.body(self.clean())
@@ -134,6 +136,63 @@ class PlantedFaultTest(Gate):
         self.assertIn("receipts", str(ctx.exception))
         self.assertIn("verdict_replays", str(ctx.exception))
         self.assertEqual(ctx.exception.closure["outcome"], "refused")
+
+
+class AnalystsAnsweredTest(Gate):
+    def degraded(self):
+        """A copy of dossier 810, a real cycle in which the gateway refused bull, bear and the narrator with 402 pricing_required."""
+        d = next(x for x in reversed(LEDGER) if (((x.get("llm") or {}).get("bull") or {}).get("receipt") or {}).get("refusal", {}).get("code") == "pricing_required")
+        return copy.deepcopy(d)
+
+    def test_a_copy_of_dossier_810_is_refused_for_analysts_answered_with_the_roles_and_the_otari_code(self):
+        d = self.degraded()
+        body = {k: v for k, v in d.items() if k not in ("hash", "closure")}
+        with self.assertRaises(closure.ClosureRefused) as ctx:
+            closure.seal(body, dossier.digest(body["evidence"]))
+        self.assertIn("analysts_answered", [c["name"] for c in ctx.exception.failed])
+        self.assertEqual([c["name"] for c in ctx.exception.failed if c["name"] != "analysts_answered"], [], "810 is otherwise a coherent record")
+        reason = next(c["reason"] for c in ctx.exception.failed)
+        self.assertIn("bull did not answer (pricing_required, HTTP 402)", reason)
+        self.assertIn("bear did not answer (pricing_required, HTTP 402)", reason)
+        record = closure.refusal_record(ctx.exception, "2026-11-04T17:00:00Z")
+        self.assertEqual([(f["role"], f["code"], f["status"]) for f in record["roles_failed"]], [("bull", "pricing_required", 402), ("bear", "pricing_required", 402)])
+        self.assertGreater(float(record["usd"]), 0, "what the refused cycle spent is on the line")
+
+    def test_one_failed_analyst_is_enough_and_an_error_without_a_receipt_counts_too(self):
+        body = {k: v for k, v in self.clean().items() if k not in ("hash", "closure")}
+        body["llm"]["bear"]["error"] = "HTTP 504 from the gateway"
+        self.assertEqual([f["role"] for f in closure.analyst_failures(body)], ["bear"])
+        self.assertIn("analysts_answered", self.refused(body))
+
+    def test_a_clean_dossier_passes_and_a_dossier_with_no_model_layer_has_nothing_to_judge(self):
+        d = self.clean()
+        self.assertTrue(next(c for c in d["closure"]["checks"] if c["name"] == "analysts_answered")["pass"])
+        self.assertEqual(closure.analyst_failures({"evidence": {}}), [])
+
+    def test_a_cycle_whose_analysts_are_refused_by_the_gateway_is_refused_whole_with_nothing_written_and_the_head_untouched(self):
+        import io
+        import urllib.error
+        real = self.reply
+        head = self.ledger.parent / "head.json"
+        head.write_text('{"seq": 0}\n')
+
+        def reply(request, timeout=None):
+            payload = json.loads(request.data.decode())
+            if not request.full_url.endswith("/messages") and any(w in payload["messages"][0]["content"] for w in ("bull analyst", "bear analyst")):
+                from tests.test_otari import message
+                raise urllib.error.HTTPError(request.full_url, 402, "Payment Required", message({"Otari-Request-ID": "req-402", "Otari-Error-Code": "pricing_required"}), io.BytesIO(b'{"code": "pricing_required"}'))
+            return real(request, timeout)
+        with mock.patch.object(self, "reply", reply), mock.patch("verdict_desk.practice.execute_open") as opens, mock.patch("verdict_desk.practice.execute_closes") as closes:
+            code, out, ledger = self.run_flow(rules_version="v7")
+        self.assertEqual((code, ledger), (closure.EXIT_CODE, []))
+        self.assertFalse(self.ledger.exists(), "no dossier, not even a half-written one")
+        self.assertEqual(head.read_text(), '{"seq": 0}\n', "the head file is as it was")
+        opens.assert_not_called()
+        closes.assert_not_called()
+        line = closure.read_refusals(self.ledger)[0]
+        self.assertEqual([f["name"] for f in line["failed"]], ["analysts_answered"])
+        self.assertEqual({f["code"] for f in line["roles_failed"]}, {"pricing_required"})
+        self.assertEqual({f["role"] for f in line["roles_failed"]}, {"bull", "bear"})
 
 
 class SoftCheckTest(Gate):
@@ -226,7 +285,7 @@ class OldDossiersTest(unittest.TestCase):
                 continue
             result = closure.evaluate({k: v for k, v in d.items() if k != "hash"}, None)
             hard = [c["name"] for c in result["checks"] if c["class"] == "hard" and not c["pass"]]
-            self.assertEqual(hard, [], d["seq"])
+            self.assertEqual(hard, [] if not closure.analyst_failures(d) else ["analysts_answered"], d["seq"])  # only a cycle whose analysts were refused is stopped
 
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

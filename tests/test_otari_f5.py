@@ -349,14 +349,20 @@ class WebEvidenceUseTest(unittest.TestCase):
 
     def test_a_cited_excerpt_beats_a_cited_title_and_the_audit_picks_it_up_by_itself(self):
         ledger = self.ledger()
-        target = ledger[-1]
-        target["llm"]["otari"]["evidence_use"] = {"web_items": 3, "web_items_cited": 0, "web_excerpts": 1, "web_excerpts_cited": 0, "mcp_items": 1, "mcp_items_cited": 0}
-        self.assertNotEqual(self.row6(ledger)["dossier"], target["seq"], "newest, but nothing cited")
-        older = ledger[-3]
+
+        def read_web(d):  # a dossier whose search and page fetch both completed: the only kind the web proof can cite
+            web = (d.get("evidence") or {}).get("web") or {}
+            page = web.get("page") or {}
+            return bool(page.get("otari_reported_fetch") and page.get("excerpt") and any(t.get("type") == "web_search" and t.get("status") == "completed" for t in (web.get("receipt") or {}).get("tool_calls") or []))
+        done = [d for d in ledger if read_web(d)]  # chosen by the property, never by position: the newest dossier may be a degraded cycle
+        self.assertGreaterEqual(len(done), 2)
+        for d in done:
+            d["llm"]["otari"]["evidence_use"] = {"web_items": 3, "web_items_cited": 0, "web_excerpts": 1, "web_excerpts_cited": 0, "mcp_items": 1, "mcp_items_cited": 0}
+        target, older = done[-1], done[-2]
+        self.assertEqual(self.row6(ledger)["dossier"], target["seq"], "nothing cited anywhere: the newest dossier that read the web")
         older["llm"]["otari"]["evidence_use"].update(web_excerpts=1, web_excerpts_cited=1)
-        older["evidence"]["web"]["page"].update(otari_reported_fetch=True, excerpt="x" * 40)
         row = self.row6(ledger)
-        self.assertEqual(row["dossier"], older["seq"])
+        self.assertEqual(row["dossier"], older["seq"], "a cited excerpt beats a newer dossier where nothing was cited")
         self.assertIn("1 of 1 page excerpts", row["note"])
 
     def test_when_nothing_was_ever_cited_the_row_says_so_instead_of_implying_use(self):

@@ -18,6 +18,17 @@ ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which("node")
 LEDGER = [json.loads(line) for line in (ROOT / "ledger" / "ledger.jsonl").read_text().splitlines() if line.strip()]
 ERA = rep.era(LEDGER)
+
+
+def answered(d):
+    """A cycle in which the four analyst roles answered and the judge was routed: the base of fixtures that need a full cycle. The newest
+    dossier may be a degraded real cycle (dossier 810: the gateway refused bull, bear and the narrator), so no test starts from position."""
+    layer = d.get("llm") or {}
+    return all(isinstance(layer.get(p), dict) and not layer[p].get("error") and not (layer[p].get("receipt") or {}).get("refusal") for p in ("bull", "bear", "judge", "checker")) \
+        and isinstance((layer.get("judge") or {}).get("route_rule"), dict)
+
+
+ANSWERED = [d for d in ERA if answered(d)]
 EVIDENCE = rep.read_evidence()
 
 
@@ -80,7 +91,7 @@ class AuditTest(unittest.TestCase):
         self.assertTrue(rows[3]["drill_proof"], "the Otari-side 403 refusal is still named, and marked as a drill")
 
     def test_a_proof_that_lives_only_in_a_drill_file_is_marked_as_such_and_counted_apart(self):
-        d = copy.deepcopy(ERA[-1])  # a real dossier without the canary and the headroom: nothing is sealed for rows 2 to 4
+        d = copy.deepcopy(ANSWERED[-1])  # a real full cycle without the canary and the headroom: nothing is sealed for rows 2 to 4
         d["llm"]["otari"].pop("canary", None)
         d["llm"]["otari"].pop("headroom", None)
         d["llm"]["judge"]["route_rule"].pop("gates", None)
@@ -90,6 +101,27 @@ class AuditTest(unittest.TestCase):
         self.assertEqual([rows[n]["source"] for n in (2, 3, 4)], ["drill", "drill", "drill"])
         self.assertTrue(all(rows[n]["note"].startswith("drill only (not sealed") for n in (2, 3, 4)))
         self.assertRegex(rep.summary_line(list(rows.values())), r"^8 resources: \d proven from sealed receipts \+ 3 from drills \(not sealed\) \+ \d NOT PROVEN$")
+
+    def test_a_degraded_dossier_at_the_tail_of_the_ledger_is_tolerated_by_the_audit_and_the_readme_builders(self):
+        """Dossier 810 is a real cycle in which the gateway refused bull, bear and the narrator (402 pricing_required): no claims, no judge ruling."""
+        bad = next(d for d in reversed(LEDGER) if rep.era([d]) and (d["llm"]["bull"].get("receipt") or {}).get("refusal"))
+        degraded = copy.deepcopy(bad)
+        self.assertFalse(answered(degraded))
+        ledger = copy.deepcopy(ANSWERED[-3:]) + [degraded]
+        rows = {r["n"]: r for r in rep.audit(ledger, EVIDENCE)}
+        self.assertEqual(len(rows), 8)
+        self.assertEqual(rows[1]["status"], "PASS", "the proof comes from the full cycles before it")
+        rep.render_audit(list(rows.values()))
+        rep.board(ledger)
+        rep.who_saw(degraded)
+        rep.models_markdown(ledger)
+        rep.proofs_markdown(list(rows.values()))
+        rep.board_markdown(rep.board(ledger))
+        text = "<!-- otari:proofs:start -->\n<!-- otari:proofs:end -->\n<!-- otari:board:start -->\n<!-- otari:board:end -->\n<!-- otari:models:start -->\n<!-- otari:models:end -->\n<!-- otari:hosts:start -->\n<!-- otari:hosts:end -->"
+        out = rep.refresh_readme(text, ledger, EVIDENCE)
+        self.assertIn("8 resources", out)
+        self.assertIn("Bull analyst", out)
+        self.assertTrue(any(c["receipt"].get("refusal") for c in rep.calls_of(degraded)), "the degraded cycle's refusals are calls like any other")
 
     def test_every_proof_id_is_a_request_id_that_the_ledger_or_the_evidence_file_holds(self):
         known = {c["receipt"].get("request_id") for d in ERA for c in rep.calls_of(d)}
