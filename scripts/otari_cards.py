@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import readme_cards as rc  # noqa: E402
+import site_shell  # noqa: E402
 from verdict_desk import otari_report  # noqa: E402
 
 OUT = ROOT / "docs" / "readme"
@@ -28,7 +29,7 @@ FLOW = OUT / "otari-flow.svg"
 FEATURES = OUT / "otari-features.svg"
 ICON_DIR = OUT / "icons"
 # (slug, label, icon, style): the first button is the primary action, the others are quiet
-PRODUCT_NAME = "Verdict Desk on Otari"  # the product name on the header card; scripts/site_shell.py holds the one the site shell shows
+PRODUCT_NAME = f"{site_shell.NAME} {site_shell.NAME_SUB}"  # the header card shows the product name of the one constant, scripts/site_shell.py NAME (never typed again here)
 
 BUTTONS = [
     ("cycle", "Call-by-call view", "play", "primary"),
