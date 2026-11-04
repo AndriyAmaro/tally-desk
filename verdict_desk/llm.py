@@ -60,9 +60,10 @@ class OtariError(LLMError):
     """A refusal or failure reported by the Otari gateway, with the fields the dossier records."""
 
     def __init__(self, message: str, status: int | None = None, code: str | None = None, scope: str | None = None,
-                 retry_after: str | None = None, request_id: str | None = None):
+                 retry_after: str | None = None, request_id: str | None = None, detail: dict | None = None):
         super().__init__(message)
         self.status, self.code, self.scope, self.retry_after, self.request_id = status, code, scope, retry_after, request_id
+        self.detail = detail  # the `detail` object of the error body when it was JSON (a guardrail_violation lists the flagged profiles and scores)
 
 
 def _otari_key() -> str:
@@ -92,7 +93,27 @@ def otari_config(path: Path | None = None) -> dict:
             raise LLMError(f"{path.name}: the fallbacks of role {name!r} must be a list of distinct catalog ids")
     if not isinstance(cfg.get("base_url"), str) or not isinstance(cfg.get("auth_header"), str):
         raise LLMError(f"{path.name}: base_url and auth_header are required")
+    _check_guardrails(cfg, path.name)
     return cfg
+
+
+GUARDRAIL_MODES = ("monitor", "block")
+GUARDRAIL_UNAVAILABLE = ("monitor", "block")
+GUARDRAIL_HEADER_KEYS = ("profile", "mode", "valid", "score", "status", "reason")  # what the receipt keeps of an `Otari-Guardrails` entry; the header carries no free text
+
+
+def _check_guardrails(cfg: dict, name: str) -> None:
+    """The optional `guardrails` section: a profile, a mode, what to do when the check cannot run, and the roles whose requests carry it."""
+    g = cfg.get("guardrails")
+    if g is None:
+        return
+    if not isinstance(g, dict) or not isinstance(g.get("profile"), str) or not g["profile"].strip():
+        raise LLMError(f"{name}: guardrails needs a profile name")
+    if g.get("mode") not in GUARDRAIL_MODES or g.get("on_unavailable") not in GUARDRAIL_UNAVAILABLE:
+        raise LLMError(f"{name}: guardrails mode and on_unavailable must each be one of monitor or block")
+    roles = g.get("roles")
+    if not isinstance(roles, list) or not all(r in cfg["roles"] for r in roles):
+        raise LLMError(f"{name}: guardrails roles must be a list of roles of this config")
 
 
 def role_model(role: str | None, cfg: dict | None = None) -> str:
@@ -258,7 +279,8 @@ def otari_summary() -> dict | None:
             "roles": {name: spec["model"] for name, spec in cfg["roles"].items()},
             "sent": {name: sent_model(name, cfg) for name in cfg["roles"]},
             "fallbacks": {name: list(spec["fallbacks"]) for name, spec in cfg["roles"].items() if spec.get("fallbacks")},
-            "cycle_cap_usd": None if cycle_cap(cfg) is None else format(cycle_cap(cfg), "f")}
+            "cycle_cap_usd": None if cycle_cap(cfg) is None else format(cycle_cap(cfg), "f"),
+            **({"guardrails": {k: g[k] for k in ("profile", "mode", "on_unavailable", "roles")}} if (g := guardrail_settings(cfg)) else {})}  # only while the switch is on
 
 
 def model_name() -> str:
@@ -272,6 +294,26 @@ def feature_on(name: str, cfg: dict | None = None) -> bool:
         return False
     cfg = cfg or otari_config()
     return _flag(f"OTARI_{name.upper()}", (cfg.get("features") or {}).get(name))
+
+
+def guardrail_settings(cfg: dict | None = None) -> dict | None:
+    """The `guardrails` section of the config when the switch is on (`enabled` in the config, OTARI_GUARDRAILS=0/1 overrides), else None.
+    Off until the owner has deployed the guardrails service and created the organization mandate for its profile."""
+    if not otari_active():
+        return None
+    cfg = cfg or otari_config()
+    g = cfg.get("guardrails")
+    return g if isinstance(g, dict) and _flag("OTARI_GUARDRAILS", g.get("enabled")) else None
+
+
+def guardrail_request(role: str | None, cfg: dict | None = None) -> list[dict] | None:
+    """The `guardrails` field of a request of `role`: one entry naming the profile, the mode and `on_unavailable`, or None when the
+    switch is off or the role carries no untrusted text. The endpoint and the credential come from the organization's mandate, not from here."""
+    cfg = cfg or otari_config()
+    g = guardrail_settings(cfg)
+    if g is None or (role or cfg["default_role"]) not in (g.get("roles") or []):
+        return None
+    return [{"profile": g["profile"], "mode": g["mode"], "on_unavailable": g["on_unavailable"]}]
 
 
 def _send_user(cfg: dict) -> bool:
@@ -347,9 +389,11 @@ def parse_receipt(headers, body: dict | None, role: str, sent_model: str, end_us
         except ValueError:
             parsed = None
         if isinstance(parsed, list) and all(isinstance(g, dict) for g in parsed):
-            receipt["guardrails"] = parsed  # [{"profile","mode","valid","score"}]: valid and score are null when nothing evaluated the input
-            # one word per guardrail, never a pass that Otari did not report: not_evaluated (valid null), pass, flagged
-            receipt["guardrail_result"] = {str(g.get("profile")): ("not_evaluated" if g.get("valid") is None else "pass" if g.get("valid") else "flagged") for g in parsed}
+            # [{"profile","mode","valid","score","status","reason"}]: valid and score are null when nothing evaluated the input, `status` says
+            # evaluated, inconclusive or unavailable (and `reason` why), on a gateway that reports it
+            receipt["guardrails"] = [{k: g[k] for k in GUARDRAIL_HEADER_KEYS if k in g} for g in parsed]
+            # one word per guardrail, never a pass that Otari did not report: not_evaluated (valid null, or a status other than evaluated), pass, flagged
+            receipt["guardrail_result"] = {str(g.get("profile")): ("not_evaluated" if g.get("valid") is None or g.get("status", "evaluated") != "evaluated" else "pass" if g.get("valid") else "flagged") for g in parsed}
     for name, field in (("otari-guardrails", "guardrails_raw"), ("otari-end-user-budget", "end_user_budget"),
                         ("otari-idempotent-replayed", "replayed")):
         if h.get(name) is not None:
@@ -594,7 +638,11 @@ def _otari_chat_once(system: str, user: str, timeout: int, max_tokens: int | Non
     for name, value in (extra or {}).items():
         if name not in EXTRA_FIELDS:
             raise LLMError(f"request field {name!r} is not one the app may add")
+        if name == "guardrails" and value is None:
+            continue  # an explicit None: this call carries no guardrail (the failover canary, whose filler is not untrusted text)
         payload[name] = value
+    if "guardrails" not in (extra or {}) and (entry := guardrail_request(role, cfg)):
+        payload["guardrails"] = entry  # the config's guardrail, on the roles that carry untrusted text
     if end_user:
         payload["user"] = end_user  # per-user budgets bill this id; only a service key may send it
     if spec.get("reasoning_effort"):
@@ -624,6 +672,8 @@ def _otari_chat_once(system: str, user: str, timeout: int, max_tokens: int | Non
                 reply_headers = getattr(response, "headers", None)
             data = json.loads(raw.decode("utf-8"))
             receipt = parse_receipt(reply_headers, data, role, model, end_user, client_attempts=tries.n, local_id=headers["Idempotency-Key"])
+            if payload.get("guardrails"):
+                receipt["guardrails_requested"] = payload["guardrails"]  # what the request asked for, so a missing header is told from a guardrail never asked for
             _served.receipt = receipt
             _cycle_add(receipt)
             _served.model = receipt["served_by"] or (data.get("model") if isinstance(data, dict) else None)
@@ -687,7 +737,13 @@ def _retry_or_raise(err: urllib.error.HTTPError, tries: _Tries, key: str, base: 
         delay = _retry_delay(err, tries.failures) if err.code in RETRY_STATUS and tries.failures < MAX_RETRIES else None
         tries.failures += 1
     if delay is None:
-        raise _otari_error(err, key, detail, base, model) from err
+        error = _otari_error(err, key, detail, base, model)
+        refusal = _served.receipt.get("refusal")
+        if isinstance(refusal, dict):
+            refusal["code"] = refusal.get("code") or error.code  # a guardrail block names its code only in the body
+            if error.code == "guardrail_violation" and error.detail:
+                refusal["guardrails"] = [{"profile": g.get("profile"), "score": g.get("score")} for g in error.detail.get("guardrails") or [] if isinstance(g, dict)]
+        raise error from err
     return delay
 
 
@@ -700,10 +756,11 @@ def _transport_failure(err: Exception, attempt: int, base: str, role: str, model
 
 def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, timeout: int = 120, tools: list | None = None,
                   mcp_servers: list | None = None, max_tool_iterations: int | None = None, beta: str | None = None, stream: bool = False,
-                  extra_headers: dict | None = None, reader=None, opener=None) -> dict:
+                  extra_headers: dict | None = None, reader=None, opener=None, guardrails="config") -> dict:
     """One call to Otari's Messages API (the path that returns native tool blocks): same key, end user, budget header, cycle cap,
     retries on the same Idempotency-Key and receipts as `chat`. Returns {"data": the reply JSON (not streamed), "stream": what
-    `reader` made of the stream, "receipt": the receipt}; raises OtariError on a refusal or a failure (its receipt is on the thread)."""
+    `reader` made of the stream, "receipt": the receipt}; raises OtariError on a refusal or a failure (its receipt is on the thread).
+    `guardrails` is "config" (the config's guardrail, for the roles that carry untrusted text), a list of entries, or None (none)."""
     opener = opener or urllib.request.urlopen
     cfg = otari_config()
     model = sent_model(role, cfg)
@@ -717,6 +774,9 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
             payload[name] = value
     if stream:
         payload["stream"] = True
+    entry = guardrail_request(role, cfg) if guardrails == "config" else guardrails
+    if entry:
+        payload["guardrails"] = entry
     if end_user:
         # The Messages API names its end user in `metadata.user_id`, not in a top-level `user` (that field is chat completions only: on
         # /messages Otari ignores it and bills the key's own user, so the end user is never created). Docs: docs/end-users.md, section 3.
@@ -757,6 +817,8 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
     mapped = {"usage": {"prompt_tokens": usage.get("input_tokens"), "completion_tokens": usage.get("output_tokens"),
                         "cost_usd": usage.get("cost_usd"), "pricing_source": usage.get("pricing_source")}}
     receipt = parse_receipt(reply_headers, mapped, role, model, end_user, client_attempts=tries.n, local_id=local_id)
+    if payload.get("guardrails"):
+        receipt["guardrails_requested"] = payload["guardrails"]
     if receipt["cost_usd"] is None and receipt["request_id_source"] == "otari":
         row = usage_for(receipt["request_id"])  # a stream carries no cost: the settled row gives it
         if row and row.get("cost_usd") is not None:
@@ -773,11 +835,23 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
 
 def _otari_error(err: urllib.error.HTTPError, key: str, detail: str, base: str, model: str) -> OtariError:
     h = err.headers if err.headers is not None else {}
-    detail = detail.replace(key, "***")[:300].replace("\n", " ").strip()
+    detail = detail.replace(key, "***")
+    body = _detail_object(detail)
+    detail = detail[:300].replace("\n", " ").strip()
     code, scope = h.get("Otari-Error-Code"), h.get("Otari-Budget-Scope")
+    code = code or (body.get("code") if body and isinstance(body.get("code"), str) else None)  # a guardrail block names its code in the body
     extra = "".join(f" {name}={value}" for name, value in (("code", code), ("budget_scope", scope)) if value)
     return OtariError(f"HTTP {err.code} {err.reason} from {base} model {model}{extra}: {detail or 'no body'}",
-                      status=err.code, code=code, scope=scope, retry_after=h.get("Retry-After"), request_id=h.get("Otari-Request-ID"))
+                      status=err.code, code=code, scope=scope, retry_after=h.get("Retry-After"), request_id=h.get("Otari-Request-ID"), detail=body)
+
+
+def _detail_object(text: str) -> dict | None:
+    """The `detail` object of an error body, when the body is JSON and that field is an object (else None)."""
+    try:
+        detail = json.loads(text).get("detail")
+    except (ValueError, AttributeError):
+        return None
+    return detail if isinstance(detail, dict) else None
 
 
 def served_by() -> str | None:

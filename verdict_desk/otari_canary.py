@@ -39,7 +39,8 @@ def run(ask=None, cfg: dict | None = None) -> dict:
               "prompt": {"filler_units": UNITS, "chars": len(text), "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()},
               "estimated_cost_usd": round(UNITS * INPUT_USD_PER_MILLION / 1e6, 6)}
     try:
-        ask(SYSTEM, text, timeout=60, max_tokens=8, role="judge", model=policy, end_user=user, end_user_budget=cfg.get("end_user_budget"))
+        ask(SYSTEM, text, timeout=60, max_tokens=8, role="judge", model=policy, end_user=user, end_user_budget=cfg.get("end_user_budget"),
+            extra={"guardrails": None})  # the filler is not untrusted text, and a long body has no business at the guardrails service
     except (OSError, ValueError) as err:
         return {**record, "passed": False, "error": str(err)[:300], "receipt": llm.served_receipt(),
                 "reading": "the canary call did not complete, so the backup route is not shown: the judge stays on the standard route"}

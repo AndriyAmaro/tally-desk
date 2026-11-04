@@ -235,6 +235,34 @@
     return `Source drift: ${b.status} (${head})`;
   }
 
+  /* What a receipt says about each guardrail of its call, for the chip on the cycle page: [{profile, state, text}]. `state` is passed, flagged,
+   * unavailable, inconclusive, not_evaluated or no_header (the request asked for a guardrail and the reply carried no verdict). A receipt from
+   * before the header had `status` keeps its old reading (valid null: not evaluated). verdict_desk/otari_report.py `guardrail_views` writes the same words. */
+  function scoreText(v) {
+    return typeof v === "number" && Number.isFinite(v) ? String(Number(v.toFixed(4))) : null;
+  }
+  function guardrailsOf(r) {
+    const out = [];
+    const listed = r && Array.isArray(r.guardrails) ? r.guardrails.filter((g) => g && typeof g === "object") : [];
+    const name = (g) => String(g.profile == null ? "None" : g.profile);
+    for (const g of listed) {
+      const status = g.status == null ? null : g.status;
+      let state, label;
+      if (status === "unavailable") { state = "unavailable"; label = "unavailable" + (g.reason ? `, ${g.reason}` : ""); }
+      else if (status === "inconclusive") { state = "inconclusive"; label = "inconclusive"; }
+      else if (g.valid === true && (status === null || status === "evaluated")) { state = "passed"; label = "passed"; }
+      else if (g.valid === false && (status === null || status === "evaluated")) { state = "flagged"; label = "flagged"; }
+      else { state = "not_evaluated"; label = "not evaluated"; }
+      const score = state === "passed" || state === "flagged" ? scoreText(g.score) : null;
+      out.push({ profile: name(g), state, text: `${name(g)}: ${label}` + (score ? ` (score ${score})` : "") });
+    }
+    const shown = new Set(out.map((v) => v.profile));
+    for (const g of r && Array.isArray(r.guardrails_requested) ? r.guardrails_requested : []) {
+      if (g && typeof g === "object" && !shown.has(name(g))) out.push({ profile: name(g), state: "no_header", text: `${name(g)}: asked, no verdict in the reply` });
+    }
+    return out;
+  }
+
   /* The four figures of the README card that the ledger alone can give; the same counts as scripts/otari_cards.py (tests/home.test.js checks it). */
   function figures(ledger) {
     const dossiers = era(ledger);
@@ -249,5 +277,5 @@
     };
   }
 
-  return { REMEDY, failureOf, roleFallbackOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures, closureLine, driftLine };
+  return { REMEDY, failureOf, roleFallbackOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures, closureLine, driftLine, guardrailsOf };
 });

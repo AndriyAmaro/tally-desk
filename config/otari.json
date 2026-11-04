@@ -110,6 +110,14 @@
     "claims_at_least": 8
   },
   "_judge_route_doc": "The judge is routed by a deterministic rule sealed with its ruling (llm.judge.route_rule). A hard case (the deterministic bull and bear scores less than `margin_below` apart, the most a judge's vote can add, or `claims_at_least` validated claims, the most the analysts can bring) goes to `hard_model`, the larger DeepSeek, sent by its catalog id (Otari falls back across its providers); every other case goes to the standard judge, the vd-judge policy. No dashboard policy is created for it, and the hard route does not pass through vd-judge's guardrail. OTARI_JUDGE_ROUTE=0 turns the rule off.",
+  "_guardrails_doc": "Otari guardrail on the requests that carry untrusted text (news headlines, fetched pages). `enabled` stays false until the owner has deployed services/guardrail and created the organization mandate for `profile` in the Otari dashboard (Organization, Guardrails: url and credential of the service, mode monitor, on_unavailable monitor); the endpoint and the credential live in that mandate, never here. `mode` monitor serves the request and reports the verdict in the Otari-Guardrails response header; block refuses a flagged input with 403 guardrail_violation. `on_unavailable` monitor serves the request when the service cannot be reached, so an outage never stops a cycle. `roles` are the roles whose requests carry the entry: the analysts, the checker, the judge and the narrator read third-party text; searcher and fetcher drive the web tools; sandbox and mcp send fixed text of ours and are left out. OTARI_GUARDRAILS=0 or 1 overrides `enabled`. The audit counts the feature only from sealed receipts whose header says status evaluated for this profile.",
+  "guardrails": {
+    "enabled": false,
+    "profile": "tally-web-injection",
+    "mode": "monitor",
+    "on_unavailable": "monitor",
+    "roles": ["bull", "bear", "judge", "checker", "narrator", "searcher", "fetcher"]
+  },
   "models_open_weights": {
     "deepseek/deepseek-v4-pro": true,
     "vd-judge": true,

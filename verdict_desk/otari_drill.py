@@ -61,7 +61,8 @@ def fallback_drill(ledger: list[dict], ask=None, usage=None) -> dict:
     user = cfg.get("drill_fallback_user") or "vd-drill-fallback"  # never the production end user vd-judge: its spend is the judge's alone
     record["end_user"] = user
     try:
-        answer = ask(system, pack, timeout=120, max_tokens=16, role="judge", model=policy, end_user=user, end_user_budget=cfg.get("end_user_budget"))
+        answer = ask(system, pack, timeout=120, max_tokens=16, role="judge", model=policy, end_user=user, end_user_budget=cfg.get("end_user_budget"),
+                     extra={"guardrails": None})  # this drill is about routing: the 165,000 characters of evidence are not sent to the guardrails service
     except (OSError, ValueError) as err:
         return {**record, "pass": False, "error": str(err), "receipt": llm.served_receipt()}
     receipt = llm.served_receipt()
@@ -97,7 +98,7 @@ def role_fallback_drill(ask=None, usage=None) -> dict:
     llm.refused_receipts()
     try:
         answer = ask("You are the bull analyst in a market debate.", "Reply with the single word ok.", timeout=60, max_tokens=16, role=role, model=missing,
-                     role_fallbacks=True, end_user=user, end_user_budget=cfg.get("end_user_budget"))
+                     role_fallbacks=True, end_user=user, end_user_budget=cfg.get("end_user_budget"), extra={"guardrails": None})
     except llm.OtariError as err:
         why = (f"the gateway answered HTTP {err.status} {err.code or ''}".strip() + ", which the app does not treat as a model-side refusal, so nothing fell back"
                if not llm.model_side_reason(err) else f"the chain failed: {err}")
@@ -160,13 +161,13 @@ def budget_drill(ask=None, usage=None, end_user_info=None) -> dict:
     record["end_user_before"] = end_user_info(user)
     system, prompt = "You are the judge in a market debate. Answer with one word.", "Reply ok."
     try:
-        ask(system, prompt, max_tokens=16, role="judge", model=model, end_user=user, end_user_budget=budget)
+        ask(system, prompt, max_tokens=16, role="judge", model=model, end_user=user, end_user_budget=budget, extra={"guardrails": None})
         record["small_call"] = {"passed": True, "receipt": llm.served_receipt()}
     except (OSError, ValueError) as err:
         return {**record, "pass": False, "error": f"the small call failed: {err}", "receipt": llm.served_receipt()}
     refusal, error = None, None
     try:
-        ask(system, prompt, max_tokens=BIG_MAX_TOKENS, role="judge", model=model, end_user=user, end_user_budget=budget)
+        ask(system, prompt, max_tokens=BIG_MAX_TOKENS, role="judge", model=model, end_user=user, end_user_budget=budget, extra={"guardrails": None})
     except llm.OtariError as err:
         error = {"status": err.status, "code": err.code, "budget_scope": err.scope, "retry_after": err.retry_after, "request_id": err.request_id, "message": str(err)[:300]}
     except (OSError, ValueError) as err:

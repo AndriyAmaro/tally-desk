@@ -7,7 +7,7 @@ partial. Two classes:
 
 - hard: the record would be wrong or unverifiable. The dossier is NOT appended; the refusal and its reason go to the runner log and to
   `ledger/closure-refusals.jsonl`.
-- soft: the record is true but degraded (a declared partial narrative, an unpriced call). It is sealed, with the warning in the closure.
+- soft: the record is true but degraded (a declared partial narrative, an unpriced call, a guardrail that was switched on and never evaluated). It is sealed, with the warning in the closure.
 
 The outcome is sealed in the new dossier as `closure` (version, the checks with pass and the reason in one line). Dossiers recorded before
 the gate have no such field and are untouched: `recheck` is silent about them, and so are `verify` and the page. `recheck` recomputes the
@@ -229,6 +229,33 @@ def check_narrative_complete(body: dict, frozen) -> tuple[bool, str]:
     return True, "every extraction batch answered"
 
 
+def check_guardrail_ran(body: dict, frozen):
+    """Soft, and applied only to a cycle whose run summary says the guardrail switch was on (`llm.otari.guardrails`): at least one of the calls that
+    asked for the guardrail carries a verdict the gateway evaluated. A cycle sealed without the switch has no such check, so older dossiers and
+    a cycle run with the switch off replay as before. Returns None when it does not apply."""
+    g = ((body.get("llm") or {}).get("otari") or {}).get("guardrails")
+    if not isinstance(g, dict):
+        return None
+    from . import otari_report
+    asked = [c for c in otari_report.calls_of(body) if c["receipt"].get("guardrails_requested") and not c["receipt"].get("refusal") and not c["receipt"].get("error")]
+    if not asked:
+        return False, f"the guardrail {g.get('profile')} was switched on, but no call that was answered carried it"
+    states: dict[str, int] = {}
+    for call in asked:
+        entry = next((e for e in call["receipt"].get("guardrails") or [] if isinstance(e, dict) and e.get("profile") == g.get("profile")), None)
+        if entry is None:
+            state = "no header"
+        elif entry.get("status") == "evaluated" and isinstance(entry.get("valid"), bool):
+            state = "evaluated"
+        else:
+            state = str(entry.get("status") or "no status")
+        states[state] = states.get(state, 0) + 1
+    if states.get("evaluated"):
+        flagged = sum(1 for c in asked for e in c["receipt"].get("guardrails") or [] if isinstance(e, dict) and e.get("profile") == g.get("profile") and e.get("status") == "evaluated" and e.get("valid") is False)
+        return True, f"{states['evaluated']} of {len(asked)} calls carry a verdict the gateway evaluated for {g.get('profile')} ({flagged} flagged)"
+    return False, f"none of {len(asked)} calls carries an evaluated verdict for {g.get('profile')}: " + ", ".join(f"{n} {k}" for k, n in sorted(states.items()))
+
+
 CHECKS = (
     ("analysts_answered", HARD, check_analysts),
     ("receipts", HARD, check_receipts),
@@ -240,15 +267,19 @@ CHECKS = (
     ("priced_within_cap", SOFT, check_priced),
     ("narrative_complete", SOFT, check_narrative_complete),
 )
+OPTIONAL_CHECKS = (("guardrail_ran", SOFT, check_guardrail_ran),)  # a check that may not apply: it answers None and is left out of the closure
 
 
 def evaluate(body: dict, frozen: str | None) -> dict:
     """Runs every check over a candidate body (a dossier without `hash` and without `closure`). `frozen` is the digest of the evidence
     taken when collection ended; None compares nothing. A check that cannot run fails, and fails closed if it is hard."""
     checks = []
-    for name, klass, fn in CHECKS:
+    for name, klass, fn in CHECKS + OPTIONAL_CHECKS:
         try:
-            ok, reason = fn(body, frozen)
+            outcome = fn(body, frozen)
+            if outcome is None:
+                continue
+            ok, reason = outcome
         except (KeyError, TypeError, ValueError, AttributeError, IndexError, ZeroDivisionError) as err:
             ok, reason = False, f"the check could not run ({type(err).__name__})"
         checks.append({"name": name, "class": klass, "pass": bool(ok), "reason": reason})

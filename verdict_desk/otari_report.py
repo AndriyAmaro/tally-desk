@@ -79,6 +79,62 @@ def drift_line(d: dict) -> str:
     return f"Source drift: {status} ({head})"
 
 
+GUARDRAIL_PROFILE = "tally-web-injection"  # the custom profile of services/guardrail; config/otari.json (`guardrails.profile`) names the one in force
+
+
+def guardrail_profile() -> str:
+    try:
+        name = json.loads(CONFIG.read_text(encoding="utf-8"))["guardrails"]["profile"]
+        return name if isinstance(name, str) and name else GUARDRAIL_PROFILE
+    except (OSError, ValueError, KeyError, TypeError):
+        return GUARDRAIL_PROFILE
+
+
+def _score_text(value) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
+        return None
+    return f"{round(float(value), 4):.4f}".rstrip("0").rstrip(".")
+
+
+def guardrail_views(r: dict) -> list[dict]:
+    """What a receipt says about each guardrail of its call, for the cycle page chip: {profile, state, text}. `state` is passed, flagged,
+    unavailable, inconclusive, not_evaluated or no_header (the request asked for a guardrail and the reply carried no verdict). A receipt
+    that predates `status` keeps its old reading (valid null: not evaluated). web/cycle.js `guardrailsOf` writes the same words."""
+    out = []
+    listed = [g for g in r.get("guardrails") or [] if isinstance(g, dict)]
+    for g in listed:
+        status, valid, reason = g.get("status"), g.get("valid"), g.get("reason")
+        if status == "unavailable":
+            state, label = "unavailable", "unavailable" + (f", {reason}" if reason else "")
+        elif status == "inconclusive":
+            state, label = "inconclusive", "inconclusive"
+        elif valid is True and status in (None, "evaluated"):
+            state, label = "passed", "passed"
+        elif valid is False and status in (None, "evaluated"):
+            state, label = "flagged", "flagged"
+        else:
+            state, label = "not_evaluated", "not evaluated"
+        score = _score_text(g.get("score")) if state in ("passed", "flagged") else None
+        out.append({"profile": str(g.get("profile")), "state": state, "text": f"{g.get('profile')}: {label}" + (f" (score {score})" if score else "")})
+    shown = {v["profile"] for v in out}
+    for g in r.get("guardrails_requested") or []:
+        if isinstance(g, dict) and str(g.get("profile")) not in shown:
+            out.append({"profile": str(g.get("profile")), "state": "no_header", "text": f"{g.get('profile')}: asked, no verdict in the reply"})
+    return out
+
+
+def guardrail_proofs(newest: list[dict], profile: str) -> list[tuple[int, str, dict, dict]]:
+    """(dossier seq, call label, receipt, header entry) for every sealed call whose `Otari-Guardrails` entry for `profile` says status evaluated
+    with a boolean verdict, newest first. An entry whose status is unavailable or inconclusive, or an evaluated entry of another profile, is not one."""
+    found = []
+    for d in newest:
+        for c in calls_of(d):
+            for e in c["receipt"].get("guardrails") or []:
+                if isinstance(e, dict) and e.get("profile") == profile and e.get("status") == "evaluated" and isinstance(e.get("valid"), bool):
+                    found.append((d["seq"], c["label"], c["receipt"], e))
+    return found
+
+
 def _failed(r: dict) -> bool:
     return bool(r.get("refusal") or r.get("error"))
 
@@ -261,17 +317,33 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
         row(4, True, echo[1], echo[0], f"drill only (not sealed in the ledger): {len(users['end_users'])} end users read back on the vd-analyst budget; Otari echoed the budget on the receipts", source="drill")
     else:
         row(4, False, [], None, "no end-user proof")
-    # 5 guardrails
+    # 5 guardrails: proven only by sealed receipts whose Otari-Guardrails entry for the CUSTOM profile says status evaluated
+    profile = guardrail_profile()
+    proofs = guardrail_proofs(newest, profile)
     seen = [(d["seq"], c["receipt"]) for d in newest for c in calls_of(d) if c["receipt"].get("guardrail_result")]
-    evaluated = next(((s, r) for s, r in seen if any(v in ("pass", "flagged") for v in r["guardrail_result"].values())), None)
-    if evaluated:
-        row(5, True, [_rid(evaluated[1])], evaluated[0], f"evaluated: {evaluated[1]['guardrail_result']}")
+    if proofs:
+        seqs = sorted({p[0] for p in proofs})
+        flagged = sum(1 for p in proofs if p[3]["valid"] is False)
+        seq, label, r, e = proofs[0]
+        row(5, True, [_rid(p[2]) for p in proofs[:3]], seq,
+            f"the custom profile {profile} was evaluated by Otari on {len(proofs)} sealed calls ({len(proofs) - flagged} passed, {flagged} flagged) in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs[-6:]))}"
+            f"{' and earlier' if len(seqs) > 6 else ''}; newest: dossier {seq}, {label} call, request {_rid(r)}, header status evaluated, mode {e.get('mode')}, valid {str(e['valid']).lower()}, score {_score_text(e.get('score')) or 'n/a'}")
     else:
         said = sorted({(g.get("status"), g.get("reason")) for _, r in seen for g in r.get("guardrails") or [] if g.get("status")})
         why = (f"from dossier {min(s for s, r in seen if any(g.get('status') for g in r.get('guardrails') or []))} the header says why: "
                + ", ".join(f"status {a}" + (f", reason {b}" if b else "") for a, b in said) if said else "the hosted gateway has no guardrails service")
-        row(5, False, [_rid(r) for _, r in seen[:2]], seen[0][0] if seen else None,
-            f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated ({why}); not counted")
+        mine = [(d["seq"], c["receipt"]) for d in newest for c in calls_of(d)
+                for g in (c["receipt"].get("guardrails") or []) + (c["receipt"].get("guardrails_requested") or []) if isinstance(g, dict) and g.get("profile") == profile]
+        if mine:
+            states = sorted({v["state"] for _, r in mine for v in guardrail_views(r) if v["profile"] == profile})
+            custom = (f"the custom profile {profile} was asked for on {len({id(r) for _, r in mine})} sealed calls but no header said status evaluated "
+                      f"(it said {', '.join(s.replace('_', ' ') for s in states)}); a header with status unavailable is never counted")
+        else:
+            custom = (f"the custom profile {profile} appears in no sealed receipt yet: it needs the service deployed (services/guardrail), "
+                      f"the Otari organization mandate, and guardrails.enabled true in config/otari.json")
+        first = (f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated ({why}); not counted. " if seen
+                 else "no sealed receipt carries an Otari-Guardrails header; ")
+        row(5, False, [_rid(r) for _, r in seen[:2]], seen[0][0] if seen else None, first + custom[0].upper() + custom[1:])
     # 6 web search and fetch: the newest dossier with a completed search and fetch; among those, the newest where the analysts really
     # cited what was found (the page excerpt first, then a source title), so the proof shows the evidence used and not only fetched
     cands = []
@@ -454,7 +526,7 @@ def who_saw(d: dict, cfg: dict | None = None) -> dict:
 
 def proofs_markdown(rows: list[dict]) -> str:
     """A short table to scan, then one block per resource: the evidence in a sentence, one request id per line, the code that does it."""
-    where = {1: "`config/otari.json`, `llm.py`", 2: "`otari_canary.py`", 3: "`llm.read_headroom`, `llm.route_decision`", 4: "`llm._end_user`, `llm.read_headroom`", 5: "`llm.parse_receipt`",
+    where = {1: "`config/otari.json`, `llm.py`", 2: "`otari_canary.py`", 3: "`llm.read_headroom`, `llm.route_decision`", 4: "`llm._end_user`, `llm.read_headroom`", 5: "`llm.guardrail_request`, `llm.parse_receipt`, `services/guardrail/`",
              6: "`otari_web.py`", 7: "`sandbox_rederive.py`", 8: "`otari_mcp.py`"}
     origin = {"sealed": "Sealed receipts in the ledger", "drill": "A drill file, not sealed", "none": "No proof"}
     lines = ["| # | Resource | Status | Dossier |", "|---|---|---|---|"]

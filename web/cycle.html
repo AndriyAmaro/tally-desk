@@ -141,7 +141,8 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     if (r.policy) chips.push(`<span class="chip">policy ${esc(r.policy)}</span>`);
     if (r.truncated) chips.push(`<span class="chip warn">answer cut off</span>`);
     if (r.client_attempts > 1) chips.push(`<span class="chip">${esc(r.client_attempts)} tries</span>`);
-    const guard = r.guardrail_result ? Object.entries(r.guardrail_result).map(([k, v]) => `${esc(k)}: ${esc(v.replace("_", " "))}`).join(", ") : null;
+    const tone = { passed: "ok", flagged: "bad" };  // anything else is a check that did not give a verdict: a warning, never a pass
+    for (const v of C.guardrailsOf(r)) chips.push(`<span class="chip ${tone[v.state] || "warn"}" data-guardrail="${esc(v.state)}">guardrail &middot; ${esc(v.text)}</span>`);
     const tools = (r.tool_calls || []).map((t) => `${esc(t.type)} ${esc(t.status)}${t.query ? ` "${esc(t.query)}"` : ""}${t.url ? ` ${esc(t.url)}` : ""}`).join("; ");
     const start = timed ? `${(bar.startMs / 1000).toFixed(1)} s` : "order only";
     const took = bar.durationMs == null ? (f ? "n/a" : "n/a (replayed)") : `${bar.durationMs} ms`;
@@ -157,7 +158,6 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
       </dl>
       <div class="meta">
         <div class="rid"><span class="k">Request id </span><code>${esc(r.request_id)}</code> <span class="mut">(${esc(r.request_id_source || "otari")})</span></div>
-        ${guard ? `<div><span class="k">Guardrail </span>${guard}</div>` : ""}
         ${r.finish_reason ? `<div><span class="k">Stopped </span>${esc(r.finish_reason)}</div>` : ""}
         ${tools ? `<div><span class="k">Tool </span>${tools}</div>` : ""}
         ${own ? `<div><span class="k">Role fallback </span>${esc(own.line.replace(/^Role fallback: /, ""))} <span class="mut">(the app's own chain of models for this role, not Otari's provider failover)</span></div>` : ""}
