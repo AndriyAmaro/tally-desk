@@ -37,7 +37,7 @@ The question it answers is simple: when the agent loses money, which model said 
 
 ## What we would ask of Otari
 
-1. A guardrails service on the hosted gateway, or a header that says why `valid` is null.
+1. A guardrails service on the hosted gateway, and an error instead of a silent pass for an output-side guardrail. The header now says `unavailable, not_configured` (first seen in dossier 805), which helps, but nothing is evaluated.
 2. A JSON error with a request id when the edge times out, a documented 30 second limit, and a wait instead of a 409 on a retried key.
 3. A pricing change that does not refuse a model that answered an hour earlier, or a notice when a model loses its price.
 4. A per-request list of fallback models, so an app can test failover from code.
