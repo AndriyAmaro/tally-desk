@@ -1,14 +1,14 @@
 {
-  "asof": 807,
+  "asof": 808,
   "source": "scripts/otari_cards.py, from ledger/ledger.jsonl and docs/evidence/otari-drills.jsonl",
   "figures": [
     {
-      "value": "16",
+      "value": "17",
       "label": "Otari-era dossiers",
-      "sub": "792 to 807"
+      "sub": "792 to 808"
     },
     {
-      "value": "314",
+      "value": "337",
       "label": "sealed receipts",
       "sub": "one per model or tool call"
     },
@@ -23,7 +23,7 @@
       "sub": "guardrails not proven"
     },
     {
-      "value": "38",
+      "value": "39",
       "label": "backup-route answers",
       "sub": "canary plus real traffic"
     }
@@ -36,7 +36,7 @@
       "resource": "Several open-weight models in distinct roles",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 807
+      "dossier": 808
     },
     {
       "n": 2,
@@ -50,7 +50,7 @@
       "resource": "Budgets and spend limits",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 807
+      "dossier": 808
     },
     {
       "n": 4,
@@ -78,14 +78,14 @@
       "resource": "Code execution",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 807
+      "dossier": 808
     },
     {
       "n": 8,
       "resource": "MCP",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 807
+      "dossier": 808
     }
   ]
 }
