@@ -11,6 +11,7 @@ from pathlib import Path
 from .canonical import canonical
 
 GENESIS = "0" * 64
+RECEIPTS_KIND = "receipts/1"  # a record sealed by verdict_desk.seal for a workload that is not the trading agent: it has no verdict
 
 # Lazy module cache — v1 modules are the default, v2 is opt-in via rules_version.
 _MODULES: dict[str, dict] = {}
@@ -227,6 +228,9 @@ def append(packet: dict, path: Path, ask=None, rules_version: str = "v1", rules=
 
 def replay(dossier: dict, rules_version: str = "v1") -> dict:
     """Refaz a decisao so com a evidencia congelada e compara com o registrado."""
+    if dossier.get("kind") == RECEIPTS_KIND:  # a foreign workload: no rules to re-derive, only the record itself is re-checked
+        from . import seal
+        return seal.replay(dossier)
     # Auto-detect rules_version from the dossier's verdict when not provided.
     if rules_version == "auto":
         rules_version = dossier.get("verdict", {}).get("rules_version", "v1")
@@ -331,4 +335,6 @@ def head(ledger: list[dict]) -> dict:
     if problems:
         raise ValueError("refusing to publish the head of a broken chain: " + "; ".join(problems))
     last = ledger[-1]
+    if last.get("kind") == RECEIPTS_KIND:
+        return {"seq": last["seq"], "hash": last["hash"], "symbol": last["workload"]["name"]}
     return {"seq": last["seq"], "hash": last["hash"], "symbol": last["evidence"]["symbol"]}

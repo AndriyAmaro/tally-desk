@@ -363,7 +363,8 @@ def cmd_replay(opts) -> int:
         rv = d.get("verdict", {}).get("rules_version", "v1")
         result = dossier.replay(d, rules_version=rv)
         mismatches += not result["matches"]
-        print(f"#{result['seq']} replay {'MATCHES' if result['matches'] else 'DIFFERS'}: {result['replayed']['action']}")
+        outcome = result["replayed"]["action"] if result["replayed"] else result["note"]  # a receipts record has no verdict to re-derive
+        print(f"#{result['seq']} replay {'MATCHES' if result['matches'] else 'DIFFERS'}: {outcome}")
     return 1 if mismatches else 0
 
 
@@ -396,6 +397,8 @@ def export_pack(ledger: list[dict], seq: int) -> dict:
     target = next((d for d in ledger if d["seq"] == seq), None)
     if target is None:
         raise ValueError(f"seq {seq} not found in the ledger")
+    if target.get("kind") == dossier.RECEIPTS_KIND:
+        raise ValueError(f"seq {seq} is a receipts record: it has no verdict to pack; use verify and replay")
     index = ledger.index(target)
     replay_result = dossier.replay(target, rules_version=target.get("verdict", {}).get("rules_version", "v1"))
     body = {k: v for k, v in target.items() if k != "hash"}

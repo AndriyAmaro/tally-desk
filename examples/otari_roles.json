@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "_doc": "The role config of the example agents (verdict_desk/seal.py reads it with Session(config=...)). One role, `reader`, plays an open-weight model; it drives Otari's web fetch tool, so it is a tool role and the tool cap applies. Edit the model id to any open-weight catalog id.",
+  "base_url": "https://otari.ai/api/v1",
+  "auth_header": "Otari-Key",
+  "default_role": "reader",
+  "send_user": false,
+  "_send_user_doc": "false so an ordinary key works. With a service key, OTARI_SEND_USER=1 bills the role to its own end user, `byo-reader`.",
+  "end_user_prefix": "byo-",
+  "cycle_cap_usd": "0.02",
+  "tool_cap_usd": "0.05",
+  "roles": {
+    "reader": {
+      "model": "deepseek/deepseek-v4-flash-0731",
+      "vendor": "DeepSeek",
+      "tool_role": true,
+      "open_weights": true
+    }
+  }
+}
