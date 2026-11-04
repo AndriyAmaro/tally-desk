@@ -1,0 +1,56 @@
+name: otari-cycle
+
+# One Verdict Desk decision cycle through the Otari gateway, every 3 hours.
+# It runs from the default branch (GitHub only schedules there) and works on the otari branch.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: otari-cycle
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: otari
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: OpenTimestamps client
+        run: pip install --user opentimestamps-client
+
+      - name: Restore the runner state (spend so far, cycles per day)
+        uses: actions/cache/restore@v4
+        with:
+          path: logs/otari-runner.state.json
+          key: otari-runner-state-${{ github.run_id }}
+          restore-keys: otari-runner-state-
+
+      - name: One cycle
+        env:
+          OTARI_KEY_FILE: ${{ runner.temp }}/otari.key
+          OTARI_SECRET: ${{ secrets.OTARI_API_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$OTARI_SECRET" > "$OTARI_KEY_FILE"
+          python3 tools/otari_runner.py --once
+          rm -f "$OTARI_KEY_FILE"
+
+      - name: Save the runner state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: logs/otari-runner.state.json
+          key: otari-runner-state-${{ github.run_id }}
