@@ -10,9 +10,11 @@ from verdict_desk.__main__ import export_pack
 from verdict_desk.canonical import canonical
 
 
+LEDGER_PATH = Path(__file__).resolve().parents[1] / "ledger" / "ledger.jsonl"
+
+
 def ledger() -> list[dict]:
-    path = Path(__file__).resolve().parents[1] / "ledger" / "ledger.jsonl"
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [json.loads(line) for line in LEDGER_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 class ExportPackTest(unittest.TestCase):
@@ -58,6 +60,17 @@ class ExportPackTest(unittest.TestCase):
         self.assertGreaterEqual(len(steps), 4)
         self.assertTrue(any("SHA-256" in s for s in steps))
         self.assertTrue(any("replay" in s for s in steps))
+
+    def test_the_replay_command_in_the_instructions_is_one_the_cli_accepts(self):
+        """The pack says how to replay a dossier; run that exact line (replay takes the seq as a positional argument, not --seq)."""
+        import shlex
+        import subprocess
+        import sys
+        line = next(s for s in export_pack(self.rows, 80)["how_to_verify_this_file_without_trusting_us"] if "Run:" in s).split("Run:", 1)[1].strip()
+        args = shlex.split(line.replace("<ledger.jsonl>", str(LEDGER_PATH)).replace("<seq>", "80"))
+        self.assertEqual(args[:3], ["python3", "-m", "verdict_desk"])
+        done = subprocess.run([sys.executable, *args[1:]], capture_output=True, text=True, cwd=LEDGER_PATH.parent.parent)
+        self.assertEqual((done.returncode, "MATCHES" in done.stdout), (0, True), done.stderr)
 
     def test_missing_sequence_raises(self):
         with self.assertRaises(ValueError):

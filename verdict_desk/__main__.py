@@ -381,7 +381,7 @@ EXPORT_INSTRUCTIONS = [
     "2. Remove the `hash` key, canonicalize the rest as UTF-8 JSON with sorted keys and",
     "   no whitespace (verdict_desk/canonical.py), then SHA-256 it. It must equal",
     "   `recomputed_hash` below and `dossier.hash`.",
-    "3. Run: python3 -m verdict_desk --ledger <ledger.jsonl> replay --seq <seq>",
+    "3. Run: python3 -m verdict_desk --ledger <ledger.jsonl> replay <seq>",
     "   It recomputes the verdict from the frozen evidence alone. It must MATCH.",
     "4. Compare `neighbors.prev_hash` with the real previous dossier, and this dossier's",
     "   hash with the next one. Any edit here breaks both links.",
