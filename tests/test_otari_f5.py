@@ -177,6 +177,8 @@ class AuditBudgetRowsTest(unittest.TestCase):
         rows = self.rows(ledger)
         self.assertEqual(rows[4]["dossier"], max(complete), "the newest dossier before the edited one whose every asked user was found")
         self.assertRegex(rows[4]["note"], r"(\d+) of \1 asked were found")
+        self.assertIn(f"The newest read (dossier {ledger[-1]['seq']}) found 8 of 10, without a row for vd-sandbox, vd-mcp", rows[4]["note"])
+        self.assertIn("(vd-bull, vd-bear", rows[4]["note"], "the note names the end users that were found")
 
     def test_when_no_read_is_complete_row_four_names_the_gap_instead_of_hiding_it(self):
         ledger = self.ledger()
@@ -189,6 +191,7 @@ class AuditBudgetRowsTest(unittest.TestCase):
         self.assertIn("8 of 10 asked were found", row["note"])
         self.assertIn("1 not created yet", row["note"])
         self.assertIn("1 lookups failed", row["note"])
+        self.assertIn("not found: vd-sandbox, vd-mcp", row["note"])
         self.assertEqual(row["status"], "PASS")
 
 

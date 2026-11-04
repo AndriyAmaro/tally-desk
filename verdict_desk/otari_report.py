@@ -229,9 +229,16 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
         found = {n: u for n, u in seal[1]["users"].items() if u.get("found")}
         on = [n for n, u in found.items() if u.get("budget_id") == seal[1].get("expected_budget_id")]
         asked, got, absent, failed = _read_counts(seal[1])
-        gaps = "" if got == asked else f"; {absent} not created yet on this key (answered without a row) and {failed} lookups failed or were not recorded as answered"
+        missing = [n for n, u in seal[1]["users"].items() if not u.get("found")]
+        gaps = "" if got == asked else f"; {absent} not created yet on this key (answered without a row) and {failed} lookups failed or were not recorded as answered; not found: {', '.join(missing)}"
+        latest = sealed[0]  # the newest read, which may be a thinner one than the read cited above
+        latest_gap = ""
+        if latest[0] != seal[0]:
+            l_asked, l_got, _, _ = _read_counts(latest[1])
+            l_missing = [n for n, u in latest[1]["users"].items() if not u.get("found")]
+            latest_gap = f". The newest read (dossier {latest[0]}) found {l_got} of {l_asked}" + (f", without a row for {', '.join(l_missing)}" if l_missing else "")
         row(4, bool(found) and len(on) == len(found), echo[1], seal[0],
-            f"{len(on)} of the {got} end users found sit on the vd-analyst budget; {got} of {asked} asked were found{gaps} (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts")
+            f"{len(on)} of the {got} end users found sit on the vd-analyst budget; {got} of {asked} asked were found ({', '.join(found)}){gaps} (read back from Otari, sealed in the dossier){latest_gap}; Otari echoed the budget on the receipts")
     elif users and echo:
         row(4, True, echo[1], echo[0], f"drill only (not sealed in the ledger): {len(users['end_users'])} end users read back on the vd-analyst budget; Otari echoed the budget on the receipts", source="drill")
     else:

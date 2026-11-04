@@ -709,7 +709,9 @@ def messages_call(role: str, system: str, user: str, *, max_tokens: int = 300, t
     if stream:
         payload["stream"] = True
     if end_user:
-        payload["user"] = end_user
+        # The Messages API names its end user in `metadata.user_id`, not in a top-level `user` (that field is chat completions only: on
+        # /messages Otari ignores it and bills the key's own user, so the end user is never created). Docs: docs/end-users.md, section 3.
+        payload["metadata"] = {"user_id": end_user}
     auth = cfg["auth_header"]
     local_id = uuid.uuid4().hex
     headers = {auth: f"Bearer {key}" if auth.lower() == "authorization" else key, "Content-Type": "application/json", "anthropic-version": "2023-06-01",

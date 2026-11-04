@@ -955,6 +955,23 @@ class ReceiptExchangeTest(Env):
             got = llm.messages_call("sandbox", "s", "u")
         self.assertEqual((got["receipt"]["finish_reason"], got["receipt"]["truncated"]), ("max_tokens", True))
 
+    def test_the_messages_path_names_its_end_user_in_metadata_with_the_budget_header(self):
+        """On /messages Otari reads the end user from `metadata.user_id`; a top-level `user` is ignored and the end user is never created."""
+        sent = []
+
+        def opener(request, timeout=None):
+            sent.append(request)
+            return FakeResponse({"content": [{"type": "text", "text": "hi"}], "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1, "cost_usd": "0.000001"}}, HEADERS)
+        repo = Path(__file__).resolve().parent.parent / "config" / "otari.json"  # the real switches: send_user on, the vd-analyst budget id
+        with mock.patch.object(llm, "OTARI_CONFIG", repo), mock.patch.dict(os.environ, {"OTARI_SEND_USER": ""}):
+            for role in ("sandbox", "mcp"):
+                llm.messages_call(role, "s", "u", opener=opener)
+                payload = json.loads(sent[-1].data.decode())
+                self.assertEqual(payload["metadata"], {"user_id": f"vd-{role}"})
+                self.assertNotIn("user", payload)
+                self.assertEqual(sent[-1].get_header("Otari-end-user-budget"), llm.otari_config()["end_user_budget"])
+                self.assertEqual(llm.served_receipt()["end_user"], f"vd-{role}")
+
     def test_a_cut_off_checker_answer_is_ignored_and_a_complete_one_is_used(self):
         labels = {"B1": {"claim": "x", "cites": ["E1"]}}
         items = {"E1": "BTC last close 100"}
