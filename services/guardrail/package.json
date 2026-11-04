@@ -1,0 +1,8 @@
+{
+  "name": "tally-guardrail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rule-based prompt-injection screen for untrusted text, speaking the Otari guardrails service contract. Zero dependencies.",
+  "license": "MIT",
+  "engines": { "node": ">=18" }
+}
