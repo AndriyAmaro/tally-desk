@@ -6,7 +6,8 @@ the new head (and a request to the calendars to upgrade the newest earlier proof
 the budgets the dashboard enforces (USD 0.10 a day per end user, USD 1.50 a day for the organization) with a margin of its own, counts what
 it spends from the receipts, never spends more than USD 2.00 in all, and stops by itself (a line in the log says why) when:
 
-  - a cycle fails twice in a row;
+  - a cycle fails twice in a row (a dossier the closure gate refuses is not a failure: the refusal is logged and written to
+    ledger/closure-refusals.jsonl, the money it cost is counted like any other cycle's, and the next cycle goes on);
   - the key file is gone (a recycled container), which is reported as a stop, not as an error;
   - the working tree is not clean, or the branch is not `otari`;
   - a secret shows up in a changed file;
@@ -33,6 +34,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from verdict_desk import closure  # noqa: E402
 
 KEY_FILE = Path(os.environ.get("OTARI_KEY_FILE") or "/root/.config/otari/key")  # a CI job points this at a file it writes from its secret store
 INTERVAL_S = 3 * 3600
@@ -179,13 +182,47 @@ class Runner:
     def restore(self) -> None:
         """Throws away what a failed cycle left: the appended dossier, its head files, a new stamp, a rewritten README."""
         self.sh(["git", "checkout", "--", "ledger", "README.md", "docs/readme/otari-figures.svg", "docs/readme/otari-features.svg", "web/otari-figures.json"])
-        self.sh(["git", "clean", "-fq", "--", "ledger/timestamps"])
+        self.sh(["git", "clean", "-fq", "--", "ledger/timestamps", "ledger/closure-refusals.jsonl"])
+
+    def refusals(self) -> list[dict]:
+        path = self.root / "ledger" / "closure-refusals.jsonl"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()] if path.exists() else []
+
+    def refused(self, symbol: str, new: list[dict], key: str) -> dict:
+        """The closure gate refused the dossier of this cycle: nothing was appended. Not a failure: the refusal file is committed and pushed
+        so the refusal is public, and what the cycle cost is returned like the entry of any cycle."""
+        users: dict[str, Decimal] = {}
+        for line in new:
+            for user, cost in (line.get("users") or {}).items():
+                users[user] = users.get(user, Decimal(0)) + Decimal(cost)
+        entry = {"seq": None, "symbol": symbol, "usd": str(sum((Decimal(line.get("usd") or 0) for line in new), Decimal(0))), "users": {u: str(c) for u, c in users.items()},
+                 "refused": "; ".join(f"{f['name']}: {f['reason']}" for line in new for f in line.get("failed") or [])[:300]}
+        try:
+            self.scan_for_secrets(key)
+            self.sh(["git", "add", "--", "ledger/closure-refusals.jsonl"])
+            message = f"otari: closure gate refused the cycle of {symbol}, recorded by the runner\n"
+            commit = self.sh(["git", "-c", f"user.name={AUTHOR[0]}", "-c", f"user.email={AUTHOR[1]}", "commit", "-q", "-m", message])
+            if commit.returncode != 0:
+                raise Failure(f"git commit of the refusal failed: {(commit.stderr or commit.stdout or '')[-160:].strip()}")
+            push = self.sh(["git", "push", "-q", "origin", "otari"], timeout=180)
+            if push.returncode != 0:
+                raise Failure(f"git push of the refusal failed (the commit stays local): {(push.stderr or '')[-160:].strip()}")
+        except (Failure, Stop) as err:
+            err.entry = entry  # the cycle spent its money even though its refusal could not be published
+            raise
+        return entry
 
     def cycle(self, state: dict, key: str) -> dict:
         symbol = SYMBOLS[state["cycles"] % len(SYMBOLS)]
         before = len(self.ledger())
+        seen = len(self.refusals())
         env = {**os.environ, "OTARI_API_KEY": key, "VERDICT_DESK_APPEND_PUBLIC": "1"}
         out = self.sh([sys.executable, "-m", "verdict_desk", "decide-v7", symbol, "--config", "config/voices.json"], env=env, timeout=900)
+        if out.returncode == closure.EXIT_CODE:
+            new = self.refusals()[seen:]
+            if not new or len(self.ledger()) != before:
+                raise Failure(f"decide-v7 {symbol} exited {closure.EXIT_CODE} (a closure refusal) but the files do not say so")
+            return self.refused(symbol, new, key)
         if out.returncode != 0:
             raise Failure(f"decide-v7 {symbol} {'timed out' if out.returncode == 124 else 'exited ' + str(out.returncode)}: {(out.stderr or out.stdout or '')[-200:].strip()}")
         ledger = self.ledger()
@@ -310,6 +347,9 @@ class Runner:
             state["total_usd"] = str(Decimal(state["total_usd"]) + Decimal(entry["usd"]))
             state["next_run"] = (now + datetime.timedelta(seconds=INTERVAL_S)).isoformat()
             self.save(state)
+            if entry.get("refused"):  # a normal outcome: no dossier, the money counted, the next symbol next time
+                self.log(f"cycle refused by the closure gate ({entry['symbol']}, nothing appended): {entry['refused']}; counted USD {entry['usd']}, total USD {state['total_usd']}; next at {state['next_run']}")
+                return "refused"
             self.log(f"cycle ok: dossier {entry['seq']} {entry['symbol']}, USD {entry['usd']}, total USD {state['total_usd']}; next at {state['next_run']}")
             return "ok"
         except Stop as stop:

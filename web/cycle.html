@@ -23,6 +23,9 @@
 @media (max-width:60em){.summary{grid-template-columns:repeat(3,minmax(0,1fr))}.summary>div{border-bottom:1px solid var(--color-border)}.summary>div:nth-child(3n){border-right:0}.summary>div:nth-last-child(-n+2){border-bottom:0}}
 @media (max-width:36em){.summary{grid-template-columns:repeat(2,minmax(0,1fr))}.summary>div:nth-child(3n){border-right:1px solid var(--color-border)}.summary>div:nth-child(2n){border-right:0}.summary>div:nth-last-child(-n+2){border-bottom:1px solid var(--color-border)}.summary>div:last-child{border-bottom:0;grid-column:1 / -1;border-right:0}}
 
+.gates{list-style:none;margin:0 0 var(--space-4);padding:0;font-size:var(--text-sm);color:var(--color-text-muted)}
+.gates li{margin:0 0 var(--space-1)}
+.gates li.warn{color:var(--color-text)}
 .overview{margin:0 0 var(--space-2)}
 .overview .strip{position:relative;height:2.25rem;border-radius:var(--radius-md);background:var(--color-surface-sunken);border:1px solid var(--color-border-subtle);overflow:hidden}
 .overview .strip i{position:absolute;top:5px;bottom:5px;min-width:3px;border-radius:3px;background:var(--role,var(--role-narrator))}
@@ -37,7 +40,7 @@ h2{scroll-margin-top:calc(var(--header-h) + 6rem)}
 .call::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--role)}
 .call[data-role="bull"]{--role:var(--role-bull)}.call[data-role="bear"]{--role:var(--role-bear)}.call[data-role="judge"]{--role:var(--role-judge)}
 .call[data-role="checker"]{--role:var(--role-checker)}.call[data-role="canary"]{--role:var(--role-canary)}
-.call[data-role="searcher"],.call[data-role="fetcher"],.call[data-role="mcp"],.call[data-role="sandbox"]{--role:var(--role-tool)}
+.call[data-role="searcher"],.call[data-role="fetcher"],.call[data-role="drift"],.call[data-role="mcp"],.call[data-role="sandbox"]{--role:var(--role-tool)}
 .call.fail{border-color:color-mix(in oklab,var(--color-danger) 60%,var(--color-border))}
 .call.fail::before{background:var(--color-danger)}
 .call-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3)}
@@ -86,6 +89,7 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
 
 <div id="main" hidden>
   <div class="summary" id="summary"></div>
+  <ul class="gates" id="gates"></ul>
   <div class="overview" id="overview"></div>
   <h2 id="timeline">Timeline</h2>
   <p class="mut" id="timenote"></p>
@@ -168,8 +172,11 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     $("summary").innerHTML = `<div><span class="mut">Dossier</span><b>#${esc(d.seq)}</b>${esc((d.evidence || {}).symbol)} · ${esc((d.verdict || {}).action)}</div>
       <div><span class="mut">Calls</span><b>${calls.length}</b>${calls.filter((c) => C.failureOf(c.receipt)).length} refused or failed</div>
       <div><span class="mut">Cost of the receipts</span><b>$${C.microsText(micros)}</b>${cycle ? "sealed spend $" + esc(cycle.total_spent_usd) : ""}</div>
-      <div><span class="mut">Roles</span><b>${new Set(calls.map((c) => c.label).filter((l) => l !== "canary")).size} of 9</b>${calls.some((c) => c.label === "canary") ? "plus the failover canary" : "took part"}</div>
+      <div><span class="mut">Roles</span><b>${new Set(calls.map((c) => c.label).filter((l) => l !== "canary" && l !== "drift")).size} of 9</b>${calls.some((c) => c.label === "canary") ? "plus the failover canary" : "took part"}</div>
       <div><span class="mut">Wall time</span><b>${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " s" : "n/a"}</b>${lay.timed ? "from the first call to the last answer" : "this dossier predates start offsets"}</div>`;
+    // one line each for the closure gate and the source drift seal; a dossier recorded before them has neither field and says so
+    const gate = (d.closure && Array.isArray(d.closure.checks) && d.closure.checks.some((x) => x && !x.pass)) ? "warn" : "";
+    $("gates").innerHTML = [C.closureLine ? `<li class="${gate}">${esc(C.closureLine(d))}</li>` : "", C.driftLine ? `<li>${esc(C.driftLine(d))}</li>` : ""].join("");
     $("overview").innerHTML = C.stripHtml(calls, lay) + `<ul class="legend">${[...new Set(calls.map((c) => c.label))].map((l) => `<li class="${C.roleClass(l)}"><span class="sw"></span><b>${esc(l)}</b> ${calls.filter((c) => c.label === l).length}</li>`).join("")}</ul>`;
     $("timenote").textContent = lay.timed ? "Bars sit where each call began, on one scale for the whole cycle." : "This dossier was recorded before receipts carried the start of each call, so the bars are laid end to end in the order the cycle makes the calls: their length is real, their position is only an order.";
     const g = C.groups(calls);

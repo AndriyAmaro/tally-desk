@@ -173,3 +173,46 @@ test("a call with no duration says n/a (replayed) and draws no bar; a hard route
   assert.ok(!/hard case, larger model/.test(calls), "no policy-like chip for the hard route");
   assert.match(calls, /Model sent <\/span>deepseek\/deepseek-v4-pro/);
 });
+
+const CHECKS = ["receipts", "evidence_frozen", "verdict_replays", "checker_gate", "narrative_flagged", "headroom_lookups", "priced_within_cap", "narrative_complete"];
+const closureOf = (failing) => ({ version: 1, outcome: failing ? "warning" : "pass", checks: CHECKS.map((name, i) => ({ name, class: i < 5 ? "hard" : "soft", pass: name !== failing, reason: "r" })) });
+
+test("a dossier recorded before the closure gate and the drift seal renders as before and says it has neither", async () => {
+  const d = clone(9020, (r) => { delete r.refusal; });
+  delete d.closure;
+  delete d.drift;
+  const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9020");
+  await m.settle();
+  assert.equal(m.els.main.hidden, false);
+  assert.match(m.els.gates.innerHTML, /Closure gate: not applied to this dossier/);
+  assert.match(m.els.gates.innerHTML, /Source drift: not checked in this dossier/);
+  assert.match(m.els.calls.innerHTML, /class="role">bull</);
+});
+
+test("a dossier with the closure gate and the drift seal shows one line each, and the drift fetch is a call of its own", async () => {
+  const d = clone(9021, (r) => { delete r.refusal; });
+  d.closure = closureOf("narrative_complete");
+  d.drift = { schema: "otari-drift/1", status: "changed", source_dossier: 808, minutes_after_decision: 190,
+    receipt: { schema: "otari-receipt/1", role: "fetcher", request_id: "drift-req", request_id_source: "otari", sent_model: "deepseek/deepseek-v4-flash-0731", served_by: "deepinfra:x", provider: "deepinfra",
+      duration_ms: 3000, cost_usd: "0.010", started_offset_ms: 150000, end_user: "vd-fetcher" } };
+  const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9021");
+  await m.settle();
+  assert.match(m.els.gates.innerHTML, /Closure gate: 7 of 8 checks passed \(1 warning: narrative_complete\)/);
+  assert.match(m.els.gates.innerHTML, /Source drift: changed \(dossier 808, 190 min after the decision\)/);
+  assert.match(m.els.calls.innerHTML, /class="role">drift</);
+  assert.match(m.els.calls.innerHTML, /drift-req/);
+  d.closure = closureOf(null);
+  const m2 = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9021");
+  await m2.settle();
+  assert.match(m2.els.gates.innerHTML, /Closure gate: 8 of 8 checks passed<\/li>/);
+});
+
+test("closure and drift fields of the wrong shape never break the page", async () => {
+  const d = clone(9022, (r) => { delete r.refusal; });
+  d.closure = { checks: "nope" };
+  d.drift = "nope";
+  const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9022");
+  await m.settle();
+  assert.equal(m.els.main.hidden, false);
+  assert.match(m.els.gates.innerHTML, /not applied/);
+});

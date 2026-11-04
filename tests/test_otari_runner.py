@@ -33,10 +33,10 @@ class Clock:
 class World:
     """Answers the commands the runner issues, and remembers them."""
 
-    def __init__(self, root, branch="otari", dirty="", fail_decide=False, fail_push=False, key_in_readme=False, fail_verify=False, replay_line=None, noisy_error=False, timeout_decide=False):
+    def __init__(self, root, branch="otari", dirty="", fail_decide=False, fail_push=False, key_in_readme=False, fail_verify=False, replay_line=None, noisy_error=False, timeout_decide=False, refuse_decide=False):
         self.root, self.branch, self.dirty = Path(root), branch, dirty
         self.fail_decide, self.fail_push, self.key_in_readme, self.fail_verify, self.noisy_error = fail_decide, fail_push, key_in_readme, fail_verify, noisy_error
-        self.replay_line, self.timeout_decide = replay_line, timeout_decide
+        self.replay_line, self.timeout_decide, self.refuse_decide = replay_line, timeout_decide, refuse_decide
         self.calls, self.envs = [], []
         (self.root / "ledger" / "timestamps").mkdir(parents=True, exist_ok=True)
         (self.root / "ledger" / "ledger.jsonl").write_text("")
@@ -70,6 +70,12 @@ class World:
                 return self.cp(rc=1, err=(f"boom with {KEY} in it" if self.noisy_error else "boom"))
             path = self.root / "ledger" / "ledger.jsonl"
             rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+            if self.refuse_decide:  # the closure gate refused: a line in the refusal file, no dossier, the refusal exit code
+                line = {"schema": "closure-refusal/1", "symbol": "BTCUSDT", "usd": "0.031000", "users": {"vd-bull": "0.000100", "vd-fetcher": "0.010100"},
+                        "failed": [{"name": "receipts", "reason": "2 of 9 calls have no receipt with an Otari request id: bull, bear"}]}
+                with (self.root / "ledger" / "closure-refusals.jsonl").open("a") as fh:
+                    fh.write(json.dumps(line) + "\n")
+                return self.cp(rc=R.closure.EXIT_CODE, err="closure gate REFUSED BTCUSDT")
             d = synthetic(len(rows) + 1)
             d["llm"]["otari"]["cycle"] = {"total_spent_usd": "0.036000"}
             with path.open("a") as fh:
@@ -125,6 +131,44 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(push[-3:], ["-q", "origin", "otari"][-3:])
         self.assertNotIn("--force", push)
         self.assertNotIn("-f", push)
+
+    def test_a_closure_refusal_is_a_normal_outcome_logged_counted_published_and_not_a_failure(self):
+        r = self.make(refuse_decide=True)
+        self.assertEqual(r.tick(), "refused")
+        state = r.load()
+        self.assertEqual((state["failures"], state["cycles"], state["stopped"], state["total_usd"]), (0, 1, None, "0.031000"))
+        entry = state["history"][-1]
+        self.assertEqual((entry["seq"], entry["users"]["vd-fetcher"]), (None, "0.010100"))
+        self.assertIn("receipts", entry["refused"])
+        log = (self.root / "logs" / "otari-runner.log").read_text()
+        self.assertIn("cycle refused by the closure gate (BTCUSDT, nothing appended)", log)
+        self.assertIn("counted USD 0.031000", log)
+        self.assertNotIn("cycle failed", log)
+        steps = self.commands()
+        self.assertFalse(any(s.startswith("-m verdict_desk verify") or s.startswith("-m verdict_desk replay") for s in steps), "no dossier, nothing to verify")
+        add = next(c for c in self.world.calls if c[:3] == ["git", "add", "--"])
+        self.assertEqual(add[3:], ["ledger/closure-refusals.jsonl"], "only the refusal file is published")
+        commit = next(c for c in self.world.calls if "commit" in c)
+        self.assertIn("closure gate refused the cycle of BTCUSDT", commit[-1])
+        self.assertTrue(any("push" in c for c in self.world.calls))
+        self.assertFalse(any(c[:3] == ["git", "checkout", "--"] for c in self.world.calls), "nothing to restore")
+
+    def test_refusals_do_not_count_toward_the_two_failures_stop_but_their_money_counts_toward_the_caps(self):
+        r = self.make(refuse_decide=True)
+        for _ in range(3):
+            self.assertEqual(r.tick(), "refused")
+            self.clock.advance(R.INTERVAL_S)
+        state = r.load()
+        self.assertEqual((state["failures"], state["stopped"], state["total_usd"]), (0, None, "0.093000"))
+        self.assertEqual(R.Runner.today(state, "2026-11-02")[0], 3, "each counts as a cycle of the day")
+        self.world.refuse_decide = False
+        self.assertEqual(r.tick(), "ok")
+
+    def test_a_refusal_exit_with_no_refusal_line_is_a_failure_because_the_files_do_not_say_so(self):
+        r = self.make(refuse_decide=True)
+        original = r.refusals
+        r.refusals = lambda: original()[:0] if self.world.calls and any("decide-v7" in c for c in self.world.calls) else original()
+        self.assertEqual(r.tick(), "failed")
 
     def test_a_decide_that_outlives_its_timeout_is_a_failure_with_the_tree_restored_not_an_exception(self):
         r = self.make(timeout_decide=True)

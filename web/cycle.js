@@ -54,6 +54,7 @@
     const web = ev.web || {};
     if (web.receipt) found.push(["searcher", web.receipt]);
     if ((web.page || {}).receipt) found.push(["fetcher", web.page.receipt]);
+    if ((d.drift || {}).receipt) found.push(["drift", d.drift.receipt]); // the source drift seal: one more fetch of the cycle
     if ((ev.market_mcp || {}).receipt) found.push(["mcp", ev.market_mcp.receipt]);
     for (const part of ["bull", "bear", "checker", "judge"]) if ((llm[part] || {}).receipt) found.push([part, llm[part].receipt]);
     const canary = ((llm.otari || {}).canary) || {};
@@ -179,7 +180,7 @@
   }
 
   /* Role -> the class that carries its color (web/theme.css: --role-*). The role name is always printed next to the color. */
-  const ROLE_CLASS = { bull: "r-bull", bear: "r-bear", judge: "r-judge", checker: "r-checker", narrator: "r-narrator", searcher: "r-tool", fetcher: "r-tool", mcp: "r-tool", sandbox: "r-tool", canary: "r-canary" };
+  const ROLE_CLASS = { bull: "r-bull", bear: "r-bear", judge: "r-judge", checker: "r-checker", narrator: "r-narrator", searcher: "r-tool", fetcher: "r-tool", drift: "r-tool", mcp: "r-tool", sandbox: "r-tool", canary: "r-canary" };
   const roleClass = (label) => ROLE_CLASS[label] || "r-narrator";
   const escText = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -190,6 +191,24 @@
     const spans = bars.map((e) => `<i class="${roleClass(e.c.label)}" style="left:${e.b.leftPct}%;width:${e.b.widthPct}%" title="${escText(e.c.label)}: ${e.b.durationMs} ms"></i>`).join("");
     const roles = [...new Set(calls.map((c) => c.label))].join(", ");
     return `<div class="strip" role="img" aria-label="${calls.length} calls over ${lay.timed ? (lay.totalMs / 1000).toFixed(1) + " seconds" : "one cycle"}: ${escText(roles)}">${spans}</div>`;
+  }
+
+  /* The two lines of the cycle page about the closure gate and the source drift seal; verdict_desk/otari_report.py writes the same words. A
+   * dossier recorded before either existed has neither field, and says so. */
+  function closureLine(d) {
+    const c = d && d.closure;
+    if (!c || !Array.isArray(c.checks)) return "Closure gate: not applied to this dossier (recorded before the gate)";
+    const checks = c.checks.filter((x) => x && typeof x === "object");
+    const warned = checks.filter((x) => !x.pass && x.class === "soft").map((x) => String(x.name));
+    return `Closure gate: ${checks.filter((x) => x.pass).length} of ${checks.length} checks passed` + (warned.length ? ` (${warned.length} warning${warned.length === 1 ? "" : "s"}: ${warned.join(", ")})` : "");
+  }
+  function driftLine(d) {
+    const b = d && d.drift;
+    if (!b || typeof b !== "object") return "Source drift: not checked in this dossier (recorded before the seal existed)";
+    if (b.status === "none") return "Source drift: no earlier page old enough to read again";
+    const head = `dossier ${b.source_dossier}` + (Number.isInteger(b.minutes_after_decision) ? `, ${b.minutes_after_decision} min after the decision` : "");
+    if (b.status === "unavailable") return `Source drift: unavailable (${head}): ${b.reason}`;
+    return `Source drift: ${b.status} (${head})`;
   }
 
   /* The four figures of the README card that the ledger alone can give; the same counts as scripts/otari_cards.py (tests/home.test.js checks it). */
@@ -206,5 +225,5 @@
     };
   }
 
-  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures };
+  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures, closureLine, driftLine };
 });

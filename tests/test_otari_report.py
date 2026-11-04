@@ -289,6 +289,40 @@ process.stdout.write(JSON.stringify({{ board: C.board(input.ledger), who: era.ma
 
 
 @unittest.skipUnless(NODE, "node is not installed here")
+class GateLinesParityTest(unittest.TestCase):
+    """The closure and drift lines of the cycle page are written twice (here and in web/cycle.js); they must say the same words, and calls_of
+    must find the drift fetch in the same place in both."""
+
+    CASES = [
+        {}, {"closure": "garbage", "drift": 5}, {"closure": {"checks": "nope"}},
+        {"closure": {"checks": [{"name": "receipts", "class": "hard", "pass": True}, {"name": "narrative_complete", "class": "soft", "pass": False},
+                                {"name": "priced_within_cap", "class": "soft", "pass": False}]}, "drift": {"status": "changed", "source_dossier": 7, "minutes_after_decision": 190}},
+        {"closure": {"checks": [{"name": "a", "class": "hard", "pass": True}]}, "drift": {"status": "unchanged", "source_dossier": 8}},
+        {"drift": {"status": "none"}}, {"drift": {"status": "unavailable", "source_dossier": 9, "minutes_after_decision": 121, "reason": "boom"}},
+    ]
+
+    def test_the_two_languages_write_the_same_lines_and_order_the_calls_alike(self):
+        with_call = {**synthetic(), "drift": {"status": "unchanged", "source_dossier": 1, "receipt": receipt("fetcher", "id-drift", started_offset_ms=6000)}}
+        script = f"""
+const C = require({json.dumps(str(ROOT / 'web' / 'cycle.js'))});
+const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify({{ lines: input.cases.map((d) => [C.closureLine(d), C.driftLine(d)]), order: C.callsOf(input.call).map((c) => c.label + ':' + c.receipt.request_id) }}));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+            fh.write(script)
+            path = fh.name
+        try:
+            out = subprocess.run([NODE, path], input=json.dumps({"cases": self.CASES, "call": with_call}), capture_output=True, text=True, timeout=60)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        self.assertEqual(out.returncode, 0, out.stderr[:400])
+        got = json.loads(out.stdout)
+        self.assertEqual(got["lines"], [[rep.closure_line(d), rep.drift_line(d)] for d in self.CASES])
+        self.assertEqual(got["order"], [f"{c['label']}:{c['receipt']['request_id']}" for c in rep.calls_of(with_call)])
+        self.assertIn("drift:id-drift", got["order"])
+
+
+@unittest.skipUnless(NODE, "node is not installed here")
 class NodeSuiteTest(unittest.TestCase):
     """The node tests of the F4 page run inside the one unittest discovery, so a single command covers them."""
 

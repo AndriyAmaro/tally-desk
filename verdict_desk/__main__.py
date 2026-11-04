@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import voices as voices_config
-from . import anchor, backtest, battery, cadence, dossier, evidence, journal, learning, livestats, llm, narrative, portfolio, research, scoreboard, trust
+from . import anchor, backtest, battery, cadence, closure, dossier, evidence, journal, learning, livestats, llm, narrative, portfolio, research, scoreboard, trust
 
 DEFAULT_LEDGER = Path("ledger/ledger.jsonl")
 
@@ -146,13 +146,19 @@ def _decide_flow(opts, rules_version: str) -> int:
         web = otari_web.collect(opts.symbols, block)
         page = web.get("page") or {}
         print(f"web via Otari: {len(web['items'])} items, page excerpt {'yes' if page.get('excerpt') else 'no'}" + (f" ({web['error'][:80]})" if web.get("error") else ""))
+    drift = None
+    if web is not None and llm._flag("OTARI_SOURCE_DRIFT", True):
+        from . import source_drift
+        drift = source_drift.collect(dossier.read_ledger(opts.ledger))  # one more fetch, of a page an earlier dossier cited; never moves a verdict
+        print(f"source drift via Otari: {drift['status']}" + (f" ({drift['reason'][:80]})" if drift.get("reason") else ""))
     if llm.feature_on("mcp"):
         from . import otari_mcp
         market_mcp = otari_mcp.collect()
         print(f"MCP via Otari ({market_mcp['server']}): prices {market_mcp.get('prices')}, code trusted {market_mcp.get('trusted')}" + (f" ({market_mcp['error'][:80]})" if market_mcp.get("error") else ""))
     from . import practice
     execute = practice.chain_executor()  # practice trades on Sepolia when the key is present; otherwise simulated as before
-    recorded = 0
+    recorded = refused = 0
+    gate = llm.otari_active()  # the closure gate guards every dossier of an Otari run
     for symbol in opts.symbols:
         try:
             packet = evidence.collect(symbol, opts.interval, with_news=not opts.no_news)
@@ -167,11 +173,24 @@ def _decide_flow(opts, rules_version: str) -> int:
             from . import otari_mcp
             check = otari_mcp.apply(packet, market_mcp, float(llm.otari_config().get("market_check_limit_pct", otari_mcp.LIMIT_PCT)))
             print(f"{symbol}: MCP price check {check['status']}" + (f" ({check['diff_pct']}% from the exchange close, limit {check['limit_pct']}%)" if "diff_pct" in check else f" ({check.get('reason')})"))
+        try:
+            record = dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, execute=execute, drift=drift, gate=gate)
+        except closure.ClosureRefused as err:
+            refused += 1
+            _log_refusal(opts.ledger, err)
+            continue
         recorded += 1
-        print_record(dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, execute=execute))
+        print_record(record)
     if recorded and opts.ledger == DEFAULT_LEDGER:
         publish_head(opts.ledger)
-    return 0 if recorded else 1
+    return 0 if recorded else (closure.EXIT_CODE if refused else 1)
+
+
+def _log_refusal(ledger_path: Path, err) -> None:
+    """A dossier the closure gate refused: nothing was appended. The reason goes to the screen (the runner log) and to ledger/closure-refusals.jsonl."""
+    record = closure.refusal_record(err, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    closure.log_refusal(ledger_path, record)
+    print(f"closure gate REFUSED {record['symbol']} (it would have been dossier {record['seq_not_used']}), nothing appended: {err}; cycle cost USD {record['usd']}", file=sys.stderr)
 
 
 def cmd_decide_v2(opts) -> int:

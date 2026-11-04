@@ -79,3 +79,20 @@ test("the failover canary of a dossier is one of its calls, after the four roles
   const d = { seq: 1, evidence: {}, llm: { otari: { canary: { receipt: rec("judge", "c") } }, bull: { receipt: rec("bull", "b") }, judge: { receipt: rec("judge", "j") } }, sandbox: { receipt: rec("sandbox", "s") } };
   assert.deepEqual(C.callsOf(d).map((c) => c.label), ["bull", "judge", "canary", "sandbox"]);
 });
+
+test("the drift fetch is one of the calls of a dossier, right after the page fetch, and the two lines of the cycle page say what the dossier has", () => {
+  const d = { seq: 1, evidence: { web: { receipt: rec("searcher", "s"), page: { receipt: rec("fetcher", "f") } } }, llm: { otari: {}, bull: { receipt: rec("bull", "b") } },
+    drift: { status: "unchanged", source_dossier: 7, minutes_after_decision: 185, receipt: rec("fetcher", "d") } };
+  assert.deepEqual(C.callsOf(d).map((c) => c.label + ":" + c.receipt.request_id), ["searcher:s", "fetcher:f", "drift:d", "bull:b"]);
+  assert.equal(C.roleClass("drift"), "r-tool");
+  assert.equal(C.driftLine(d), "Source drift: unchanged (dossier 7, 185 min after the decision)");
+  assert.equal(C.driftLine({ drift: { status: "none" } }), "Source drift: no earlier page old enough to read again");
+  assert.equal(C.driftLine({ drift: { status: "unavailable", source_dossier: 7, reason: "boom" } }), "Source drift: unavailable (dossier 7): boom");
+  assert.match(C.driftLine({}), /not checked in this dossier/);
+  assert.match(C.closureLine({}), /^Closure gate: not applied to this dossier/);
+  const checks = [{ name: "receipts", class: "hard", pass: true }, { name: "narrative_complete", class: "soft", pass: false }, { name: "priced_within_cap", class: "soft", pass: true }];
+  assert.equal(C.closureLine({ closure: { checks } }), "Closure gate: 2 of 3 checks passed (1 warning: narrative_complete)");
+  assert.equal(C.closureLine({ closure: { checks: checks.map((c) => ({ ...c, pass: true })) } }), "Closure gate: 3 of 3 checks passed");
+  assert.match(C.closureLine({ closure: "garbage" }), /not applied/, "a field of the wrong shape is read as absent, never thrown on");
+  assert.match(C.driftLine({ drift: 5 }), /not checked/);
+});

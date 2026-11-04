@@ -35,6 +35,8 @@ def calls_of(d: dict) -> list[dict]:
         found.append(("searcher", web["receipt"]))
     if (web.get("page") or {}).get("receipt"):
         found.append(("fetcher", web["page"]["receipt"]))
+    if (d.get("drift") or {}).get("receipt"):  # the source drift seal: one more fetch of the cycle, a call like any other
+        found.append(("drift", d["drift"]["receipt"]))
     if (ev.get("market_mcp") or {}).get("receipt"):
         found.append(("mcp", ev["market_mcp"]["receipt"]))
     for part in ("bull", "bear", "checker", "judge"):
@@ -49,6 +51,32 @@ def calls_of(d: dict) -> list[dict]:
     if any(isinstance(c["receipt"].get("started_offset_ms"), int) for c in calls):
         calls.sort(key=lambda c: (c["receipt"].get("started_offset_ms") if isinstance(c["receipt"].get("started_offset_ms"), int) else 10**12, c["n"]))
     return calls
+
+
+def closure_line(d: dict) -> str:
+    """The cycle page's one line for the closure gate of a dossier; web/cycle.js writes the same words (tests/test_otari_report.py compares)."""
+    closure = d.get("closure")
+    if not isinstance(closure, dict) or not isinstance(closure.get("checks"), list):
+        return "Closure gate: not applied to this dossier (recorded before the gate)"
+    checks = [c for c in closure["checks"] if isinstance(c, dict)]
+    warned = [str(c.get("name")) for c in checks if not c.get("pass") and c.get("class") == "soft"]
+    line = f"Closure gate: {sum(1 for c in checks if c.get('pass'))} of {len(checks)} checks passed"
+    return line + (f" ({len(warned)} warning{'' if len(warned) == 1 else 's'}: {', '.join(warned)})" if warned else "")
+
+
+def drift_line(d: dict) -> str:
+    """The same for the source drift seal."""
+    block = d.get("drift")
+    if not isinstance(block, dict):
+        return "Source drift: not checked in this dossier (recorded before the seal existed)"
+    status = block.get("status")
+    if status == "none":
+        return "Source drift: no earlier page old enough to read again"
+    after = block.get("minutes_after_decision")
+    head = f"dossier {block.get('source_dossier')}" + (f", {after} min after the decision" if isinstance(after, int) else "")
+    if status == "unavailable":
+        return f"Source drift: unavailable ({head}): {block.get('reason')}"
+    return f"Source drift: {status} ({head})"
 
 
 def _failed(r: dict) -> bool:
@@ -404,7 +432,7 @@ ROLE_ROWS = [
     ("Judge", "weighs the validated claims", ("judge",), "a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget"),
     ("Citation checker", "re-reads each claim against the evidence it cites", ("checker",), "small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1)"),
     ("Narrator", "reads news headlines in batches", ("narrator",), "a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies"),
-    ("Tool drivers", "search, fetch, sandbox, MCP", ("searcher", "fetcher", "sandbox", "mcp"), "the tool does the work and the model only drives it, so a small fast model is enough"),
+    ("Tool drivers", "search, fetch, sandbox, MCP", ("searcher", "fetcher", "drift", "sandbox", "mcp"), "the tool does the work and the model only drives it, so a small fast model is enough"),
 ]
 
 

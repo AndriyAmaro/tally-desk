@@ -182,7 +182,10 @@ def _rules_for(m: dict, dossier_or_rules=None, rules_version: str = "v1"):
 
 
 def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True, rules_version: str = "v1", rules=None,
-          execute=None, closed: list | None = None) -> dict:
+          execute=None, closed: list | None = None, drift: dict | None = None, frozen: str | None = None, closer=None) -> dict:
+    """The sealed dossier of one packet. `frozen` (the digest of the evidence when collection ended) switches the closure gate on: it
+    runs after the cycle's calls and BEFORE anything leaves the process on chain, and raises closure.ClosureRefused when a hard check
+    fails. `closer` makes the closes of earlier positions after the gate, for the same reason."""
     m = _mods(rules_version)
     feats = m["features"].compute(packet)
     narrative = packet.get("narrative")
@@ -201,12 +204,19 @@ def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True
     }
     if layer is not None:
         body["llm"] = layer
+    if drift is not None:
+        body["drift"] = drift  # an evidence-freshness receipt: nothing above reads it, so it cannot move the verdict
     if use_llm and ask is None and hasattr(m["llm"], "feature_on") and m["llm"].feature_on("code_execution"):
         # Otari runs the verdict arithmetic in its hosted sandbox; the sealed block holds both outputs and whether they are identical
         from . import sandbox_rederive
         body["sandbox"] = sandbox_rederive.seal(body)
         if layer is not None and isinstance(layer.get("otari"), dict):
             layer["otari"]["cycle"] = m["llm"].cycle_status()  # a snapshot taken after the sandbox call, so the sealed spend includes it
+    if frozen is not None:
+        from . import closure
+        body["closure"] = closure.seal(body, frozen)
+    if closer is not None:
+        closed = closer()
     # Practice trades on Sepolia (practice.py): the transaction is sent before sealing, so its hash is inside the dossier.
     from . import practice
     execution = practice.execute_open(seq, packet.get("symbol"), debate["verdict"], packet, execute)
@@ -217,12 +227,16 @@ def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True
     return {**body, "hash": digest(body)}
 
 
-def append(packet: dict, path: Path, ask=None, rules_version: str = "v1", rules=None, execute=None) -> dict:
+def append(packet: dict, path: Path, ask=None, rules_version: str = "v1", rules=None, execute=None, drift: dict | None = None, gate: bool = False) -> dict:
+    """Builds and appends one dossier. With `gate` the closure gate inspects the finished candidate first and raises
+    closure.ClosureRefused, with nothing appended and nothing sent on chain, when a hard check fails."""
     ledger = read_ledger(path)
     prev = ledger[-1]["hash"] if ledger else GENESIS
     from . import practice
-    closed = practice.execute_closes(ledger, packet.get("symbol"), packet, execute)
-    dossier = build(packet, prev, len(ledger) + 1, ask, rules_version=rules_version, rules=rules, execute=execute, closed=closed)
+    frozen = digest(packet) if gate else None  # the evidence as collected, before anything in build can touch it
+    closed = None if gate else practice.execute_closes(ledger, packet.get("symbol"), packet, execute)
+    closer = (lambda: practice.execute_closes(ledger, packet.get("symbol"), packet, execute)) if gate else None
+    dossier = build(packet, prev, len(ledger) + 1, ask, rules_version=rules_version, rules=rules, execute=execute, closed=closed, drift=drift, frozen=frozen, closer=closer)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(dossier, ensure_ascii=False) + "\n")
@@ -291,12 +305,22 @@ def replay(dossier: dict, rules_version: str = "v1") -> dict:
         market = otari_mcp.recheck(dossier)  # the MCP price check, recomputed from the frozen packet; a mismatch must be a refusal
         result.update(market)
         result["matches"] = result["matches"] and market.get("market_check_ok", True)
+    if isinstance(dossier.get("drift"), dict):
+        from . import source_drift
+        seen = source_drift.recheck(dossier)  # the sealed hashes and the status follow from the sealed passage; the page is not fetched again
+        result.update(seen)
+        result["matches"] = result["matches"] and seen.get("drift_ok", True)
     if dossier.get("sandbox") is not None:
         # The sandbox half is re-run locally from the frozen dossier (no network, no model); whether Otari's run was identical stays as sealed
         from . import sandbox_rederive
         extra = sandbox_rederive.recheck(dossier)
         result.update(extra)
         result["matches"] = result["matches"] and extra.get("sandbox_local_matches", True)  # an unsealed (error) block is not a divergence
+    if dossier.get("closure") is not None:
+        from . import closure
+        closed = closure.recheck(dossier)  # the gate's checks recomputed from the dossier alone; a dossier recorded before the gate has none
+        result.update(closed)
+        result["matches"] = result["matches"] and closed.get("closure_ok", True)
     return result
 
 
