@@ -22,7 +22,7 @@ class SiteTest(unittest.TestCase):
         self.assertEqual(site_shell.main(["--check"]), 0, "run scripts/site_shell.py")
 
     def test_every_page_has_one_main_landmark_and_a_skip_link_that_reaches_it(self):
-        for page in sorted(WEB.glob("*.html")):
+        for page in sorted(WEB.glob("**/*.html")):
             html = page.read_text(encoding="utf-8")
             self.assertEqual(html.count('<main id="content">'), 1, page.name)
             self.assertIn('href="#content"', html, page.name)

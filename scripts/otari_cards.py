@@ -28,6 +28,8 @@ FLOW = OUT / "otari-flow.svg"
 FEATURES = OUT / "otari-features.svg"
 ICON_DIR = OUT / "icons"
 # (slug, label, icon, style): the first button is the primary action, the others are quiet
+PRODUCT_NAME = "Verdict Desk on Otari"  # the product name on the header card; scripts/site_shell.py holds the one the site shell shows
+
 BUTTONS = [
     ("cycle", "Call-by-call view", "play", "primary"),
     ("verify", "Verify a record", "check", "quiet"),
@@ -108,7 +110,7 @@ def header_svg() -> str:
 <g clip-path="url(#clip)"><rect width="{width}" height="{height}" fill="url(#dots)" opacity=".55"/><ellipse cx="140" cy="10" rx="460" ry="280" fill="url(#g1)"/><ellipse cx="780" cy="300" rx="380" ry="220" fill="url(#g2)"/><rect x="0" y="0" width="{width}" height="4" fill="url(#edge)"/></g>
 <rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="18" class="bd" stroke-width="1.5"/>
 {_mark(40, 34, 30)}
-{_text(82, 56, "Verdict Desk on Otari", "mu", 15, 600, spacing="-0.1")}
+{_text(82, 56, PRODUCT_NAME, "mu", 15, 600, spacing="-0.1")}
 {_text(40, 122, "Every model call,", "tx", 46, 700, spacing="-1.6")}
 {_text(40, 172, "on the record.", "ac", 46, 700, spacing="-1.6")}
 {_text(40, 204, "A paper-trading agent on the Otari gateway and open-weight models.", "mu", 14.5)}

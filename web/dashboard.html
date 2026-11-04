@@ -56,26 +56,24 @@ a.btn[hidden]{display:none}
 </head><body>
 <!-- shell:header:start -->
 <a class="skip-link" href="#content">Skip to content</a>
-<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="dashboard.html" aria-current="page">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="exhibit/index.html">Exhibits</a></li><li><a href="scorecard.html">Scorecard</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="learn.html">Learn</a></li><li><a href="usecase.html">Use case</a></li></ul></details></nav></header>
+<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more has-current"><summary>More</summary><ul><li><a href="dashboard.html" aria-current="page">Chain dashboard</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="scorecard.html">Scorecard</a></li></ul></details><details class="more"><summary>Earlier era</summary><ul><li><a href="legacy/judge.html">Judge path</a></li><li><a href="legacy/evidence.html">Evidence</a></li><li><a href="legacy/usecase.html">Use case</a></li><li><a href="legacy/learn.html">Learn</a></li><li><a href="legacy/exhibit/index.html">Exhibits</a></li></ul></details></nav></header>
 <!-- shell:header:end -->
 <main id="content">
 
 <header class="hero">
   <p class="kicker">The ledger dashboard · every dossier of the chain, earlier era and Otari era</p>
   <h1>Verdict Desk</h1>
-  <p class="tagline">An AI agent makes a market decision, and each one becomes a piece of evidence a lawyer can file. Frozen inputs, a debate where every claim cites its source, a deterministic verdict, and a hash-chained record anchored on Sepolia and in Bitcoin. Recomputed in your browser, not on our server.</p>
+  <p class="tagline">Every decision of the reference agent becomes a sealed record that anyone auditing an agent can check. Frozen inputs, a debate where every claim cites its source, a deterministic verdict, and a hash-chained record stamped in Bitcoin (and, in the earlier era, anchored on Sepolia). Recomputed in your browser, not on our server.</p>
   <div class="actions">
-    <a class="btn" href="judge.html" style="border-color:var(--accent);font-weight:700">Judge path →</a>
-    <a class="btn" href="evidence.html" style="border-color:var(--accent);font-weight:700">For a lawyer: draft a foundation declaration →</a>
     <a class="btn" href="ask.html" style="border-color:var(--accent);font-weight:700">Ask the record →</a>
     <a class="btn" href="cycle.html" style="border-color:var(--accent);font-weight:700">One cycle, call by call →</a>
     <a class="btn" href="lab.html">Cause and effect lab</a>
-    <a class="btn" href="exhibit/index.html">Decision exhibits</a>
+    <a class="btn" href="legacy/exhibit/index.html">Decision exhibits (earlier era)</a>
     <a class="btn" href="scorecard.html">Scorecard</a>
     <a class="btn" href="verify.html">Verify a record</a>
     <a class="btn" href="narrative.html" style="border-color:var(--accent);font-weight:700">Market voices →</a>
     <a class="btn" href="witnesses.html">Witnesses</a>
-    <a class="btn" href="learn.html">Learn it by breaking it</a>
+    <a class="btn" href="legacy/learn.html">Learn it by breaking it (earlier era)</a>
   </div>
   <section class="diff" aria-labelledby="diff-title">
     <h2 id="diff-title">What you can check here that a debate log cannot show</h2>
@@ -253,10 +251,10 @@ function showDetail(r) {
   const d = r.dossier, box = $("detail"); box.replaceChildren(); box.hidden = false;
   box.appendChild(el("h2", `Dossier #${d.seq}: ${d.evidence.symbol} ${d.verdict.action}`));
   const exLink = document.createElement("a");
-  exLink.href = `exhibit/exhibit-${d.seq}.html`;
+  exLink.href = `legacy/exhibit/exhibit-${d.seq}.html`;
   exLink.className = "btn";
   exLink.style.marginBottom = "8px";
-  exLink.textContent = "Open this decision as a printable exhibit →";
+  exLink.textContent = "Open this decision as a printable exhibit (earlier era) →";
   box.appendChild(exLink);
   box.appendChild(el("p", d.verdict.rationale));
   const e = d.evidence;

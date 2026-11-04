@@ -5,10 +5,14 @@
   python3 scripts/site_shell.py --check   # exit 1 if a page carries a stale or missing shell
 
 A page keeps its shell between <!-- shell:header:start --> / <!-- shell:header:end --> and <!-- shell:footer:start --> /
-<!-- shell:footer:end -->. A page that has no markers yet (the earlier-era pages) gets them once: its old <nav> is removed, the
-header is put on top, the content is wrapped in <main id="content"> and the footer closes the page. No page logic is touched.
+<!-- shell:footer:end -->. A page that has no markers yet gets them once: its old <nav> is removed, the header is put on top, the
+content is wrapped in <main id="content"> and the footer closes the page. No page logic is touched.
+
+Pages under web/legacy/ belong to the earlier, legal-tech version of the project. They also carry a banner that says so, kept between
+<!-- shell:banner:start --> / <!-- shell:banner:end --> at the top of <main>. Every link the shell writes is relative to the page.
 """
 
+import posixpath
 import re
 import sys
 from html import escape
@@ -17,11 +21,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 REPO = "https://github.com/AndriyAmaro/verdict-desk-otari"
+NAME, NAME_SUB = "Verdict Desk", "on Otari"  # the product name, in one place; the README cards take theirs from scripts/otari_cards.py
 PRIMARY = [("index.html", "Overview"), ("cycle.html", "Cycle"), ("verify.html", "Verify")]
 AUDIT = (REPO + "/tree/otari#proofs-resource-by-resource", "Audit")
-EARLIER = [("dashboard.html", "Chain dashboard"), ("judge.html", "Judge path"), ("ask.html", "Ask the record"), ("lab.html", "Lab"),
-           ("exhibit/index.html", "Exhibits"), ("scorecard.html", "Scorecard"), ("narrative.html", "Market voices"),
-           ("witnesses.html", "Witnesses"), ("evidence.html", "Evidence"), ("learn.html", "Learn"), ("usecase.html", "Use case")]
+# Chain tools and views of the reference workload: they stay in place and read the same ledger.
+MORE = [("dashboard.html", "Chain dashboard"), ("witnesses.html", "Witnesses"), ("ask.html", "Ask the record"), ("lab.html", "Lab"),
+        ("narrative.html", "Market voices"), ("scorecard.html", "Scorecard")]
+# The pages of the earlier, legal-tech version of the project, kept under web/legacy/ with a banner.
+EARLIER = [("legacy/judge.html", "Judge path"), ("legacy/evidence.html", "Evidence"), ("legacy/usecase.html", "Use case"),
+           ("legacy/learn.html", "Learn"), ("legacy/exhibit/index.html", "Exhibits")]
+BANNER_TEXT = "Earlier era: the legal-tech version of this project."
 FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1017'/%3E"
            "%3Crect x='4' y='13' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Crect x='11' y='7' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E"
            "%3Cpath d='M21 5h7v20l-1.75-1.3-1.75 1.3-1.75-1.3L21 25z' fill='none' stroke='%23fbbf24' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E")
@@ -30,24 +39,42 @@ MARK = ('<svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden
         '<path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg>')
 
 
+def rel(target: str, page: str) -> str:
+    """The link from `page` to `target`, both given relative to web/."""
+    return posixpath.relpath(target, posixpath.dirname(page) or ".")
+
+
+def menu(summary: str, items: list, page: str) -> str:
+    def link(href, label):
+        cur = ' aria-current="page"' if href == page else ""
+        return f'<a href="{rel(href, page)}"{cur}>{escape(label)}</a>'
+    has = " has-current" if any(h == page for h, _ in items) else ""
+    return f'<details class="more{has}"><summary>{escape(summary)}</summary><ul>{"".join(f"<li>{link(h, l)}</li>" for h, l in items)}</ul></details>'
+
+
 def header(page: str) -> str:
     def link(href, label):
         cur = ' aria-current="page"' if href == page else ""
-        return f'<a href="{href}"{cur}>{escape(label)}</a>'
+        return f'<a href="{rel(href, page)}"{cur}>{escape(label)}</a>'
     primary = "".join(f"<li>{link(h, l)}</li>" for h, l in PRIMARY) + f'<li><a href="{AUDIT[0]}" rel="noopener">{AUDIT[1]}</a></li>'
-    earlier = "".join(f"<li>{link(h, l)}</li>" for h, l in EARLIER)
-    has = ' has-current' if any(h == page for h, _ in EARLIER) else ""
     return (f'<!-- shell:header:start -->\n<a class="skip-link" href="#content">Skip to content</a>\n'
             f'<header class="site-header"><nav class="site-nav" aria-label="Primary">'
-            f'<a class="brand" href="index.html"{" aria-current=\"page\"" if page == "index.html" else ""}>{MARK}<span>Verdict Desk</span><span class="brand-sub">on Otari</span></a>'
+            f'<a class="brand" href="{rel("index.html", page)}"{" aria-current=\"page\"" if page == "index.html" else ""}>{MARK}<span>{escape(NAME)}</span><span class="brand-sub">{escape(NAME_SUB)}</span></a>'
             f'<ul class="nav-links">{primary}</ul>'
-            f'<details class="more{has}"><summary>Earlier era</summary><ul>{earlier}</ul></details></nav></header>\n'
+            f'{menu("More", MORE, page)}{menu("Earlier era", EARLIER, page)}</nav></header>\n'
             f'<!-- shell:header:end -->')
+
+
+def banner(page: str) -> str:
+    return ('<!-- shell:banner:start -->\n<aside class="legacy-banner" role="note"><p><b>' + escape(BANNER_TEXT) + '</b> This page is kept as it was written for '
+            'that audience. The current project is a receipt layer for agents that call models through an AI gateway: see '
+            f'<a href="{rel("index.html", page)}">the overview</a> and <a href="{REPO}/blob/otari/docs/HISTORY.md" rel="noopener">the lineage</a>.</p></aside>\n'
+            '<!-- shell:banner:end -->')
 
 
 def footer() -> str:
     return ('<!-- shell:footer:start -->\n<footer class="site-footer">'
-            '<p>Verdict Desk on Otari decides on paper trades only. No real-money order is ever placed.</p>'
+            f'<p>{escape(NAME)} {escape(NAME_SUB)} decides on paper trades only. No real-money order is ever placed.</p>'
             f'<ul><li><a href="{REPO}/tree/otari" rel="noopener">Source (branch otari)</a></li>'
             f'<li><a href="{REPO}/blob/otari/docs/FEEDBACK_LOG.md" rel="noopener">Feedback to Otari</a></li>'
             f'<li><a href="{REPO}/tree/otari#proofs-resource-by-resource" rel="noopener">Proofs table</a></li>'
@@ -58,6 +85,7 @@ def footer() -> str:
 
 HEAD_RE = re.compile(r"<!-- shell:header:start -->.*?<!-- shell:header:end -->", re.S)
 FOOT_RE = re.compile(r"<!-- shell:footer:start -->.*?<!-- shell:footer:end -->", re.S)
+BANNER_RE = re.compile(r"<!-- shell:banner:start -->.*?<!-- shell:banner:end -->", re.S)
 ICON_RE = re.compile(r'<link rel="icon"[^>]*>')
 
 
@@ -68,6 +96,10 @@ def render(page: str, html: str) -> str:
         html = html.replace("</body>", "</main>\n<!-- shell:footer:start --><!-- shell:footer:end -->\n</body>", 1)
     html = HEAD_RE.sub(lambda _: header(page), html, count=1)
     html = FOOT_RE.sub(lambda _: footer(), html, count=1)
+    if page.startswith("legacy/"):
+        if not BANNER_RE.search(html):
+            html = html.replace('<main id="content">', '<main id="content">\n<!-- shell:banner:start --><!-- shell:banner:end -->', 1)
+        html = BANNER_RE.sub(lambda _: banner(page), html, count=1)
     icon = f'<link rel="icon" href="{FAVICON}">'
     html = ICON_RE.sub(lambda _: icon, html, count=1) if ICON_RE.search(html) else html.replace("</head>", icon + "\n</head>", 1)
     return html
@@ -76,11 +108,12 @@ def render(page: str, html: str) -> str:
 def main(argv=None) -> int:
     check = "--check" in (argv if argv is not None else sys.argv[1:])
     stale = []
-    for path in sorted(WEB.glob("*.html")):
+    for path in sorted(WEB.glob("**/*.html")):
+        name = path.relative_to(WEB).as_posix()
         old = path.read_text(encoding="utf-8")
-        new = render(path.name, old)
+        new = render(name, old)
         if new != old:
-            stale.append(path.name)
+            stale.append(name)
             if not check:
                 path.write_text(new, encoding="utf-8")
     if check:

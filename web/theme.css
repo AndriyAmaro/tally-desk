@@ -201,6 +201,8 @@ details>summary:hover{color:var(--color-text)}
 .more>ul li{margin:0}
 .more>ul a{display:flex!important;width:100%}
 @media (max-width:40em){.more>ul{left:0;right:auto}}
+.legacy-banner{margin:var(--space-4) 0;padding:var(--space-3) var(--space-4);background:var(--color-warning-wash);border:1px solid var(--color-border-strong);border-radius:var(--radius-lg);font-size:var(--text-sm);color:var(--color-text)}
+.legacy-banner p{margin:0;max-width:none}
 
 .site-footer{margin-top:var(--space-9);padding-top:var(--space-5);border-top:1px solid var(--color-border);display:grid;gap:var(--space-3);font-size:var(--text-sm);color:var(--color-text-muted)}
 .site-footer p{margin:0;max-width:none}

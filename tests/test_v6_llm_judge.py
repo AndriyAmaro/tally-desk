@@ -166,7 +166,7 @@ class ParseRulingTest(unittest.TestCase):
         self.assertEqual(llm.parse_ruling(None), {})
 
 
-JUDGE_PAGE = Path(__file__).resolve().parents[1] / "web" / "judge.html"
+JUDGE_PAGE = Path(__file__).resolve().parents[1] / "web" / "legacy" / "judge.html"
 
 
 class JudgePageStatesTheMoatTest(unittest.TestCase):

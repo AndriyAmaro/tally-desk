@@ -513,12 +513,13 @@ def cmd_exhibit(opts) -> int:
     if opts.outdir:
         outdir = Path(opts.outdir)
         outdir.mkdir(parents=True, exist_ok=True)
+        root = getattr(opts, "root", None) or "../"  # from the folder the exhibits are written to up to the site root
         written = []
         for row in target:
             href = None
             if getattr(opts, "packs", None) and (Path(opts.packs) / f"{row['seq']}.json").exists():
-                href = f"../{Path(opts.packs).name}/{row['seq']}.json"
-            page = exhibit.render(row, chain=chain, anchor=anchor_for(row), pack_href=href)
+                href = f"{root}{Path(opts.packs).name}/{row['seq']}.json"
+            page = exhibit.render(row, chain=chain, anchor=anchor_for(row), pack_href=href, root=root)
             path = outdir / f"exhibit-{row['seq']}.html"
             path.write_text(page, encoding="utf-8")
             written.append((row, path))
@@ -970,6 +971,7 @@ def main() -> int:
     p.add_argument("--rpc", default=anchor.DEFAULT_RPC, help="RPC endpoint for --anchor")
     p.add_argument("--address", default=anchor.DEFAULT_ADDRESS, help="LedgerAnchor address")
     p.add_argument("--packs", metavar="DIR", help="directory of evidence packs written by `packs`; an exhibit links its pack when the file exists")
+    p.add_argument("--root", metavar="PATH", help="with --outdir: the path from that folder up to the site root, where the verifier lives (default ../; web/legacy/exhibit needs ../../)")
     p.add_argument("--also", type=int, action="append", metavar="SEQ", help="with --recent, also render this dossier, whatever its age (repeatable; config/always_published.json is always included)")
     p.set_defaults(func=cmd_exhibit)
     p = sub.add_parser("monitor", help="compare the ledger against the head anchored on Sepolia (read-only)")

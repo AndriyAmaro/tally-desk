@@ -58,7 +58,7 @@ class PacksCommandTest(unittest.TestCase):
     def test_the_use_case_dossier_is_always_published_with_its_exhibit_and_pack(self):
         """usecase.html walks a lawyer through one dossier by number; the hourly site build must keep serving it."""
         import re
-        seq = int(re.search(r"var SEQ = (\d+);", (ROOT / "web" / "usecase.html").read_text(encoding="utf-8")).group(1))
+        seq = int(re.search(r"var SEQ = (\d+);", (ROOT / "web" / "legacy" / "usecase.html").read_text(encoding="utf-8")).group(1))
         self.assertIn(seq, cli.always_published())
         out = Path(tempfile.mkdtemp())
         run(out, 1)

@@ -21,13 +21,16 @@ th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;lett
 .scroll{overflow-x:auto}
 .btn{display:inline-block;padding:6px 14px;border-radius:8px;border:1px solid var(--accent);color:var(--accent);text-decoration:none;margin:4px 6px 4px 0}
 </style>
-<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../theme.css">
 </head><body>
 <!-- shell:header:start -->
 <a class="skip-link" href="#content">Skip to content</a>
-<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="dashboard.html">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="exhibit/index.html">Exhibits</a></li><li><a href="scorecard.html">Scorecard</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="learn.html">Learn</a></li><li><a href="usecase.html" aria-current="page">Use case</a></li></ul></details></nav></header>
+<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="../index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="../index.html">Overview</a></li><li><a href="../cycle.html">Cycle</a></li><li><a href="../verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more"><summary>More</summary><ul><li><a href="../dashboard.html">Chain dashboard</a></li><li><a href="../witnesses.html">Witnesses</a></li><li><a href="../ask.html">Ask the record</a></li><li><a href="../lab.html">Lab</a></li><li><a href="../narrative.html">Market voices</a></li><li><a href="../scorecard.html">Scorecard</a></li></ul></details><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="judge.html">Judge path</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="usecase.html" aria-current="page">Use case</a></li><li><a href="learn.html">Learn</a></li><li><a href="exhibit/index.html">Exhibits</a></li></ul></details></nav></header>
 <!-- shell:header:end -->
 <main id="content">
+<!-- shell:banner:start -->
+<aside class="legacy-banner" role="note"><p><b>Earlier era: the legal-tech version of this project.</b> This page is kept as it was written for that audience. The current project is a receipt layer for agents that call models through an AI gateway: see <a href="../index.html">the overview</a> and <a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/docs/HISTORY.md" rel="noopener">the lineage</a>.</p></aside>
+<!-- shell:banner:end -->
 
 <h1>A use case: "why did your agent do that, and what did it know?"</h1>
 <p class="mut">This page walks through one real decision of the live ledger the way a lawyer would. It is not legal advice, and whether a record is admitted is for the court; the page shows what the record lets you establish and what it does not.</p>
@@ -41,15 +44,15 @@ th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;lett
   <li><b>Open the exhibit.</b> <a id="ex-exhibit" href="exhibit/index.html">The decision exhibit</a> is a printable document generated from one line of the public ledger. Its seal says whether the record still matches its fingerprint, recomputed when the page is built and again by your browser on the verifier.</li>
   <li><b>Read what the agent saw.</b> Section 1 lists every item the agent had (candles, funding, headlines, public voices) with its source and the time it was collected. An item that failed to load is recorded as a gap, not left out silently.</li>
   <li><b>Read why it acted.</b> The bull and bear arguments each cite the evidence item they rest on. The exhibit marks the single argument that decided the verdict and shows what would have flipped it. Claims the validator refused (for example a number the cited evidence does not contain) are listed with the reason.</li>
-  <li><b>Take the pack.</b> The exhibit offers an <i>evidence pack</i>, one JSON file with the record, the recomputed hash, the replayed verdict and the links to the records either side. <a id="ex-pack" href="exhibit/index.html">Download the pack</a>, then <a href="verify.html">paste it into the verifier</a> to recompute the hash in your browser, or follow the numbered steps in the file without our software.</li>
-  <li><b>Ask three witnesses outside the operator.</b> <a href="witnesses.html">The witnesses page</a> asks Bitcoin (through two block explorers), the public Sigstore transparency log and the Sepolia contract whether the head of the chain is the one they saw, at a time the operator does not control.</li>
+  <li><b>Take the pack.</b> The exhibit offers an <i>evidence pack</i>, one JSON file with the record, the recomputed hash, the replayed verdict and the links to the records either side. <a id="ex-pack" href="exhibit/index.html">Download the pack</a>, then <a href="../verify.html">paste it into the verifier</a> to recompute the hash in your browser, or follow the numbered steps in the file without our software.</li>
+  <li><b>Ask three witnesses outside the operator.</b> <a href="../witnesses.html">The witnesses page</a> asks Bitcoin (through two block explorers), the public Sigstore transparency log and the Sepolia contract whether the head of the chain is the one they saw, at a time the operator does not control.</li>
   <li><b>Draft the foundation declaration.</b> <a href="evidence.html">The evidence page</a> drafts a declaration from the real dossier, after re-checking the chain in your browser, for a qualified person to review and sign.</li>
 </ol>
 
 <div>
   <a class="btn" id="b-exhibit" href="exhibit/index.html">Open the exhibits</a>
-  <a class="btn" href="verify.html">Verify a record</a>
-  <a class="btn" href="witnesses.html">Check the witnesses</a>
+  <a class="btn" href="../verify.html">Verify a record</a>
+  <a class="btn" href="../witnesses.html">Check the witnesses</a>
 </div>
 
 <h2>What this lets you show, and what it does not</h2>
@@ -69,7 +72,7 @@ th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;lett
 (async function () {
   var SEQ = 212;
   try {
-    var text = await (await fetch('ledger/ledger.jsonl', { cache: 'no-store' })).text();
+    var text = await (await fetch('../ledger/ledger.jsonl', { cache: 'no-store' })).text();
     var row = text.split('\n').filter(Boolean).map(function (l) { return JSON.parse(l); }).find(function (r) { return r.seq === SEQ; });
     if (!row) return;
     document.getElementById('ex-seq').textContent = row.seq;
@@ -83,7 +86,7 @@ th{font-weight:600;font-size:12px;color:var(--mut);text-transform:uppercase;lett
       document.getElementById('b-exhibit').href = ex;
       document.getElementById('b-exhibit').textContent = 'Open exhibit #' + SEQ;
     }
-    if ((await fetch('pack/' + SEQ + '.json', { method: 'HEAD' })).ok) document.getElementById('ex-pack').href = 'pack/' + SEQ + '.json';
+    if ((await fetch('../pack/' + SEQ + '.json', { method: 'HEAD' })).ok) document.getElementById('ex-pack').href = '../pack/' + SEQ + '.json';
   } catch (e) { /* the static text above still reads correctly without the live values */ }
 })();
 </script>

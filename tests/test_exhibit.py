@@ -260,6 +260,16 @@ class IndexTest(unittest.TestCase):
         for r in rows:
             self.assertIn(f"exhibit-{r['seq']}.html", page)
         self.assertIn("Decision exhibits", page)
+        self.assertIn("Earlier era: the legal-tech version of this project.", page)
+
+
+class LegacyPlacementTest(unittest.TestCase):
+    def test_an_exhibit_written_two_levels_down_still_reaches_the_verifier_and_says_it_is_earlier_era(self):
+        row = ledger_rows()[-1]
+        page = exhibit.render(row, pack_href="../../pack/1.json", root="../../")
+        self.assertIn("Earlier era: the legal-tech version of this project.", page)
+        self.assertIn('href="../../verify.html"', page)
+        self.assertIn(f'href="../../ask.html?seq={row["seq"]}"', page)
 
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 

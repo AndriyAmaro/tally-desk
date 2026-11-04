@@ -20,20 +20,23 @@ nav a{margin-right:14px}
 .learned b{color:var(--ok)}
 dt{font-weight:600;margin-top:8px}dd{margin:0 0 0 0;color:var(--mut)}
 </style>
-<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../theme.css">
 </head><body>
 <!-- shell:header:start -->
 <a class="skip-link" href="#content">Skip to content</a>
-<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="dashboard.html">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="exhibit/index.html">Exhibits</a></li><li><a href="scorecard.html">Scorecard</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="learn.html" aria-current="page">Learn</a></li><li><a href="usecase.html">Use case</a></li></ul></details></nav></header>
+<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="../index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="../index.html">Overview</a></li><li><a href="../cycle.html">Cycle</a></li><li><a href="../verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more"><summary>More</summary><ul><li><a href="../dashboard.html">Chain dashboard</a></li><li><a href="../witnesses.html">Witnesses</a></li><li><a href="../ask.html">Ask the record</a></li><li><a href="../lab.html">Lab</a></li><li><a href="../narrative.html">Market voices</a></li><li><a href="../scorecard.html">Scorecard</a></li></ul></details><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="judge.html">Judge path</a></li><li><a href="evidence.html">Evidence</a></li><li><a href="usecase.html">Use case</a></li><li><a href="learn.html" aria-current="page">Learn</a></li><li><a href="exhibit/index.html">Exhibits</a></li></ul></details></nav></header>
 <!-- shell:header:end -->
 <main id="content">
+<!-- shell:banner:start -->
+<aside class="legacy-banner" role="note"><p><b>Earlier era: the legal-tech version of this project.</b> This page is kept as it was written for that audience. The current project is a receipt layer for agents that call models through an AI gateway: see <a href="../index.html">the overview</a> and <a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/docs/HISTORY.md" rel="noopener">the lineage</a>.</p></aside>
+<!-- shell:banner:end -->
 
 <h1>Learn it by breaking it</h1>
 <p class="mut">The bounty is a developer-education program, so this page is a short course. Each exercise makes one idea concrete by letting you try to <b>fool</b> the system, and ends with what you should have learned. About twenty minutes in all; all but two need nothing installed. Every position is simulated and no real-money order is ever placed (practice trades use test tokens on Sepolia).</p>
 
 <div class="ex">
   <h2>1. Break the hash chain</h2>
-  <p class="t">2 minutes · <a href="index.html">Dashboard</a></p>
+  <p class="t">2 minutes · <a href="../dashboard.html">Dashboard</a></p>
   <ol>
     <li>Press <b>Test the chain</b>. One dossier is edited in a copy held in your tab and the whole chain is verified again.</li>
     <li>Press <b>Tamper and re-hash</b>: the edited record now looks valid, but the <i>next</i> one no longer links to it.</li>
@@ -44,7 +47,7 @@ dt{font-weight:600;margin-top:8px}dd{margin:0 0 0 0;color:var(--mut)}
 
 <div class="ex">
   <h2>2. Remove the argument that decided</h2>
-  <p class="t">2 minutes · <a href="lab.html">Cause and effect lab</a></p>
+  <p class="t">2 minutes · <a href="../lab.html">Cause and effect lab</a></p>
   <ol>
     <li>Pick a LONG or SHORT dossier and look for the red rows: those are the single arguments whose removal flips the verdict.</li>
     <li>Pick a dossier where no row is red. Why does it survive the loss of any one argument?</li>
@@ -66,7 +69,7 @@ dt{font-weight:600;margin-top:8px}dd{margin:0 0 0 0;color:var(--mut)}
 
 <div class="ex">
   <h2>4. Be the voices, set your own limit</h2>
-  <p class="t">3 minutes · <a href="narrative.html">Market voices</a></p>
+  <p class="t">3 minutes · <a href="../narrative.html">Market voices</a></p>
   <ol>
     <li>In <b>Which voices earned trust</b>, find a voice whose hit rate is high but whose skill is near zero. Why does "by luck" matter?</li>
     <li>In <b>Try it</b>, tick two voices and see whether a position opens. Add voices and the high-conviction box until it does.</li>
@@ -77,7 +80,7 @@ dt{font-weight:600;margin-top:8px}dd{margin:0 0 0 0;color:var(--mut)}
 
 <div class="ex">
   <h2>5. Read a Bitcoin proof yourself</h2>
-  <p class="t">3 minutes · <a href="witnesses.html">Witnesses</a></p>
+  <p class="t">3 minutes · <a href="../witnesses.html">Witnesses</a></p>
   <ol>
     <li>Find a head stamped in a Bitcoin block and note the block number and when it was mined.</li>
     <li>Press <b>Check every proof against Bitcoin</b>. Each line is your browser replaying the hash steps and asking two independent explorers.</li>

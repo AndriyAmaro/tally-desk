@@ -24,13 +24,16 @@ button,select,input{font:inherit;padding:5px 10px;border-radius:8px;border:1px s
 button{border-color:var(--accent);color:var(--accent);cursor:pointer}
 .scroll{overflow-x:auto}
 </style>
-<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="../theme.css">
 </head><body>
 <!-- shell:header:start -->
 <a class="skip-link" href="#content">Skip to content</a>
-<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="index.html">Overview</a></li><li><a href="cycle.html">Cycle</a></li><li><a href="verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="dashboard.html">Chain dashboard</a></li><li><a href="judge.html">Judge path</a></li><li><a href="ask.html">Ask the record</a></li><li><a href="lab.html">Lab</a></li><li><a href="exhibit/index.html">Exhibits</a></li><li><a href="scorecard.html">Scorecard</a></li><li><a href="narrative.html">Market voices</a></li><li><a href="witnesses.html">Witnesses</a></li><li><a href="evidence.html" aria-current="page">Evidence</a></li><li><a href="learn.html">Learn</a></li><li><a href="usecase.html">Use case</a></li></ul></details></nav></header>
+<header class="site-header"><nav class="site-nav" aria-label="Primary"><a class="brand" href="../index.html"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="a" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="a" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="b" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></svg><span>Verdict Desk</span><span class="brand-sub">on Otari</span></a><ul class="nav-links"><li><a href="../index.html">Overview</a></li><li><a href="../cycle.html">Cycle</a></li><li><a href="../verify.html">Verify</a></li><li><a href="https://github.com/AndriyAmaro/verdict-desk-otari/tree/otari#proofs-resource-by-resource" rel="noopener">Audit</a></li></ul><details class="more"><summary>More</summary><ul><li><a href="../dashboard.html">Chain dashboard</a></li><li><a href="../witnesses.html">Witnesses</a></li><li><a href="../ask.html">Ask the record</a></li><li><a href="../lab.html">Lab</a></li><li><a href="../narrative.html">Market voices</a></li><li><a href="../scorecard.html">Scorecard</a></li></ul></details><details class="more has-current"><summary>Earlier era</summary><ul><li><a href="judge.html">Judge path</a></li><li><a href="evidence.html" aria-current="page">Evidence</a></li><li><a href="usecase.html">Use case</a></li><li><a href="learn.html">Learn</a></li><li><a href="exhibit/index.html">Exhibits</a></li></ul></details></nav></header>
 <!-- shell:header:end -->
 <main id="content">
+<!-- shell:banner:start -->
+<aside class="legacy-banner" role="note"><p><b>Earlier era: the legal-tech version of this project.</b> This page is kept as it was written for that audience. The current project is a receipt layer for agents that call models through an AI gateway: see <a href="../index.html">the overview</a> and <a href="https://github.com/AndriyAmaro/verdict-desk-otari/blob/otari/docs/HISTORY.md" rel="noopener">the lineage</a>.</p></aside>
+<!-- shell:banner:end -->
 
 <h1>Evidence: what the record can and cannot do for a lawyer</h1>
 <div class="notice"><b>Not legal advice.</b> Whether a record is admitted, and how much weight it carries, is for the court and depends on the jurisdiction. This page only states, layer by layer, what the technology establishes and what it leaves open, so that a lawyer can decide what to ask a qualified person to certify. Counsel should review any declaration before it is signed.</div>
@@ -56,11 +59,11 @@ button{border-color:var(--accent);color:var(--accent);cursor:pointer}
         <td>That a copy handed to you is identical, bit for bit, to the record in the chain.</td>
         <td>The identification-by-hash that Rule 902(14) describes for data copied from a file or device, together with a certification by a qualified person.</td>
         <td>That nobody certified it: the rule requires a certification, and notice to the opponent. The generator below drafts one.</td></tr>
-      <tr><td><b>Bitcoin, through OpenTimestamps</b><br><span class="mut">every hour; <a href="witnesses.html">checked in your browser</a></span></td>
+      <tr><td><b>Bitcoin, through OpenTimestamps</b><br><span class="mut">every hour; <a href="../witnesses.html">checked in your browser</a></span></td>
         <td>That the head of the chain, and so every earlier record it commits to, existed no later than the block that contains the stamp. Neither we nor a block explorer can change that.</td>
         <td>Strong supporting evidence of the time by which the record existed, and a defence against "you rewrote it later".</td>
         <td>It is <b>not a qualified electronic time stamp</b> under eIDAS. Article 41(2) gives its presumption of accuracy of date, time and integrity only to qualified time stamps issued by a qualified trust service provider; Article 41(1) says other electronic time stamps cannot be denied effect solely because they are electronic or not qualified, which leaves their weight to the court.</td></tr>
-      <tr><td><b>Sigstore transparency log</b><br><span class="mut">every hour, no key of ours; <a href="witnesses.html">checked in your browser</a></span></td>
+      <tr><td><b>Sigstore transparency log</b><br><span class="mut">every hour, no key of ours; <a href="../witnesses.html">checked in your browser</a></span></td>
         <td>That the head was signed by this repository's GitHub workflow, and that a public log run by the Sigstore project recorded the signature at a time we do not control. The log cannot be back-dated by us.</td>
         <td>A second, independent clock with a named signer, usable next to the Bitcoin stamp, and checkable by anyone with <code>cosign verify-blob</code>.</td>
         <td>Not a qualified time stamp either. It shows <i>which workflow</i> signed, not who wrote the record; whoever controls the repository controls the workflow, so its worth is the log's time, not the signer's independence. The page checks the digest and the signer's name; the certificate chain and the log's inclusion proof need the <code>cosign</code> command.</td></tr>
@@ -96,7 +99,7 @@ button{border-color:var(--accent);color:var(--accent);cursor:pointer}
   </ul>
 </section>
 
-<script src="canonical.js"></script>
+<script src="../canonical.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -104,7 +107,7 @@ button{border-color:var(--accent);color:var(--accent);cursor:pointer}
   const utc = (iso) => String(iso).slice(0, 16).replace("T", " ") + " UTC";
   const where = location.href.replace(/[^/]*$/, "") + "ledger/ledger.jsonl";
 
-  Promise.all([fetch("ledger/ledger.jsonl", { cache: "no-store" }).then((r) => r.text()), fetch("witnesses.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : { heads: [] }).catch(() => ({ heads: [] }))]).then(async ([text, index]) => {
+  Promise.all([fetch("../ledger/ledger.jsonl", { cache: "no-store" }).then((r) => r.text()), fetch("../witnesses.json", { cache: "no-store" }).then((r) => r.ok ? r.json() : { heads: [] }).catch(() => ({ heads: [] }))]).then(async ([text, index]) => {
     const check = await VerdictDesk.verifyLedger(text, VerdictDesk.webSha256);
     const rows = check.rows;
     const intact = check.problems.length === 0;
@@ -121,7 +124,7 @@ button{border-color:var(--accent);color:var(--accent);cursor:pointer}
       $("checks").innerHTML =
         `<p class="${intact ? "ok" : "bad"}">${intact ? "✓" : "✗"} Whole chain re-checked here: ${rows.length} dossiers, ${intact ? "every link and every hash intact" : esc(check.problems.join("; "))}.</p>` +
         `<p class="${row.intact ? "ok" : "bad"}">${row.intact ? "✓" : "✗"} Dossier #${seq}: the hash recomputed in this browser ${row.intact ? "equals" : "DOES NOT equal"} the one stored.</p>` +
-        `<p class="${stamped ? "ok" : "warn"}">${stamped ? `✓ Head #${stamped.seq} was stamped with OpenTimestamps and every dossier up to it, including #${seq}, is committed by it. Whether that stamp is already confirmed in a Bitcoin block (it takes a few hours) is shown, proof by proof, on <a href="witnesses.html">the witnesses page</a>.` : "No stamped head covers this dossier yet (the newest stamps are pending)."}</p>`;
+        `<p class="${stamped ? "ok" : "warn"}">${stamped ? `✓ Head #${stamped.seq} was stamped with OpenTimestamps and every dossier up to it, including #${seq}, is committed by it. Whether that stamp is already confirmed in a Bitcoin block (it takes a few hours) is shown, proof by proof, on <a href="../witnesses.html">the witnesses page</a>.` : "No stamped head covers this dossier yet (the newest stamps are pending)."}</p>`;
 
       const proofLine = stamped
         ? `5. The head of the ledger at dossier #${stamped.seq} (hash ${stamped.hash}) was stamped with OpenTimestamps; the saved head is ledger/timestamps/${stamped.seq}.json and its proof is ledger/timestamps/${stamped.seq}.json.ots. I [checked / did not check] the proof [with the OpenTimestamps client / at ${location.href.replace(/[^/]*$/, "")}witnesses.html]. Because every dossier commits to the one before it, that stamp also covers dossier #${seq}.`
