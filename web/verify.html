@@ -72,10 +72,11 @@
 
 <script src="canonical.js"></script>
 <script src="policy.js"></script>
+<script src="receipts.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const V = window.VerdictDesk, P = window.VerdictPolicy;
+  const V = window.VerdictDesk, P = window.VerdictPolicy, RC = window.VerdictReceipts;
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // An evidence pack (`python3 -m verdict_desk export`) wraps the record under `dossier`; check the record inside it.
@@ -113,6 +114,23 @@
     }
   }
 
+  // A receipts/1 record (verdict_desk/seal.py) belongs to someone else's ledger, so its link is checked against the records pasted with
+  // it, never against the published ledger. It has no verdict: the schema and the closure are recomputed, and nothing is re-derived.
+  async function checkReceipts(d, pasted) {
+    const body = {};
+    Object.keys(d).forEach((k) => { if (k !== "hash") body[k] = d[k]; });
+    const recomputed = await V.webSha256(V.canonical(body));
+    let linked = null, linkNote = "";
+    if (d.prev_hash === V.GENESIS) { linked = d.seq === 1; linkNote = "record claims to be the genesis"; }
+    else {
+      const prev = pasted.get(d.seq - 1);
+      if (!prev) linkNote = "record " + (d.seq - 1) + " was not pasted with it, so linkage was not checked (paste the whole ledger)";
+      else { linked = prev.hash === d.prev_hash; linkNote = linked ? "previous record " + (d.seq - 1) + " carries that hash" : "previous record " + (d.seq - 1) + " carries a different hash"; }
+    }
+    const receipts = await RC.check(d, (value) => V.webSha256(V.canonical(value)));
+    return { d, intact: recomputed === d.hash, recomputed, linked, linkNote, rederived: null, agrees: null, receipts };
+  }
+
   async function checkOne(d, index) {
     const body = {};
     Object.keys(d).forEach((k) => { if (k !== "hash") body[k] = d[k]; });
@@ -142,31 +160,44 @@
     catch (e) { $("status").innerHTML = `<span class="bad">Could not parse that: ${esc(e.message)}</span>`; return; }
     if (!records.length) { $("status").textContent = "Nothing to verify yet."; return; }
 
-    const index = await ledgerIndex();
+    const foreign = (r) => RC.isReceipts(r);
+    const index = records.every(foreign) ? null : await ledgerIndex();  // the published ledger is read only for trading dossiers
+    const pasted = new Map(records.filter(foreign).map((r) => [r.seq, r]));
     const results = [];
-    for (const r of records) results.push(await checkOne(r, index));
+    for (const r of records) results.push(foreign(r) ? await checkReceipts(r, pasted) : await checkOne(r, index));
 
-    const allGood = results.every((r) => r.intact && r.linked !== false && r.agrees !== false);
+    const receiptsGood = (r) => !r.receipts || (r.receipts.schemaOk && r.receipts.closureOk);
+    const allGood = results.every((r) => r.intact && r.linked !== false && r.agrees !== false && receiptsGood(r));
     const allLinked = results.every((r) => r.linked === true);  // null means the ledger could not be read: not "linked", and not "broken" either
     $("out").hidden = false;
     $("verdict").innerHTML = allGood
-      ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, ${allLinked ? "linked" : "linkage not checked (the published ledger could not be read here)"}${
-          results.some((r) => r.rederived) ? ", and re-derived from the frozen evidence" : ""}</span>`
+      ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, ${allLinked ? "linked" : results.some((r) => r.receipts && r.linked === null) ? "linkage not checked for a receipts record whose previous record was not pasted" : "linkage not checked (the published ledger could not be read here)"}${
+          results.some((r) => r.rederived) ? ", and re-derived from the frozen evidence" : ""}${
+          results.some((r) => r.receipts) ? "; receipts records: schema and closure recomputed, no verdict to re-derive" : ""}</span>`
       : `<span class="bad">NOT VERIFIED</span> <span class="mut" style="font-size:15px">at least one check failed, see below</span>`;
 
     $("detail").innerHTML = results.map((r) => {
       const d = r.d, v = d.verdict || {};
       const mark = (b, good, bad, unknown) => b === null ? `<span class="mut">${esc(unknown || "not checked")}</span>` : (b ? `<span class="ok">${esc(good)}</span>` : `<span class="bad">${esc(bad)}</span>`);
+      const head = r.receipts
+        ? `<b>#${esc(d.seq)}</b> ${esc((d.workload || {}).name)} · receipts/1 · ${esc(r.receipts.calls)} call${r.receipts.calls === 1 ? "" : "s"}${r.receipts.dryRun ? " · dry run (fake transport)" : ""}`
+        : `<b>#${esc(d.seq)}</b> ${esc((d.evidence || {}).symbol)} · ${esc(v.action)} · edge ${esc(v.edge)}`;
+      const rederive = r.receipts
+        ? `<span class="mut">no verdict to re-derive: this is a receipts record from another workload, and there are no rules to replay.</span>
+           <div>Receipts schema: ${mark(r.receipts.schemaOk, "every receipt has the otari-receipt/1 fields", "a receipt does not have the otari-receipt/1 fields")}</div>
+           <div>Closure recomputed: ${mark(r.receipts.closureOk, "same pass and fail as sealed (" + (r.receipts.sealedOutcome || "?") + ")", "differs from the sealed closure, or a hard check fails")}</div>
+           <div class="mut">${r.receipts.checks.map((c) => esc(c.name) + (c.pass ? " ok" : " FAILED (" + c.class + ")")).join(" · ")}</div>`
+        : r.rederived
+        ? `${mark(r.agrees, "the rules reproduce the recorded action", "the rules now produce a different action")}
+               <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under${
+              r.blockReason ? `; the evidence was refused by its sealed freshness check: ${esc(r.blockReason)}` : ""}</div>`
+        : `<span class="mut">not possible: this record has no freshness block, so the policy cannot be replayed on it</span>`;
       return `<table><tbody>
-        <tr><th>Record</th><td><b>#${esc(d.seq)}</b> ${esc((d.evidence || {}).symbol)} · ${esc(v.action)} · edge ${esc(v.edge)}</td></tr>
+        <tr><th>Record</th><td>${head}</td></tr>
         <tr><th>Integrity</th><td>${mark(r.intact, "intact: recomputed hash matches", "altered: recomputed hash differs")}
           <div class="mono mut">recorded ${esc((d.hash || "").slice(0, 32))}…<br>recomputed ${esc((r.recomputed || "").slice(0, 32))}…</div></td></tr>
         <tr><th>Linkage</th><td>${mark(r.linked, "linked", "broken link", "not checked")} <span class="mut">${esc(r.linkNote)}</span></td></tr>
-        <tr><th>Re-derivation</th><td>${r.rederived
-            ? `${mark(r.agrees, "the rules reproduce the recorded action", "the rules now produce a different action")}
-               <div class="mut">recorded <b>${esc(v.action)}</b> (rules ${esc(r.rulesVersion)}) · re-derived <b>${esc(r.rederived.state)}</b> from bull ${r.bull.toFixed(2)} vs bear ${r.bear.toFixed(2)}, ATR ${r.atrPct.toFixed(2)}%, price age ${r.age} min against the ${esc(String(r.windowMinutes || 75))}-minute window that record was made under${
-              r.blockReason ? `; the evidence was refused by its sealed freshness check: ${esc(r.blockReason)}` : ""}</div>`
-            : `<span class="mut">not possible: this record has no freshness block, so the policy cannot be replayed on it</span>`}</td></tr>
+        <tr><th>Re-derivation</th><td>${rederive}</td></tr>
       </tbody></table>`;
     }).join("");
   }
