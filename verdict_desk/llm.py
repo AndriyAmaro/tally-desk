@@ -1,19 +1,12 @@
-"""Cliente de LLM com modo offline para testes. Dois formatos, so biblioteca padrao:
+"""The one LLM path of Verdict Desk: the Otari gateway (https://otari.ai).
 
-- padrao: API de chat no formato da OpenAI (Mistral, ou qualquer outra via MISTRAL_BASE_URL e MISTRAL_MODEL);
-- LLM_PROVIDER=anthropic: Claude pela API de Mensagens nativa (modelo padrao claude-haiku-5-5).
+Every model and tool call goes through it. With OTARI_API_KEY unset `chat` raises one clear error and nothing is sent, so there is no
+other provider to fall back to. Each role (bull, bear, judge, checker, narrator and the four tool roles) uses the open-weight catalog id
+of config/otari.json; a role may also list `fallbacks`, ordered catalog ids the app tries itself when the gateway refuses the first one
+for a model-side reason (see `_otari_chat`). Each answer leaves an `otari-receipt/1` (request id, provider, model served, attempts,
+fallback, duration, cost) that the dossier seals. The key comes only from the environment and no exception carries it.
 
-A chave vem so da variavel de ambiente MISTRAL_API_KEY. Sem chave, `available()`
-e falso e os agentes LLM nao rodam (o nucleo deterministico segue sozinho).
-
-Otari: quando OTARI_API_KEY esta no ambiente, toda chamada passa pelo gateway Otari (https://otari.ai) e cada
-papel (bull, bear, judge, checker, narrator) usa o modelo open-weight de config/otari.json. Cada resposta deixa
-um recibo `otari-receipt/1` (request id, provider, modelo servido, tentativas, fallback, duracao, custo) que o
-dossie sela. Sem OTARI_API_KEY nada disto roda e o comportamento e o de sempre.
-
-O plano gratuito da Mistral aceita poucas requisicoes por segundo: o cliente espaca
-o inicio das chamadas (tambem entre threads, como nos lotes paralelos da narrativa) e
-tenta de novo em 429 e 5xx. Nenhuma excecao deste modulo carrega a chave.
+Without a key `available()` is false: the agent layers are skipped and the deterministic core (features, rules, verify, replay) runs alone.
 """
 
 import datetime
@@ -43,21 +36,16 @@ def _number(name: str, default, cast, valid):
     return value if valid(value) else default
 
 
-# LLM_PROVIDER=anthropic talks to Claude through the native Messages API; anything else is an OpenAI-style
-# chat API (Mistral by default). The MISTRAL_* names are historical and still win over the provider defaults.
-ANTHROPIC = os.environ.get("LLM_PROVIDER", "").strip().lower() == "anthropic"
-BASE_URL = os.environ.get("MISTRAL_BASE_URL") or ("https://api.anthropic.com/v1" if ANTHROPIC else "https://api.mistral.ai/v1")
-MODEL = os.environ.get("MISTRAL_MODEL") or ("claude-haiku-5-5" if ANTHROPIC else "mistral-small-latest")
-ANTHROPIC_VERSION = "2023-06-01"
-MAX_TOKENS = _number("MISTRAL_MAX_TOKENS", 3000, int, lambda v: v > 0)  # modelos com raciocinio gastam tokens antes da resposta
-MIN_INTERVAL = _number("MISTRAL_MIN_INTERVAL", 1.1, float, lambda v: math.isfinite(v) and v >= 0)  # segundos entre inicios de chamada
+MAX_TOKENS = 3000  # reasoning models spend tokens before the answer; a role may set its own `max_tokens`, OTARI_MAX_TOKENS_<ROLE> overrides
+MIN_INTERVAL = 0.0  # seconds between call starts when a caller gives no interval; the Otari path takes it from the config (OTARI_MIN_INTERVAL)
 MAX_RETRIES = 4
-RETRY_STATUS = {429, 500, 502, 503, 504, 529}  # 529: the Anthropic API is overloaded
+RETRY_STATUS = {429, 500, 502, 503, 504, 529}
 MAX_WAIT = 60.0
+NO_KEY = "OTARI_API_KEY is not set: every model call goes through the Otari gateway, so nothing was sent. Export the key from the Otari dashboard and run again."
 
 _gate = threading.Lock()
 _next_start = 0.0
-_served = threading.local()  # the model the provider named in its last reply, per thread (parallel batches too)
+_served = threading.local()  # the receipt and the model of the last call, per thread (parallel batches too)
 
 
 class LLMError(OSError):
@@ -99,6 +87,10 @@ def otari_config(path: Path | None = None) -> dict:
         raise LLMError(f"{path.name}: every role needs a model id")
     if cfg.get("default_role") not in roles:
         raise LLMError(f"{path.name}: default_role must name one of the roles")
+    for name, spec in roles.items():
+        chain = spec.get("fallbacks", [])
+        if not isinstance(chain, list) or not all(isinstance(m, str) and m and m.isprintable() and " " not in m for m in chain) or len(set(chain)) != len(chain):
+            raise LLMError(f"{path.name}: the fallbacks of role {name!r} must be a list of distinct catalog ids")
     if not isinstance(cfg.get("base_url"), str) or not isinstance(cfg.get("auth_header"), str):
         raise LLMError(f"{path.name}: base_url and auth_header are required")
     return cfg
@@ -111,6 +103,12 @@ def role_model(role: str | None, cfg: dict | None = None) -> str:
     if name not in cfg["roles"]:
         raise LLMError(f"role {name!r} is not in config/otari.json")
     return cfg["roles"][name]["model"]
+
+
+def role_fallbacks(role: str | None, cfg: dict | None = None) -> list[str]:
+    """The ordered catalog ids the app tries itself after the role's first model, `fallbacks` of the role in config/otari.json (empty: none)."""
+    cfg = cfg or otari_config()
+    return list(((cfg["roles"].get(role or cfg["default_role"])) or {}).get("fallbacks") or [])
 
 
 def _flag(name: str, default) -> bool:
@@ -264,8 +262,8 @@ def otari_summary() -> dict | None:
 
 
 def model_name() -> str:
-    """The name written as `llm.model` in the dossier: the configured model, or a label for the multi-role Otari run."""
-    return "otari:multi-role" if otari_active() else MODEL
+    """The name written as `llm.model` in the dossier: a label for the multi-role Otari run, or `no-gateway` when an injected stub (a test) answered."""
+    return "otari:multi-role" if otari_active() else "no-gateway"
 
 
 def feature_on(name: str, cfg: dict | None = None) -> bool:
@@ -495,11 +493,84 @@ def served_receipt() -> dict | None:
 EXTRA_FIELDS = ("tools", "mcp_servers", "max_tool_iterations", "guardrails")  # request fields an app may add for Otari's tools
 
 
+# What makes the app move to the next model of a role's chain: the gateway cannot serve THAT model (no pricing, unknown or unavailable model,
+# a server failure that outlived the retries). A budget refusal (403 budget_exceeded, any budget scope, the app's own cycle cap) is never
+# in this list: another model would only spend from the same money, so the call stops and says so.
+MODEL_SIDE_CODES = {"pricing_required", "model_not_found", "invalid_model", "model_not_allowed", "model_unavailable", "provider_unavailable", "no_providers_available"}
+
+
+def model_side_reason(err: "OtariError") -> str | None:
+    """Why `err` is a reason to try the next model of the role's chain, or None when it is not (a budget, a cap, a bad request, a key problem)."""
+    if err.scope or err.code in ("budget_exceeded", "cycle_cap_exceeded"):
+        return None
+    if err.code in MODEL_SIDE_CODES:
+        return err.code
+    if err.status == 402 or err.status == 404:
+        return "model_refused"  # a 402 or 404 without the usual code still says this model cannot be served under this key
+    if err.status is not None and err.status >= 500:
+        return f"gateway_{err.status}"
+    return None
+
+
 def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, role: str | None, model: str | None = None,
-                end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None) -> str:
+                end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None,
+                role_fallbacks_on: bool | None = None) -> str:
+    """One logical call. The model asked first is the caller's `model`, else the role's own route (`sent_model`). When the call names no
+    model (or `role_fallbacks_on` is true) the role's `fallbacks` follow it, in order, but only for a model-side refusal or failure
+    (`model_side_reason`); every attempt keeps the role's end user and counts against the cycle caps. The receipt that stays on the thread
+    is the last attempt's, with `role_fallback` saying which entries were skipped and why."""
     cfg = otari_config()
     role = role or cfg["default_role"]
-    model = model or sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
+    first = model or sent_model(role, cfg)  # the policy name when one is set for this role, else the catalog id
+    chain = [first] + ([m for m in role_fallbacks(role, cfg) if m != first] if (model is None if role_fallbacks_on is None else role_fallbacks_on) else [])
+    started_ms = _offset_ms()
+    skipped: list[dict] = []
+    for index, entry in enumerate(chain):
+        try:
+            text = _otari_chat_once(system, user, timeout, max_tokens, role, entry, end_user, end_user_budget, extra, cfg, started_ms)
+        except OtariError as err:
+            reason = model_side_reason(err)
+            receipt = getattr(_served, "receipt", None)
+            if reason and index < len(chain) - 1 and isinstance(receipt, dict):
+                skipped.append(_skip_entry(entry, err, receipt, reason))
+                continue
+            if skipped and isinstance(receipt, dict):  # the call went down the chain and stopped here
+                _note_role_fallback(receipt, chain, skipped, None, stopped=None if reason else (err.code or f"HTTP {err.status}"), exhausted=bool(reason))
+                if reason:
+                    raise OtariError(f"{err} (all {len(chain)} models of the {role} chain failed)", err.status, err.code, err.scope, err.retry_after, err.request_id) from err
+            raise
+        receipt = getattr(_served, "receipt", None)
+        if skipped and isinstance(receipt, dict):
+            _note_role_fallback(receipt, chain, skipped, index)
+        return text
+    raise LLMError("no model to ask")  # unreachable: the chain always holds the first model
+
+
+def _skip_entry(entry: str, err: "OtariError", receipt: dict, reason: str) -> dict:
+    """What the receipt keeps of an entry that was passed over: the model, how it failed and the request id of that refusal."""
+    out = {"model": entry, "reason": reason, "status": err.status, "code": err.code,
+           "request_id": receipt.get("request_id"), "request_id_source": receipt.get("request_id_source")}
+    if (receipt.get("client_attempts") or 1) > 1:
+        out["client_attempts"] = receipt["client_attempts"]
+    return out
+
+
+def _note_role_fallback(receipt: dict, chain: list[str], skipped: list[dict], answered: int | None, stopped: str | None = None, exhausted: bool = False) -> None:
+    """Adds `role_fallback` to the final receipt of a call that went down a role's chain (and only then, so a call served by its first model is unchanged).
+
+    `chain` is the full ordered list, `skipped` the entries passed over (each with its reason and request id), `answered` the index of the entry
+    that served the call (None when none did), `exhausted` whether the whole chain failed, `stopped` the code of a refusal that must not fall back."""
+    note = {"chain": list(chain), "skipped": list(skipped), "answered": None if answered is None else chain[answered], "answered_index": answered}
+    receipt["policy"] = None  # the entry that made this receipt is a catalog id from the role's list, never a routing policy
+    if exhausted:
+        note["exhausted"] = True
+    if stopped and not exhausted:
+        note["stopped_by"] = stopped
+    receipt["role_fallback"] = note
+
+
+def _otari_chat_once(system: str, user: str, timeout: int, max_tokens: int | None, role: str, model: str, end_user: str | None,
+                     end_user_budget: str | None, extra: dict | None, cfg: dict, started_ms: int) -> str:
     key = _otari_key()
     if not key.isprintable() or " " in key:
         raise LLMError("OTARI_API_KEY has spaces or control characters; paste only the key")
@@ -529,9 +600,8 @@ def _otari_chat(system: str, user: str, timeout: int, max_tokens: int | None, ro
         headers["Otari-End-User-Budget"] = budget  # applies only when this call creates the end user
     body = json.dumps(payload).encode("utf-8")
     _served.model = None
-    _served.route = None
     _served.receipt = None
-    _served.started_ms = _offset_ms()
+    _served.started_ms = started_ms  # the start of the whole logical call, not of this entry of its chain
     _cycle_check(cycle_cap(cfg, is_tool_role(role, cfg)), role, model, end_user, headers["Idempotency-Key"])
     tries = _Tries()
     while True:
@@ -700,70 +770,19 @@ def _otari_error(err: urllib.error.HTTPError, key: str, detail: str, base: str, 
 
 
 def served_by() -> str | None:
-    """The model the provider said answered the last call made on this thread, read once.
-
-    A router such as FreeLLMAPI's "auto" picks a different model per call, so the configured name says little;
-    the dossier records this one next to each analyst, the judge and the narrative batches. None if unnamed.
-    """
+    """The `provider:model` Otari said answered the last call made on this thread, read once (None when unnamed). The dossier records it next to each analyst, the judge and the checker."""
     model = getattr(_served, "model", None)
     _served.model = None
     return model
-
-
-def served_route() -> dict | None:
-    """The route the LLM gateway reported for the last call on this thread, read once: every model it tried (HTTP
-    status or "empty", milliseconds) and the routing policy it followed (sha256 of config/model_routing.json and its
-    as_of_seq). None when the reply did not come through the gateway (tools/llm-gateway/gate.py)."""
-    route = getattr(_served, "route", None)
-    _served.route = None
-    return route
-
-
-def _remember_route(headers) -> None:
-    route = None
-    try:
-        attempts = json.loads(headers.get("X-Verdict-Route") or "null") if headers is not None else None
-        sha, _, as_of = (headers.get("X-Verdict-Policy") or "").partition(" as_of=")
-        if isinstance(attempts, list) and attempts and all(isinstance(a, dict) and "model" in a for a in attempts):
-            # no policy loaded on the gateway (it then falls back to its own router): the attempts still matter
-            policy = {"sha256": sha, "as_of_seq": int(as_of)} if len(sha) == 64 and as_of.isdigit() else None
-            route = {"attempts": attempts, "policy": policy}
-    except (ValueError, AttributeError, TypeError):
-        route = None
-    _served.route = route
-
-
-def _remember_model(raw: bytes) -> None:
-    try:
-        model = json.loads(raw.decode("utf-8")).get("model")
-    except (ValueError, AttributeError, UnicodeDecodeError):
-        model = None
-    _served.model = model if isinstance(model, str) and model else None
 
 
 def _pause(seconds: float) -> None:
     time.sleep(seconds)
 
 
-def _key() -> str:
-    return os.environ.get("MISTRAL_API_KEY", "").strip()
-
-
-def _anthropic() -> bool:
-    return os.environ.get("LLM_PROVIDER", "").strip().lower() == "anthropic"
-
-
-def _keyless() -> bool:
-    """LLM_KEYLESS=1: the provider needs no key (a free anonymous tier).
-
-    In this mode no Authorization header is sent at all, even when MISTRAL_API_KEY holds a key for
-    another provider: a credential is never handed to a host it does not belong to.
-    """
-    return os.environ.get("LLM_KEYLESS", "").strip() == "1"
-
-
 def available() -> bool:
-    return bool(_key()) or _keyless() or otari_active()
+    """True when the agent layers can run: OTARI_API_KEY is set."""
+    return otari_active()
 
 
 def message_text(content) -> str:
@@ -824,26 +843,7 @@ def _read_detail(err: urllib.error.HTTPError) -> str:
         return ""
 
 
-def _free_limit_delay(err: urllib.error.HTTPError, detail: str) -> float | None:
-    """A free anonymous tier answers HTTP 402 FREE_LIMIT with "Retry after Ns": wait that long, once it fits MAX_WAIT."""
-    if err.code != 402 or "FREE_LIMIT" not in detail:
-        return None
-    found = re.search(r"[Rr]etry after (\d+)\s*s", detail)
-    wait = float(found.group(1)) + 1.0 if found else 31.0
-    return wait if wait <= MAX_WAIT else None
-
-
-def _http_error(err: urllib.error.HTTPError, key: str, detail: str | None = None) -> LLMError:
-    # O erro vai para o dossie: inclui o corpo da resposta (curto, sem a chave) para a causa aparecer no historico.
-    if detail is None:
-        detail = _read_detail(err)
-    if key:  # an empty key would be "redacted" into every gap of the text
-        detail = detail.replace(key, "***")
-    detail = detail[:300].replace("\n", " ").strip()
-    return LLMError(f"HTTP {err.code} {err.reason} from {BASE_URL} model {MODEL}: {detail or 'no body'}")
-
-
-def _first_choice(raw: bytes, source: str = "the Mistral API") -> dict:
+def _first_choice(raw: bytes, source: str = "the Otari gateway") -> dict:
     try:
         choice = json.loads(raw.decode("utf-8"))["choices"][0]
     except (KeyError, IndexError, TypeError):
@@ -853,79 +853,15 @@ def _first_choice(raw: bytes, source: str = "the Mistral API") -> dict:
     return choice
 
 
-def _anthropic_text(raw: bytes) -> str:
-    """The answer of a Messages API response: its text blocks, joined. Thinking blocks are not the answer."""
-    try:
-        data = json.loads(raw.decode("utf-8"))
-        blocks = data["content"]
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("unexpected response shape from the Anthropic API") from None
-    text = "".join(str(b.get("text", "")) for b in blocks if isinstance(b, dict) and b.get("type") == "text")
-    if text:
-        return text
-    stop = data.get("stop_reason")
-    if stop == "refusal":
-        category = (data.get("stop_details") or {}).get("category")
-        raise ValueError(f"the model refused this request (stop_reason=refusal, category={category})")
-    raise ValueError(f"model returned no text (stop_reason={stop}); raise MISTRAL_MAX_TOKENS" if stop == "max_tokens" else f"model returned no text (stop_reason={stop})")
-
-
 def chat(system: str, user: str, timeout: int = 90, max_tokens: int | None = None, role: str | None = None,
-         model: str | None = None, end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None) -> str:
-    """One chat call. `role` picks the model in Otari mode (OTARI_API_KEY set) and is ignored otherwise; `model`,
-    `end_user` and `end_user_budget` override the role's choice for one call (the drills use them)."""
-    if otari_active():
-        return _otari_chat(system, user, timeout, max_tokens, role, model, end_user, end_user_budget, extra)
-    keyless = _keyless()
-    key = "" if keyless else _key()
-    if not keyless:
-        if not key:
-            raise LLMError("MISTRAL_API_KEY is not set")
-        if not key.isprintable() or " " in key:
-            # Nao ecoa o valor: um cabecalho invalido faz o urllib imprimir a chave no erro.
-            raise LLMError("MISTRAL_API_KEY has spaces or control characters; paste only the key")
-    native = _anthropic()
-    if native:
-        # Claude Haiku 5.5 rejects non-default sampling values with a 400, so no temperature; thinking is off so no
-        # token is spent before the answer. The replay never calls the model: the text is frozen in the dossier.
-        payload = {"model": MODEL, "max_tokens": max_tokens or MAX_TOKENS, "thinking": {"type": "disabled"},
-                   "system": system, "messages": [{"role": "user", "content": user}]}
-        url = f"{BASE_URL}/messages"
-        headers = {"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION, "Content-Type": "application/json"}
-    else:
-        payload = {"model": MODEL, "temperature": 0, "max_tokens": max_tokens or MAX_TOKENS,
-                   "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
-        url = f"{BASE_URL}/chat/completions"
-        headers = {**({"Authorization": f"Bearer {key}"} if key else {}), "Content-Type": "application/json"}
-    body = json.dumps(payload).encode("utf-8")
-    _served.model = None
-    _served.route = None
-    for attempt in range(MAX_RETRIES + 1):
-        _wait_turn()
-        request = urllib.request.Request(url, data=body, headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw = response.read()
-                _remember_route(getattr(response, "headers", None))
-            _remember_model(raw)
-            if native:
-                return _anthropic_text(raw)
-            choice = _first_choice(raw)
-            break
-        except urllib.error.HTTPError as err:
-            _remember_route(err.headers)  # a failed call still shows which models the gateway tried
-            detail = _read_detail(err)
-            delay = _retry_delay(err, attempt) if err.code in RETRY_STATUS and attempt < MAX_RETRIES else None
-            if delay is None and keyless and attempt < MAX_RETRIES:
-                delay = _free_limit_delay(err, detail)
-            if delay is None:
-                raise _http_error(err, key, detail) from err
-            _pause(delay)
-    message = choice.get("message")
-    content = message_text(message.get("content") if isinstance(message, dict) else None)
-    if not content:
-        raise ValueError(f"model returned no content (finish_reason={choice.get('finish_reason')}); raise MISTRAL_MAX_TOKENS")
-    return content
+         model: str | None = None, end_user: str | None = None, end_user_budget: str | None = None, extra: dict | None = None,
+         role_fallbacks: bool | None = None) -> str:
+    """One chat call through Otari. `role` picks the model; `model`, `end_user` and `end_user_budget` override the role's choice for one
+    call (the canary and the drills use them). A call without OTARI_API_KEY raises LLMError(NO_KEY) and sends nothing. The role's
+    `fallbacks` apply when no `model` is given; `role_fallbacks=True` asks for them on a call that names its model (the hard judge route)."""
+    if not otari_active():
+        raise LLMError(NO_KEY)
+    return _otari_chat(system, user, timeout, max_tokens, role, model, end_user, end_user_budget, extra, role_fallbacks)
 
 
 def parse_claims(text: str) -> list[dict]:
@@ -963,7 +899,7 @@ def _for_role(ask, role: str | None):
 
 def rule(labels: dict[str, dict], evidence_items: dict[str, str], ask=chat, model: str | None = None) -> dict:
     """Pede ao juiz LLM um lado, lendo SO as afirmacoes validadas (rotulos B1.., S1..). `model` (Otari mode) sends the call to that model."""
-    ask = functools.partial(chat, role="judge", model=model) if (ask is chat and model) else _for_role(ask, "judge")
+    ask = functools.partial(chat, role="judge", model=model, role_fallbacks=True) if (ask is chat and model) else _for_role(ask, "judge")
     system = (
         "You are the judge in a market debate. You see only the analyst claims that passed a citation check: "
         "bull claims are labelled B1, B2, ... and bear claims S1, S2, .... Decide which side the evidence favors "

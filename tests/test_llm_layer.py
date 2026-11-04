@@ -77,52 +77,6 @@ class LlmLayerTest(unittest.TestCase):
         self.assertTrue(dossier.replay(d)["matches"])
 
 
-class LlmHttpErrorTest(unittest.TestCase):
-    def call_with(self, error):
-        import io
-        import os
-        import urllib.error
-        import urllib.request
-
-        from verdict_desk import llm
-
-        original = urllib.request.urlopen
-        old_key = os.environ.get("MISTRAL_API_KEY")
-        os.environ["MISTRAL_API_KEY"] = "  SECRET-VALUE-123 \n"
-        urllib.request.urlopen = lambda request, timeout=0: (_ for _ in ()).throw(error)
-        try:
-            # Sem espacamento aqui: a chamada nao dorme de verdade e nao deixa `_next_start` no futuro para os outros testes.
-            with mock.patch.object(llm, "MIN_INTERVAL", 0.0), mock.patch.object(llm, "_next_start", 0.0), self.assertRaises(OSError) as ctx:
-                llm.chat("system", "user")
-        finally:
-            urllib.request.urlopen = original
-            if old_key is None:
-                del os.environ["MISTRAL_API_KEY"]
-            else:
-                os.environ["MISTRAL_API_KEY"] = old_key
-        return str(ctx.exception)
-
-    def test_http_error_message_carries_status_and_body_but_never_the_key(self):
-        import io
-        import urllib.error
-
-        body = io.BytesIO(b'{"status":403,"detail":"Forbidden for SECRET-VALUE-123"}')
-        message = self.call_with(urllib.error.HTTPError("https://x", 403, "Forbidden", {}, body))
-        self.assertIn("HTTP 403 Forbidden", message)
-        self.assertIn("Forbidden for ***", message)
-        self.assertNotIn("SECRET-VALUE-123", message)
-
-    def test_key_with_stray_whitespace_is_trimmed(self):
-        import os
-
-        from verdict_desk import llm
-
-        os.environ["MISTRAL_API_KEY"] = "  \n"
-        try:
-            self.assertFalse(llm.available())
-        finally:
-            del os.environ["MISTRAL_API_KEY"]
-
 from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":

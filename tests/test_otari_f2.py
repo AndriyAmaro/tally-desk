@@ -17,7 +17,7 @@ from verdict_desk import __main__ as cli
 from verdict_desk import dossier, llm, narrative
 
 KEY = "unit-test-secret-0123456789"
-CLEAN = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTRAL_API_KEY": "", "OTARI_USE_POLICIES": "",
+CLEAN = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "OTARI_USE_POLICIES": "",
          "OTARI_CYCLE_CAP_USD": "", "OTARI_POLICY_JUDGE": "", "OTARI_POLICY_BULL": "", "OTARI_USER_JUDGE": "",
          "OTARI_END_USER_BUDGET_JUDGE": "", "OTARI_MAX_TOKENS_JUDGE": "", "OTARI_MIN_INTERVAL": ""}
 

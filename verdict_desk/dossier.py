@@ -58,7 +58,7 @@ def analyst_layer(packet: dict, ask=None, feats: dict | None = None, rules_versi
     if ask is None and not m["llm"].available():
         return None
     items = m["citations"].index(packet, feats if feats is not None else m["features"].compute(packet))
-    layer = {"model": m["llm"].model_name() if hasattr(m["llm"], "model_name") else m["llm"].MODEL, "evidence_index": items}
+    layer = {"model": m["llm"].model_name(), "evidence_index": items}
     summary = m["llm"].otari_summary() if hasattr(m["llm"], "otari_summary") else None
     if summary:  # Otari run: the base URL, the role config hash and the model of every role
         layer["otari"] = summary
@@ -116,18 +116,13 @@ def _checker_layer(m: dict, layer: dict, items: dict) -> dict:
 
 
 def _served(m: dict, block: dict) -> None:
-    """Records the model that really answered (a router names it in its reply); a stub or an unnamed reply adds nothing."""
+    """Records the model that really answered (Otari names it in its headers) and the sealed receipt; a stub or an unnamed reply adds nothing."""
     model = m["llm"].served_by() if hasattr(m["llm"], "served_by") else None
     if model:
         block["served_by"] = model
     receipt = m["llm"].served_receipt() if hasattr(m["llm"], "served_receipt") else None
     if receipt:  # Otari: the sealed receipt of this call (request id, provider, model served, attempts, fallback, cost)
         block["receipt"] = receipt
-    route = m["llm"].served_route() if hasattr(m["llm"], "served_route") else None
-    if route:  # which models the gateway tried and why it moved on, and the routing policy it followed
-        block["route"] = route["attempts"]
-        if route.get("policy"):
-            block["routing_policy"] = route["policy"]
 
 
 def _judge_layer(m: dict, layer: dict, items: dict, ask=None, route: dict | None = None) -> dict:

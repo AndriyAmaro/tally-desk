@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Checks every model of config/otari.json against the public Otari catalog (no key needed, no cost).
 
-Each role model must exist in the catalog and be flagged open_weights. Prints one row per role and exits 1 on any miss.
+Each role model, and each entry of a role's `fallbacks`, must exist in the catalog and be flagged open_weights. Prints one row per model and exits 1 on any miss.
 
     python3 tools/otari_catalog_check.py [--catalog catalog.json]
 """
@@ -26,18 +26,23 @@ def load_catalog(path: str | None) -> list[dict]:
     return data["models"] if isinstance(data, dict) else data
 
 
+def _row(label: str, model: str, by_id: dict) -> dict:
+    entry = by_id.get(model)
+    return {
+        "role": label, "model": model, "found": entry is not None,
+        "open_weights": bool(entry and entry.get("open_weights")),
+        "vendor": entry.get("vendor") if entry else None,
+        "providers": entry.get("providers") if entry else None,
+        "ok": bool(entry and entry.get("open_weights") and not entry.get("deprecated")),
+    }
+
+
 def check(config: dict, catalog: list[dict]) -> list[dict]:
     by_id = {m["id"]: m for m in catalog}
     rows = []
     for role, spec in config["roles"].items():
-        entry = by_id.get(spec["model"])
-        rows.append({
-            "role": role, "model": spec["model"], "found": entry is not None,
-            "open_weights": bool(entry and entry.get("open_weights")),
-            "vendor": entry.get("vendor") if entry else None,
-            "providers": entry.get("providers") if entry else None,
-            "ok": bool(entry and entry.get("open_weights") and not entry.get("deprecated")),
-        })
+        rows.append(_row(role, spec["model"], by_id))
+        rows.extend(_row(f"{role}#{n}", model, by_id) for n, model in enumerate(spec.get("fallbacks", []), start=1))
     return rows
 
 

@@ -40,6 +40,8 @@ def plain_config():
     cfg = json.loads(llm.OTARI_CONFIG.read_text(encoding="utf-8"))
     cfg.update(send_user=False, use_policies=False, cycle_cap_usd="0.05", end_user_prefix="", end_user_budget="", features={}, canary=False)
     cfg.pop("judge_route", None)  # the F1-era tests judge with the standard route; the routing rule has its own tests
+    for spec in cfg["roles"].values():
+        spec.pop("fallbacks", None)  # one model per role: the role fallback chains have their own tests (tests/test_role_fallbacks.py)
     path = Path(tempfile.mkdtemp()) / "otari.json"
     path.write_text(json.dumps(cfg), encoding="utf-8")
     return mock.patch.object(llm, "OTARI_CONFIG", path)
@@ -153,7 +155,7 @@ class RoleConfigTest(unittest.TestCase):
     def test_the_summary_lists_roles_and_the_config_hash_only_in_otari_mode(self):
         with mock.patch.dict(os.environ, {"OTARI_API_KEY": ""}):
             self.assertIsNone(llm.otari_summary())
-            self.assertEqual(llm.model_name(), llm.MODEL)
+            self.assertEqual(llm.model_name(), "no-gateway")
         with mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY}):
             s = llm.otari_summary()
             self.assertEqual(s["roles"]["bear"], "nvidia/nemotron-3-super-120b-a12b")
@@ -174,7 +176,8 @@ class CatalogCheckTest(unittest.TestCase):
 
     def test_every_repo_role_is_ok_in_a_catalog_that_lists_them_as_open_weights(self):
         cfg = llm.otari_config()
-        catalog = [{"id": spec["model"], "open_weights": True, "vendor": spec["vendor"], "providers": ["deepinfra"]} for spec in cfg["roles"].values()]
+        ids = {m for spec in cfg["roles"].values() for m in [spec["model"], *spec.get("fallbacks", [])]}
+        catalog = [{"id": m, "open_weights": True, "vendor": "v", "providers": ["deepinfra"]} for m in sorted(ids)]
         self.assertTrue(all(r["ok"] for r in self.tool.check(cfg, catalog)))
 
     def test_a_missing_or_closed_model_is_flagged(self):
@@ -186,7 +189,7 @@ class CatalogCheckTest(unittest.TestCase):
 class OtariCallTest(unittest.TestCase):
     def setUp(self):
         for patch in (
-            mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTRAL_API_KEY": ""}),
+            mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": ""}),
             mock.patch.object(llm, "MIN_INTERVAL", 0.0),
             mock.patch.object(llm, "_next_start", 0.0),
             mock.patch.object(llm, "_pause"),
@@ -245,7 +248,6 @@ class OtariCallTest(unittest.TestCase):
             self.assertEqual(llm.chat("s", "u", role="bull"), "text")
         self.assertEqual(llm.served_by(), "deepinfra:" + served_spelling("openai/gpt-oss-120b"))
         self.assertIsNone(llm.served_by())
-        self.assertIsNone(llm.served_route(), "Otari sends counts, not a list of attempts: no route is sealed")
         receipt = llm.served_receipt()
         self.assertEqual((receipt["role"], receipt["request_id"], receipt["cost_usd"]), ("bull", "req-1111", "0.000009"))
         self.assertEqual((receipt["sent_model"], receipt["served_model"]), ("openai/gpt-oss-120b", served_spelling("openai/gpt-oss-120b")))
@@ -254,7 +256,6 @@ class OtariCallTest(unittest.TestCase):
     def test_a_fallback_reply_does_not_pretend_the_first_provider_answered(self):
         with self.fake(headers={"Otari-Attempt-Count": "2", "Otari-Fallback": "true", "Otari-Provider": "nebius"}):
             llm.chat("s", "u", role="judge")
-        self.assertIsNone(llm.served_route())
         receipt = llm.served_receipt()
         self.assertEqual((receipt["fallback"], receipt["attempt_count"], receipt["provider"]), (True, 2, "nebius"))
 
@@ -405,18 +406,17 @@ class OtariCallTest(unittest.TestCase):
             llm.chat("s", "u")
         self.assertEqual(self.sent[0][1]["model"], llm.role_model(None))
 
-    def test_without_the_otari_key_the_old_client_runs_unchanged(self):
+    def test_without_the_otari_key_nothing_is_sent_and_the_error_is_the_one_message(self):
         sent = []
 
         def urlopen(request, timeout=None):
             sent.append(request)
-            return FakeResponse({"choices": [{"message": {"content": "legacy"}, "finish_reason": "stop"}]}, {})
-        with mock.patch.dict(os.environ, {"OTARI_API_KEY": "", "MISTRAL_API_KEY": "mistral-key"}), mock.patch.object(urllib.request, "urlopen", urlopen):
+            return FakeResponse(BODY, HEADERS)
+        with mock.patch.dict(os.environ, {"OTARI_API_KEY": ""}), mock.patch.object(urllib.request, "urlopen", urlopen):
             self.assertFalse(llm.otari_active())
-            self.assertEqual(llm.chat("s", "u", role="bull"), "legacy")
-        self.assertTrue(sent[0].full_url.endswith("/chat/completions"))
-        self.assertNotIn("otari.ai", sent[0].full_url)
-        self.assertEqual(sent[0].get_header("Authorization"), "Bearer mistral-key")
+            with self.assertRaises(llm.LLMError) as ctx:
+                llm.chat("s", "u", role="bull")
+        self.assertEqual((str(ctx.exception), sent), (llm.NO_KEY, []))
         self.assertIsNone(llm.served_receipt())
 
 
@@ -425,7 +425,7 @@ class OtariDossierTest(unittest.TestCase):
 
     def setUp(self):
         for patch in (
-            mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTRAL_API_KEY": ""}),
+            mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": ""}),
             mock.patch.object(llm, "MIN_INTERVAL", 0.0),
             mock.patch.object(llm, "_next_start", 0.0),
             mock.patch.object(llm, "_pause"),

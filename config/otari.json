@@ -13,30 +13,51 @@
   "_cycle_doc": "The app's own spend caps for one decision cycle, in USD, each the sum of usage.cost_usd of the calls so far: `cycle_cap_usd` for the roles that argue, rule, check and read headlines (bull, bear, judge, checker, narrator), and `tool_cap_usd` for the roles that only drive an Otari tool (searcher, fetcher, sandbox, mcp), so a tool that costs a cent a call can never use up the money the analysts and the judge need. No new call starts once a cap is reached; calls already started finish. Each refusal is a client-side receipt (code cycle_cap_exceeded). OTARI_CYCLE_CAP_USD and OTARI_TOOL_CAP_USD override.",
   "cycle_cap_usd": "0.02",
   "_send_user_doc": "true now that the key is a service key. With an ordinary key Otari answers 403 \"'user' field does not match the authenticated API key's user\" (docs/FEEDBACK_LOG.md, entry 2).",
+  "_fallbacks_doc": "Ordered catalog ids the app itself tries after the role's first model, only when the gateway refuses or fails on THAT model (402 pricing_required, model not found or unavailable, a 5xx that outlived the retries). A budget refusal (403 budget_exceeded, the cycle cap) never moves to the next entry. Open-weight models that have already answered in our ledger receipts; the last entry is a DeepSeek model. The receipt records which entry answered and why the earlier ones were skipped (role_fallback). The tool roles have no chain: their tool loop is proven only on the first model.",
   "roles": {
     "bull": {
       "model": "openai/gpt-oss-120b",
       "vendor": "OpenAI",
+      "fallbacks": [
+        "alibaba/qwen3-235b-a22b-instruct-2507",
+        "deepseek/deepseek-v4-flash-0731"
+      ],
       "open_weights": true
     },
     "bear": {
       "model": "nvidia/nemotron-3-super-120b-a12b",
       "vendor": "NVIDIA",
+      "fallbacks": [
+        "openai/gpt-oss-120b",
+        "deepseek/deepseek-v4-pro"
+      ],
       "open_weights": true
     },
     "judge": {
       "model": "deepseek/deepseek-v4-flash-0731",
       "vendor": "DeepSeek",
+      "fallbacks": [
+        "deepseek/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-pro"
+      ],
       "open_weights": true
     },
     "checker": {
       "model": "google/gemma-3-27b-it",
       "vendor": "Google",
+      "fallbacks": [
+        "alibaba/qwen3-235b-a22b-instruct-2507",
+        "deepseek/deepseek-v4-flash-0731"
+      ],
       "open_weights": true
     },
     "narrator": {
       "model": "alibaba/qwen3-235b-a22b-instruct-2507",
       "vendor": "Alibaba",
+      "fallbacks": [
+        "openai/gpt-oss-120b",
+        "deepseek/deepseek-v4-flash-0731"
+      ],
       "open_weights": true
     },
     "searcher": {

@@ -447,7 +447,7 @@ def print_record(record: dict) -> None:
             print(f"  [otari] cycle spend ${cycle['spent_usd']} over {cycle['calls']} calls"
                   + (f", cap ${cycle['cap_usd']}" if cycle.get("cap_usd") else "") + (f", {cycle['refused']} refused by the cap" if cycle.get("refused") else ""))
     else:
-        print("  LLM analysts off (no MISTRAL_API_KEY): deterministic core only")
+        print("  LLM analysts off (no OTARI_API_KEY): deterministic core only")
 
 
 def cmd_scorecard(opts) -> int:

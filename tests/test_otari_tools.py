@@ -18,7 +18,7 @@ from verdict_desk import __main__ as cli
 from verdict_desk import citations, dossier, evidence, llm, narrative, otari_mcp, otari_web, sandbox_rederive
 
 KEY = "unit-test-secret-0123456789"
-ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTRAL_API_KEY": "", "OTARI_USE_POLICIES": "", "OTARI_CYCLE_CAP_USD": "",
+ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "OTARI_USE_POLICIES": "", "OTARI_CYCLE_CAP_USD": "",
        "OTARI_POLICY_JUDGE": "", "OTARI_WEB_SEARCH": "", "OTARI_CODE_EXECUTION": "", "OTARI_MCP": "", "OTARI_MIN_INTERVAL": "", "OTARI_TOOL_CAP_USD": ""}
 
 

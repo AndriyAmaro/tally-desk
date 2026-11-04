@@ -16,7 +16,7 @@ from verdict_desk import llm, otari_drill
 
 KEY = "unit-test-secret-0123456789"
 GUARD = '[{"profile":"prompt-injection","mode":"monitor","valid":null,"score":null}]'
-ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "MISTRAL_API_KEY": "", "OTARI_USE_POLICIES": "", "OTARI_CYCLE_CAP_USD": "",
+ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "OTARI_USE_POLICIES": "", "OTARI_CYCLE_CAP_USD": "",
        "OTARI_POLICY_JUDGE": "", "OTARI_POLICY_BULL": "", "OTARI_USER_JUDGE": "", "OTARI_END_USER_BUDGET_JUDGE": "", "OTARI_MAX_TOKENS_JUDGE": "",
        "OTARI_MIN_INTERVAL": ""}
 
