@@ -189,5 +189,48 @@ class CycleTest(FlowEnv):
 
 
 
+class TickerNoiseTest(FlowEnv):
+    """A live price ticker inside a news page changes on every read; it must not make an unchanged article look changed."""
+
+    ARTICLE = "Bitcoin rebounded to around 83,000 on Monday after dipping to 80,500 on Sunday, a recovery that ran alongside rising US equity futures."
+
+    def test_two_readings_that_differ_only_by_a_ticker_are_the_same_text(self):
+        a = f"Bitcoin (BTC▲$80,401.00) rebounded. {self.ARTICLE}"
+        b = f"Bitcoin (BTC▼$80,977.50) rebounded. {self.ARTICLE}"
+        self.assertEqual(drift.normalize(a), drift.normalize(b))
+        self.assertNotEqual(drift.normalize(a, 1), drift.normalize(b, 1), "version 1 still sees them differ, which is why sealed blocks record their version")
+
+    def test_a_real_wording_change_is_still_a_change(self):
+        a = f"Bitcoin (BTC▲$80,401.00) rebounded. {self.ARTICLE}"
+        b = a.replace("rebounded", "collapsed")
+        self.assertNotEqual(drift.normalize(a), drift.normalize(b))
+
+    def test_numbers_of_the_article_are_not_dropped(self):
+        self.assertIn("83", drift.normalize(f"BTC▲$80,401.00 {self.ARTICLE}").split())
+
+    def test_collect_seals_unchanged_when_only_the_ticker_moved(self):
+        old = f"Bitcoin (BTC▲$80,401.00) rebounded. {self.ARTICLE}"
+        new = f"Bitcoin (BTC▼$80,977.50) rebounded. {self.ARTICLE}"
+        ledger = [old_dossier(1, 4, excerpt=old)]
+        block = drift.collect(ledger, now=NOW, ask=fetcher(text=new))
+        self.assertEqual(block["status"], "unchanged")
+        self.assertEqual(block["norm"], 2)
+        self.assertTrue(drift.recheck({"drift": block})["drift_ok"])
+
+    def test_a_block_sealed_under_version_one_still_replays(self):
+        text = "Plain words of an article with no ticker at all."
+        old = drift.normalize(text, 1)
+        block = {"schema": "otari-drift/1", "status": "unchanged", "excerpt": text, "compared_chars": len(old),
+                 "old_sha256": drift.sha(old), "new_sha256": drift.sha(old)}  # no `norm`: sealed before version 2
+        self.assertTrue(drift.recheck({"drift": block})["drift_ok"])
+
+    def test_the_sealed_blocks_of_the_real_ledger_still_replay(self):
+        ledger = [json.loads(line) for line in (Path(__file__).resolve().parents[1] / "ledger" / "ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+        sealed = [d for d in ledger if isinstance(d.get("drift"), dict) and d["drift"].get("status") in ("unchanged", "changed")]
+        self.assertTrue(sealed, "the ledger holds sealed drift blocks")
+        for d in sealed:
+            self.assertTrue(drift.recheck(d)["drift_ok"], f"dossier {d['seq']}")
+
+
 if __name__ == "__main__":
     unittest.main()

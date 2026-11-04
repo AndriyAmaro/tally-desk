@@ -18,6 +18,7 @@ receipt is a call of the cycle like any other.
 import datetime
 import hashlib
 import json
+import re
 
 from . import llm, otari_web
 
@@ -30,8 +31,15 @@ SYSTEM = ("You read one web page with the web fetch tool and reply with JSON onl
           "with those words}. No summary, no comment.")
 
 
-def normalize(text: str) -> str:
-    """Words of the text in lower case, markup and entities removed, joined by single spaces: what the two readings are compared on."""
+NORM = 2  # 1: words only. 2: also drops live price tickers ("BTC▲$78,251.00"), which change on every read of a news page and say nothing about the article.
+TICKER = re.compile(r"\b[A-Z]{2,6}\s?[▲▼△▽↑↓]\s?\$?\s?\d[\d,]*(?:\.\d+)?")
+
+
+def normalize(text: str, version: int = NORM) -> str:
+    """Words of the text in lower case, markup and entities removed, joined by single spaces: what the two readings are compared on.
+    `version` is the normalization recorded in the sealed block, so a block sealed under an earlier one still replays."""
+    if version >= 2:
+        text = TICKER.sub(" ", str(text))
     return " ".join(otari_web._words(text))
 
 
@@ -69,7 +77,7 @@ def collect(ledger: list[dict], now: datetime.datetime | None = None, ask=None, 
         return {"schema": SCHEMA, "status": "none", "reason": f"no earlier Otari-era dossier at least {MIN_AGE_MINUTES // 60} hours old holds a fetched page"}
     old = normalize(source["excerpt"])
     block = {"schema": SCHEMA, "url": source["url"], "source_dossier": source["seq"], "decided_at": source["decided"].strftime("%Y-%m-%dT%H:%M:%SZ"),
-             "old_sha256": sha(old), "compared_chars": len(old)}
+             "norm": NORM, "old_sha256": sha(old), "compared_chars": len(old)}
     anchor = " ".join(source["excerpt"].split()[:ANCHOR_WORDS])
     asked = f"Fetch this page: {source['url']}\nThe passage begins with: {anchor}\nCopy at most {len(source['excerpt'])} characters, starting there."
     ask = ask or llm.chat
@@ -110,7 +118,7 @@ def recheck(dossier: dict) -> dict:
     if not isinstance(d, dict) or d.get("status") not in ("unchanged", "changed"):
         return {}
     try:
-        again = sha(normalize(d["excerpt"])[:d["compared_chars"]])
+        again = sha(normalize(d["excerpt"], int(d.get("norm", 1)))[:d["compared_chars"]])
         ok = again == d["new_sha256"] and d["status"] == ("unchanged" if d["new_sha256"] == d["old_sha256"] else "changed")
     except (KeyError, TypeError, ValueError):
         ok = False
