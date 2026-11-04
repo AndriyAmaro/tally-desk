@@ -80,6 +80,7 @@ class AuditTest(unittest.TestCase):
         self.assertEqual([rows[n]["status"] for n in range(1, 9)], ["PASS", "PASS", "PASS", "PASS", "NOT PROVEN", "PASS", "PASS", "PASS"])
         self.assertIn("valid null", rows[5]["note"])
         self.assertIn("not counted", rows[5]["note"])
+        self.assertIn("from dossier 805 the header says why: status unavailable, reason not_configured", rows[5]["note"], "dossier 805 is the first judge call sealed after the header gained status and reason")
         self.assertEqual(len(rep.RUBRIC), 8)
 
     def test_in_the_real_ledger_fallback_budget_and_end_users_are_proven_from_sealed_receipts_not_from_drills(self):

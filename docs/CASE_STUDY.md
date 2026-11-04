@@ -26,7 +26,7 @@ The question it answers is simple: when the agent loses money, which model said 
 ## What was hard
 
 - **Long calls and the edge.** A slow completion is cut at about 30 seconds with an HTML 504 and no request id. The retry then meets a 409 "still in progress". Seven narrator batches never got past it. The app now polls on the same Idempotency-Key.
-- **Guardrails could not be proven.** A guardrail is attached to the judge's policy, but the hosted gateway has no guardrails service, so Otari reported `valid: null` on every call. It is marked NOT PROVEN and not counted.
+- **Guardrails could not be proven.** A guardrail is attached to the judge's policy, but the hosted gateway has no guardrails service, so Otari reported `valid: null` on every call (since dossier 805 with a reason: `unavailable, not_configured`). It is marked NOT PROVEN and not counted.
 - **A pricing refusal in the middle of a run.** At 16:12 UTC on 2026-11-04 the gateway refused the bull, bear and narrator models with HTTP 402 `pricing_required`, after answering the same models at 15:33. They answered again by 17:10. Dossier 810 was sealed with no argument on either side, because it was recorded before the closure gate and the role fallback chains existed (both were added that same afternoon).
 
 ## What we added

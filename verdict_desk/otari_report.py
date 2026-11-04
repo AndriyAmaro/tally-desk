@@ -267,8 +267,11 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
     if evaluated:
         row(5, True, [_rid(evaluated[1])], evaluated[0], f"evaluated: {evaluated[1]['guardrail_result']}")
     else:
+        said = sorted({(g.get("status"), g.get("reason")) for _, r in seen for g in r.get("guardrails") or [] if g.get("status")})
+        why = (f"from dossier {min(s for s, r in seen if any(g.get('status') for g in r.get('guardrails') or []))} the header says why: "
+               + ", ".join(f"status {a}" + (f", reason {b}" if b else "") for a, b in said) if said else "the hosted gateway has no guardrails service")
         row(5, False, [_rid(r) for _, r in seen[:2]], seen[0][0] if seen else None,
-            f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted")
+            f"attached to the vd-judge policy, but Otari reported valid null on {len(seen)} calls: nothing was evaluated ({why}); not counted")
     # 6 web search and fetch: the newest dossier with a completed search and fetch; among those, the newest where the analysts really
     # cited what was found (the page excerpt first, then a source title), so the proof shows the evidence used and not only fetched
     cands = []

@@ -322,7 +322,8 @@ def print_record(record: dict) -> None:
         for part in ("bull", "bear", "checker", "judge"):
             receipt = (layer.get(part) or {}).get("receipt") or {}
             for g in receipt.get("guardrails") or []:  # the guardrail Otari attached to the call, as the header reported it
-                verdict = "not evaluated (valid null)" if g.get("valid") is None else f"valid={g['valid']} score={g.get('score')}"
+                verdict = ("not evaluated (valid null" + (f", {g['status']}" if g.get("status") else "") + (f", {g['reason']}" if g.get("reason") else "") + ")"
+                           if g.get("valid") is None else f"valid={g['valid']} score={g.get('score')}")
                 print(f"  [otari {part}] guardrail {g.get('profile')} ({g.get('mode')}): {verdict}")
         cycle = (layer.get("otari") or {}).get("cycle")
         web = (record.get("evidence") or {}).get("web") or {}

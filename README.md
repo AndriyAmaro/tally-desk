@@ -217,7 +217,7 @@ Code: `llm._end_user`, `llm.read_headroom`
 
 **NOT PROVEN** &nbsp;|&nbsp; No proof &nbsp;|&nbsp; dossier 805
 
-> attached to the vd-judge policy, but Otari reported valid null on 5 calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted
+> attached to the vd-judge policy, but Otari reported valid null on 5 calls: nothing was evaluated (from dossier 805 the header says why: status unavailable, reason not_configured); not counted
 
 Request ids:
 
@@ -264,7 +264,7 @@ Request ids:
 Code: `otari_mcp.py`
 <!-- otari:proofs:end -->
 
-`otari-audit` prints this table from the ledger. A proof "sealed" lives in the hash-chained ledger and is replayed offline; a "drill" proof lives in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) and is not sealed. The guardrail row is NOT PROVEN on purpose: it is attached to the `vd-judge` policy, but Otari reported no verdict (`valid: null`) on every call.
+`otari-audit` prints this table from the ledger. A proof "sealed" lives in the hash-chained ledger and is replayed offline; a "drill" proof lives in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) and is not sealed. The guardrail row is NOT PROVEN on purpose: it is attached to the `vd-judge` policy, but Otari reported no verdict (`valid: null`) on every call; since dossier 805 the header also says why (`status: unavailable`, `reason: not_configured`).
 
 <img src="docs/readme/icons/board.svg" width="44" height="44" alt="">
 
@@ -409,7 +409,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 <summary>Limits and honest caveats</summary>
 
 - **Paper trading only.** No order is routed anywhere and there is no key with trading rights. The verdicts are simulated positions, not advice.
-- **Guardrails are NOT PROVEN.** The policy has one attached, but Otari reported `valid: null` on every call and the hosted gateway has no guardrails service we could find (feedback log, entry 13). It is not counted anywhere.
+- **Guardrails are NOT PROVEN.** The policy has one attached, but Otari reported `valid: null` on every call; since dossier 805 the header says `unavailable, not_configured` (the hosted gateway has no guardrails service we could find; feedback log, entries 11 and 13). It is not counted anywhere.
 - **Otari's budget refusal was seen once, in a drill.** No production cycle has been refused by an Otari budget; the per-cycle caps are our own code, not an Otari feature.
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.
