@@ -29,6 +29,35 @@
 .why h3{margin:0 0 var(--space-2)}
 .why p{margin:0;color:var(--color-text-muted);font-size:var(--text-sm)}
 @media (max-width:56em){.why{grid-template-columns:1fr}}
+/* Try to cheat it */
+.cheat{border-color:color-mix(in oklab,var(--color-danger) 40%,var(--color-border))}
+.cheat-target{margin:0 0 var(--space-3)}
+.cheat-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);margin:var(--space-3) 0 0}
+.cheat-opt{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3);background:var(--color-surface-sunken);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md)}
+.cheat-opt button{width:100%;justify-content:flex-start;text-align:left;min-height:2.75rem;line-height:1.3;padding-top:var(--space-2);padding-bottom:var(--space-2)}
+.cheat-opt button[aria-pressed="true"]{border-color:var(--color-danger);background:var(--color-danger-wash);box-shadow:inset 0 0 0 1px var(--color-danger)}
+.cheat-opt p{margin:0;font-size:var(--text-sm);color:var(--color-text-muted)}
+.cheat-act{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3);margin:var(--space-4) 0 0}
+#cheat-result{margin:var(--space-4) 0 0}
+.cheat-change{margin:0 0 var(--space-3);font-size:var(--text-sm)}
+.cheat-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3);margin:0 0 var(--space-4)}
+.cheat-cols.one{grid-template-columns:minmax(0,1fr)}
+.cheat-col{padding:var(--space-4);background:var(--color-surface-raised);border:1px solid var(--color-border);border-left:4px solid var(--color-border-strong);border-radius:var(--radius-md);min-width:0}
+.cheat-col[data-state="ok"]{border-left-color:var(--color-success)}
+.cheat-col[data-state="bad"]{border-left-color:var(--color-danger)}
+.cheat-col h3{margin:0 0 var(--space-1);font-size:var(--text-sm);font-weight:var(--weight-medium);color:var(--color-text-muted)}
+.cheat-state{margin:0 0 var(--space-3);font-size:var(--text-xl);font-weight:var(--weight-semibold);letter-spacing:var(--tracking-heading);line-height:1.2}
+.cheat-checks{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-3)}
+.cheat-checks li{margin:0;font-size:var(--text-sm);line-height:1.45;min-width:0}
+.cheat-checks li>b{display:block;font-size:var(--text-xs);font-weight:var(--weight-medium);color:var(--color-text-muted)}
+.cheat-checks .nt{display:block;color:var(--color-text-muted)}
+.cheat-plain code{white-space:nowrap}
+.cheat-checks .mono{display:block;margin-top:var(--space-1);line-height:1.5;font-size:.75rem}
+.cheat-checks .mono b{color:var(--color-text);font-weight:var(--weight-semibold)}
+.cheat-plain{padding:var(--space-3) var(--space-4);background:var(--color-surface-sunken);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md)}
+.cheat-plain p{margin:0 0 var(--space-2);font-size:var(--text-sm)}
+.cheat-plain p:last-child{margin:0}
+@media (max-width:48em){.cheat-opts,.cheat-cols{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head><body>
 <!-- shell:header:start -->
@@ -57,7 +86,25 @@
   <h2><span class="n">2</span>What this page checked</h2>
   <div id="verdict" class="big"></div>
   <div id="detail"></div>
-  <h2><span class="n">3</span>Why each check matters</h2>
+</section>
+
+<section class="step cheat" id="cheat" hidden aria-labelledby="cheat-title">
+  <h2 id="cheat-title"><span class="n">3</span>Try to cheat it</h2>
+  <p class="mut">Make one change to a copy of the record above, then watch the same three checks run again. The copy lives in this tab only: the original is never touched, and nothing is uploaded or saved.</p>
+  <div class="cheat-target" id="cheat-target-row" hidden><label class="field">Record to change <select id="cheat-target"></select></label></div>
+  <div class="cheat-opts" role="group" aria-label="Changes you can try">
+    <div class="cheat-opt"><button type="button" id="cheat-cost" aria-pressed="false" aria-describedby="cheat-cost-why">Change what a model call cost</button><p id="cheat-cost-why"></p></div>
+    <div class="cheat-opt"><button type="button" id="cheat-verdict" aria-pressed="false" aria-describedby="cheat-verdict-why">Change the verdict</button><p id="cheat-verdict-why"></p></div>
+    <div class="cheat-opt"><button type="button" id="cheat-sentence" aria-pressed="false" aria-describedby="cheat-sentence-why">Delete a sentence of a claim</button><p id="cheat-sentence-why"></p></div>
+    <div class="cheat-opt"><button type="button" id="cheat-prev" aria-pressed="false" aria-describedby="cheat-prev-why">Swap the link to the previous record</button><p id="cheat-prev-why"></p></div>
+  </div>
+  <div class="cheat-act"><button type="button" id="cheat-undo" class="primary" hidden>Undo, put the original back</button></div>
+  <div id="cheat-result"></div>
+  <p class="visually-hidden" id="cheat-live" role="status" aria-live="polite"></p>
+</section>
+
+<section class="step" id="why" hidden>
+  <h2><span class="n">4</span>Why each check matters</h2>
   <div class="why">
     <div><h3>Integrity</h3><p>The SHA-256 over the record's canonical JSON (RFC 8785) is recomputed here. If it differs from the recorded hash, the file was edited after recording, and nothing below can rescue it.</p></div>
     <div><h3>Linkage</h3><p>The record names the hash before it. This page reads the published ledger and confirms the previous record exists with that hash, so the file is part of a chain rather than a standalone claim.</p></div>
@@ -73,10 +120,12 @@
 <script src="canonical.js"></script>
 <script src="policy.js"></script>
 <script src="receipts.js"></script>
+<script src="tamper.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  const V = window.VerdictDesk, P = window.VerdictPolicy, RC = window.VerdictReceipts;
+  const V = window.VerdictDesk, P = window.VerdictPolicy, RC = window.VerdictReceipts, TM = window.VerdictTamper;
+  let ctx = null;  // the records loaded by the last run, with what the checks need to run again on a changed copy
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   // An evidence pack (`python3 -m verdict_desk export`) wraps the record under `dossier`; check the record inside it.
@@ -153,6 +202,12 @@
              age: input.ageMinutes, windowMinutes: input.windowMinutes, blockReason: input.freshOk === false ? input.blockReason : null };
   }
 
+  const foreign = (r) => RC.isReceipts(r);
+  const receiptsGood = (r) => !r.receipts || (r.receipts.schemaOk && r.receipts.closureOk);
+  const isGood = (r) => r.intact && r.linked !== false && r.agrees !== false && receiptsGood(r);
+  // The same three checks for any record, so a changed copy is judged exactly as the original was.
+  const checkRecord = (r, c) => (foreign(r) ? checkReceipts(r, c.pasted) : checkOne(r, c.index));
+
   async function run() {
     $("status").textContent = "";
     let records;
@@ -160,16 +215,17 @@
     catch (e) { $("status").innerHTML = `<span class="bad">Could not parse that: ${esc(e.message)}</span>`; return; }
     if (!records.length) { $("status").textContent = "Nothing to verify yet."; return; }
 
-    const foreign = (r) => RC.isReceipts(r);
     const index = records.every(foreign) ? null : await ledgerIndex();  // the published ledger is read only for trading dossiers
     const pasted = new Map(records.filter(foreign).map((r) => [r.seq, r]));
-    const results = [];
-    for (const r of records) results.push(foreign(r) ? await checkReceipts(r, pasted) : await checkOne(r, index));
+    const mine = { records, index, pasted, results: [], target: 0, kind: null, token: 0 };
+    for (const r of records) mine.results.push(await checkRecord(r, mine));
+    const results = mine.results;
 
-    const receiptsGood = (r) => !r.receipts || (r.receipts.schemaOk && r.receipts.closureOk);
-    const allGood = results.every((r) => r.intact && r.linked !== false && r.agrees !== false && receiptsGood(r));
+    const allGood = results.every(isGood);
     const allLinked = results.every((r) => r.linked === true);  // null means the ledger could not be read: not "linked", and not "broken" either
     $("out").hidden = false;
+    $("why").hidden = false;
+    ctx = mine;
     $("verdict").innerHTML = allGood
       ? `<span class="ok">VERIFIED</span> <span class="mut" style="font-size:15px">${results.length} record${results.length > 1 ? "s" : ""}: intact, ${allLinked ? "linked" : results.some((r) => r.receipts && r.linked === null) ? "linkage not checked for a receipts record whose previous record was not pasted" : "linkage not checked (the published ledger could not be read here)"}${
           results.some((r) => r.rederived) ? ", and re-derived from the frozen evidence" : ""}${
@@ -200,12 +256,176 @@
         <tr><th>Re-derivation</th><td>${rederive}</td></tr>
       </tbody></table>`;
     }).join("");
+    if (TM) initCheat();  // without tamper.js the page still verifies; it just offers no panel
+  }
+
+  // ---- Try to cheat it: one change to an in-memory copy, the same checks again, the old result beside the new one ----
+  const KINDS = ["cost", "verdict", "sentence", "prev"];
+  const DESC = {
+    cost: "Rewrites the cost on the costliest model call receipt, to make the run look cheaper.",
+    verdict: "Rewrites the recorded action, for example LONG to SHORT.",
+    sentence: "Removes the last sentence of an analyst claim, or one field when no claim has two.",
+    prev: "Replaces prev_hash with a different hash that looks just as valid.",
+  };
+  const NOTE = {
+    cost: "The link and the rules do not look at a price, so the hash is what notices.",
+    verdict: "Two checks catch it: the hash, and the rules, which read the same frozen evidence and refuse the new action.",
+    sentence: "The rules read the weights, not the wording, so only the hash notices a deleted sentence. That is why every field sits under the hash.",
+    prev: "The hash notices, and so does the chain: the previous record carries a different hash from the one this copy now names.",
+  };
+  const short = (h) => esc(String(h || "").slice(0, 20)) + "…";
+  const clip = (v) => { const t = typeof v === "string" ? v : JSON.stringify(v); return t.length > 90 ? t.slice(0, 87) + "…" : t; };
+
+  // The three checks of one result as {key, name, state: ok | bad | na, text, note}, shared by the original and the changed copy.
+  function rowsOf(r) {
+    const d = r.d, v = d.verdict || {};
+    const link = { key: "linkage", name: "Linkage", state: r.linked === null ? "na" : r.linked ? "ok" : "bad",
+      text: r.linked === null ? "not checked" : r.linked ? "linked" : "broken link", note: r.linkNote };
+    let third;
+    if (r.receipts) {
+      const good = r.receipts.schemaOk && r.receipts.closureOk;
+      third = { key: "rederivation", name: "Re-derivation", state: good ? "ok" : "bad",
+        text: good ? "receipts schema and closure recomputed: same as sealed" : "the receipts or the closure differ from what was sealed" };
+    } else if (r.rederived) {
+      third = { key: "rederivation", name: "Re-derivation", state: r.agrees ? "ok" : "bad",
+        text: r.agrees ? "the rules reproduce the recorded action (" + v.action + ")" : "the rules now produce a different action: they say " + r.rederived.state + ", the record says " + v.action };
+    } else third = { key: "rederivation", name: "Re-derivation", state: "na", text: "not possible: no freshness block to replay" };
+    return [{ key: "integrity", name: "Integrity", state: r.intact ? "ok" : "bad",
+      text: r.intact ? "intact: recomputed hash matches" : "altered: recomputed hash differs", hashes: [d.hash, r.recomputed] }, link, third];
+  }
+
+  function column(r, col, title) {
+    const good = isGood(r);
+    const items = rowsOf(r).map((x) => {
+      const cls = x.state === "ok" ? "ok" : x.state === "bad" ? "bad" : "mut";
+      const hashes = x.hashes ? `<span class="mono mut">stored <b>${short(x.hashes[0])}</b><br>recomputed <b>${short(x.hashes[1])}</b></span>` : "";
+      return `<li data-check="${x.key}" data-state="${x.state}"><b>${x.name}</b><span class="${cls}">${esc(x.text)}</span>${hashes}${x.note ? `<span class="nt">${esc(x.note)}</span>` : ""}</li>`;
+    }).join("");
+    return `<div class="cheat-col" data-col="${col}" data-state="${good ? "ok" : "bad"}"><h3>${esc(title)}</h3>
+      <p class="cheat-state ${good ? "ok" : "bad"}">${good ? "VERIFIED" : "NOT VERIFIED"}</p><ul class="cheat-checks">${items}</ul></div>`;
+  }
+
+  function plainWords(r, change, kind) {
+    const rows = rowsOf(r), bad = rows.filter((x) => x.state === "bad");
+    const list = (a) => a.map((x) => x.name).join(" and ");
+    const lines = [];
+    lines.push(bad.length ? `<p><b>Caught by ${esc(list(bad))}.</b> One edit was enough.</p>` : `<p><b>Not caught by these checks.</b> That is worth knowing: see the list above.</p>`);
+    const integ = rows[0];
+    if (integ.state === "bad") lines.push(`<p>The record still claims the hash <code>${short(integ.hashes[0])}</code>, but hashing what it holds now gives <code>${short(integ.hashes[1])}</code>. Change one character and the hash comes out completely different.</p>`);
+    const fine = rows.filter((x) => x.state === "ok");
+    if (fine.length && bad.length) lines.push(`<p>Still passing: ${esc(list(fine))}. ${esc(NOTE[kind])}</p>`);
+    else if (bad.length) lines.push(`<p>${esc(NOTE[kind])}</p>`);
+    const na = rows.filter((x) => x.state === "na");
+    if (na.length) lines.push(`<p class="mut">Could not run: ${esc(list(na))} (${esc(na.map((x) => x.note || x.text).join("; "))}).</p>`);
+    return `<div class="cheat-plain">${lines.join("")}</div>`;
+  }
+
+  function targetRecord() { return ctx && ctx.records[ctx.target]; }
+
+  function refreshCheat() {
+    const av = TM.availability(targetRecord());
+    for (const k of KINDS) {
+      $("cheat-" + k).disabled = !av[k].ok;
+      $("cheat-" + k).setAttribute("aria-pressed", ctx.kind === k ? "true" : "false");
+      $("cheat-" + k + "-why").textContent = av[k].ok ? DESC[k] : av[k].why;
+    }
+    $("cheat-undo").hidden = !ctx.kind;
+  }
+
+  function idleResult() {
+    const d = targetRecord();
+    $("cheat-result").innerHTML = `<p class="mut">Working on record #${esc(d.seq)}${d.evidence && d.evidence.symbol ? " (" + esc(d.evidence.symbol) + ")" : ""}. Pick a change above. What you loaded stays exactly as it is.</p>`;
+    $("cheat-live").textContent = "";
+  }
+
+  function initCheat() {
+    const firstGood = ctx.results.findIndex(isGood);
+    ctx.target = firstGood < 0 ? 0 : firstGood;
+    const many = ctx.records.length > 1;
+    $("cheat-target-row").hidden = !many;
+    if (many) {
+      $("cheat-target").innerHTML = ctx.records.map((d, i) => `<option value="${i}">#${esc(d.seq)} ${esc(RC.isReceipts(d) ? "receipts/1" : (d.evidence || {}).symbol || "record")}</option>`).join("");
+      $("cheat-target").value = String(ctx.target);
+    }
+    $("cheat").hidden = false;
+    refreshCheat();
+    idleResult();
+  }
+
+  async function cheat(kind) {
+    const mine = ctx, n = ++mine.token;
+    const rec = mine.records[mine.target];
+    const made = TM.apply(rec, kind);  // a changed copy; `rec` is never touched
+    if (!made.ok) return;
+    const after = await checkRecord(made.copy, mine);
+    if (ctx !== mine || mine.token !== n) return;  // a newer click or a new record got here first
+    mine.kind = kind;
+    const c = made.change;
+    const what = c.op === "delete"
+      ? `Deleted <code>${esc(c.path)}</code>: <code>${esc(clip(c.removed))}</code>.`
+      : c.what === "sentence" ? `In <code>${esc(c.path)}</code> deleted the last sentence: <code>${esc(clip(c.removed))}</code>.`
+      : `Changed <code>${esc(c.path)}</code> from <code>${esc(clip(c.before))}</code> to <code>${esc(clip(c.after))}</code>.`;
+    $("cheat-result").innerHTML = `<p class="cheat-change"><b>Your change.</b> ${what}</p>
+      <div class="cheat-cols">${column(mine.results[mine.target], "original", "The original, before")}${column(after, "after", "The copy, after your change")}</div>
+      ${plainWords(after, c, kind)}`;
+    const bad = rowsOf(after).filter((x) => x.state === "bad").map((x) => x.name);
+    $("cheat-live").textContent = (isGood(after) ? "VERIFIED. " : "NOT VERIFIED. ") + (bad.length ? "Caught by " + bad.join(" and ") + "." : "No check failed.");
+    refreshCheat();
+  }
+
+  async function undoCheat() {
+    const mine = ctx, n = ++mine.token, prior = mine.kind;
+    const back = await checkRecord(mine.records[mine.target], mine);  // the original, checked again from scratch
+    if (ctx !== mine || mine.token !== n) return;
+    mine.kind = null;
+    const good = isGood(back);
+    $("cheat-result").innerHTML = `<div class="cheat-cols one">${column(back, "restored", "The original, put back")}</div>
+      <div class="cheat-plain"><p><b>${good ? "Undone. The original verifies again." : "Undone. The original is back, exactly as you loaded it."}</b> The hash recomputed from it is <code>${short(back.recomputed)}</code>, ${back.intact ? "the same as the one it carries" : "which is still not the one it carries"}.</p></div>`;
+    $("cheat-live").textContent = good ? "Undone. VERIFIED again." : "Undone. The original is back.";
+    refreshCheat();
+    if (prior && !$("cheat-" + prior).disabled && $("cheat-" + prior).focus) $("cheat-" + prior).focus();  // the undo button just left the page
+  }
+
+  if (TM) {
+    KINDS.forEach((k) => $("cheat-" + k).addEventListener("click", () => cheat(k)));
+    $("cheat-undo").addEventListener("click", undoCheat);
+    $("cheat-target").addEventListener("change", () => {
+      if (!ctx) return;
+      ctx.target = Number($("cheat-target").value) || 0;
+      ctx.kind = null; ctx.token++;
+      refreshCheat();
+      idleResult();
+    });
   }
 
   // ?sample=1 runs the check on a real record immediately, so a link can prove the page works
-  // without asking the reader to paste anything first.
+  // without asking the reader to paste anything first. ?real=1 loads the newest dossier alone and, with #cheat, lands on the panel.
+  async function loadFromLedger(pick, message) {
+    try {
+      const got = await V.fetchLedgerText(fetch);
+      if (!got) throw new Error("no ledger file next to this page or one level up");
+      const lines = got.text.split("\n").filter((l) => l.trim());
+      $("input").value = pick(lines).join("\n");
+      $("status").textContent = message;
+      await run();
+      return true;
+    } catch (e) { $("status").innerHTML = `<span class="bad">Could not read the ledger here (${esc(e.message)}). Paste a record instead.</span>`; return false; }
+  }
+  function showCheat() {
+    const box = $("cheat");
+    if (box.hidden || typeof box.scrollIntoView !== "function") return;
+    const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+  }
+
   if (location.search.indexOf("sample") !== -1) {
     setTimeout(() => $("sample").click(), 50);
+  }
+  if (/[?&]real=1(&|$)/.test(location.search || "")) {
+    setTimeout(async () => {
+      const ok = await loadFromLedger((lines) => [lines[lines.length - 1]], "Loaded the newest dossier from the published ledger. Pick a change in the Try to cheat it panel below.");
+      if (ok) showCheat();
+    }, 50);
   }
 
   $("go").addEventListener("click", run);
@@ -215,18 +435,10 @@
     $("input").value = await f.text();
     run();
   });
-  $("sample").addEventListener("click", async () => {
-    try {
-      const got = await V.fetchLedgerText(fetch);
-      if (!got) throw new Error("no ledger file next to this page or one level up");
-      const lines = got.text.split("\n").filter((l) => l.trim());
-      // um registro com camada de analista, para a re-derivacao ter o que comparar
-      const picks = [lines[lines.length - 1], lines[Math.floor(lines.length / 2)]];
-      $("input").value = picks.join("\n");
-      $("status").textContent = "Loaded from the published ledger. Edit anything and press Verify again to see the check fail.";
-      run();
-    } catch (e) { $("status").innerHTML = `<span class="bad">Could not read the ledger here (${esc(e.message)}). Paste a record instead.</span>`; }
-  });
+  $("sample").addEventListener("click", () => loadFromLedger(
+    // um registro com camada de analista, para a re-derivacao ter o que comparar
+    (lines) => [lines[lines.length - 1], lines[Math.floor(lines.length / 2)]],
+    "Loaded from the published ledger. Edit anything and press Verify again to see the check fail, or use Try to cheat it below."));
 })();
 </script>
 
