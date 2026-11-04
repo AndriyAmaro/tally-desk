@@ -1,4 +1,4 @@
-/* JSON canonico (RFC 8785) e verificacao do ledger do Verdict Desk.
+/* JSON canonico (RFC 8785) e verificacao do ledger do Tally Desk.
  * Funciona no navegador (global VerdictDesk) e no Node (module.exports).
  * Mesmo texto canonico que verdict_desk/canonical.py, entao o hash confere nas duas pontas. */
 (function (root) {

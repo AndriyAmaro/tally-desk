@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
 REPO = "https://github.com/AndriyAmaro/verdict-desk-otari"
-NAME, NAME_SUB = "Verdict Desk", "on Otari"  # THE product name, in one place: the site shell and the README cards (scripts/otari_cards.py PRODUCT_NAME) both read it
+NAME, NAME_SUB = "Tally Desk", "on Otari"  # THE product name, in one place: the site shell and the README cards (scripts/otari_cards.py PRODUCT_NAME) both read it
 PRIMARY = [("index.html", "Overview"), ("cycle.html", "Cycle"), ("verify.html", "Verify")]
 AUDIT = (REPO + "/tree/otari#proofs-resource-by-resource", "Audit")
 # Chain tools and views of the reference workload: they stay in place and read the same ledger.

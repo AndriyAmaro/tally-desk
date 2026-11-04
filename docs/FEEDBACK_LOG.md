@@ -1,6 +1,6 @@
 # Otari feedback log
 
-Every real snag met while putting Verdict Desk behind the Otari gateway, with the symptom, the steps to reproduce and what would have helped. It is written for the Otari team and kept as a log. Entries are added as they happen; nothing here is a guess. The hosted gateway was version `0.35.0+85a3861` on 2026-11-01. In the commands, `$OTARI_API_KEY` is an ordinary (non-service) inference key; the key itself never appears in this file.
+Every real snag met while putting Tally Desk behind the Otari gateway, with the symptom, the steps to reproduce and what would have helped. It is written for the Otari team and kept as a log. Entries are added as they happen; nothing here is a guess. The hosted gateway was version `0.35.0+85a3861` on 2026-11-01. In the commands, `$OTARI_API_KEY` is an ordinary (non-service) inference key; the key itself never appears in this file.
 
 Status words: **open** (still reproduces), **worked around** (our client handles it), **fixed** (retested after a change on your side).
 

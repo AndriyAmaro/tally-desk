@@ -39,7 +39,7 @@ class OtariCardsTest(unittest.TestCase):
         self.assertNotEqual(otari_cards.figures_svg(LEDGER, EVIDENCE), otari_cards.figures_svg(LEDGER[:-1], EVIDENCE))
 
     def test_the_header_names_the_product(self):
-        self.assertIn("Verdict Desk on Otari", otari_cards.header_svg())
+        self.assertIn("Tally Desk on Otari", otari_cards.header_svg())
 
     def test_the_cycle_diagram_is_committed_current_and_shown_in_the_readme(self):
         self.assertEqual(otari_cards.FLOW.read_text(encoding="utf-8"), otari_cards.flow_svg(), "run scripts/otari_cards.py")

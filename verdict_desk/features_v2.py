@@ -1,4 +1,4 @@
-"""Indicadores tecnicos avancados para o Verdict Desk v2.
+"""Indicadores tecnicos avancados para o Tally Desk v2.
 
 Adiciona: RSI, MACD, Bollinger Bands, volume confirmation, stochastic.
 Todos deterministicos, calculados so a partir do pacote de evidencia.

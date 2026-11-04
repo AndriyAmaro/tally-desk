@@ -1,6 +1,8 @@
 # Lineage
 
-Verdict Desk on Otari did not start from an empty folder. It began as a snapshot of an earlier project and it keeps that project's engine. This page says which parts came from where, so nobody has to guess.
+Tally Desk on Otari did not start from an empty folder. It began as a snapshot of an earlier project and it keeps that project's engine. This page says which parts came from where, so nobody has to guess.
+
+Until 4 November 2026 this project was also called Verdict Desk. It was renamed to Tally Desk so it is not confused with the frozen legal-tech version, which keeps the old name. The Python package is still called `verdict_desk`, and the ledger keeps one continuous chain across both names.
 
 ## The earlier project (frozen)
 

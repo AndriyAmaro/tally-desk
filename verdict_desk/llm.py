@@ -1,4 +1,4 @@
-"""The one LLM path of Verdict Desk: the Otari gateway (https://otari.ai).
+"""The one LLM path of Tally Desk: the Otari gateway (https://otari.ai).
 
 Every model and tool call goes through it. With OTARI_API_KEY unset `chat` raises one clear error and nothing is sent, so there is no
 other provider to fall back to. Each role (bull, bear, judge, checker, narrator and the four tool roles) uses the open-weight catalog id

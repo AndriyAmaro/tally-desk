@@ -11,7 +11,7 @@
 
   <rect width="1240" height="400" fill="#fbf8f1"/>
 
-  <text x="620" y="40" text-anchor="middle" font-size="26" font-weight="700" fill="#1c2230">Verdict Desk: the chain of custody</text>
+  <text x="620" y="40" text-anchor="middle" font-size="26" font-weight="700" fill="#1c2230">Tally Desk: the chain of custody</text>
   <text x="620" y="62" text-anchor="middle" font-size="13" fill="#646a76">from a public market to a decision nobody can edit afterwards</text>
 
   <!-- node helper coords: six boxes across -->

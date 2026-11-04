@@ -12,7 +12,7 @@
 <g clip-path="url(#clip)"><rect width="860" height="300" fill="url(#dots)" opacity=".55"/><ellipse cx="140" cy="10" rx="460" ry="280" fill="url(#g1)"/><ellipse cx="780" cy="300" rx="380" ry="220" fill="url(#g2)"/><rect x="0" y="0" width="860" height="4" fill="url(#edge)"/></g>
 <rect x="1" y="1" width="858" height="298" rx="18" class="bd" stroke-width="1.5"/>
 <g transform="translate(40 34) scale(1.154)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect class="sa" x="2.5" y="10" width="6.5" height="6.5" rx="1.7"/><rect class="sa" x="8.5" y="5" width="6.5" height="6.5" rx="1.7"/><path class="sm" d="M17.5 3.5h6v18.5l-1.5-1.1-1.5 1.1-1.5-1.1-1.5 1.1z"/></g>
-<text x="82" y="56" class="mu" font-size="15" font-weight="600" text-anchor="start" letter-spacing="-0.1">Verdict Desk on Otari</text>
+<text x="82" y="56" class="mu" font-size="15" font-weight="600" text-anchor="start" letter-spacing="-0.1">Tally Desk on Otari</text>
 <text x="40" y="122" class="tx" font-size="46" font-weight="700" text-anchor="start" letter-spacing="-1.6">Every model call,</text>
 <text x="40" y="172" class="ac" font-size="46" font-weight="700" text-anchor="start" letter-spacing="-1.6">on the record.</text>
 <text x="40" y="204" class="mu" font-size="14.5" font-weight="400" text-anchor="start">A paper-trading agent on the Otari gateway and open-weight models.</text>

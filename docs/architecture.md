@@ -1,6 +1,6 @@
 # Architecture
 
-Verdict Desk on Otari is a tamper-evident receipt layer for an agent that calls models through an AI gateway. Every model or tool call leaves a receipt, the receipts are sealed with the agent's decision into a hash-chained ledger, and anyone can check the chain and replay the decision offline. The paper-trading agent in this repository is the reference workload that exercises it.
+Tally Desk on Otari is a tamper-evident receipt layer for an agent that calls models through an AI gateway. Every model or tool call leaves a receipt, the receipts are sealed with the agent's decision into a hash-chained ledger, and anyone can check the chain and replay the decision offline. The paper-trading agent in this repository is the reference workload that exercises it.
 
 The code falls into four parts. The first two are the product, the third is one example of a workload, and the fourth is how the outside world holds a copy of the chain head.
 
