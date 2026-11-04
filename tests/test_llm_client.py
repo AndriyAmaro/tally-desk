@@ -215,6 +215,15 @@ class NoKeyTest(unittest.TestCase):
                 call()
             self.assertEqual(str(ctx.exception), llm.NO_KEY)
 
+    def test_no_other_provider_is_left_in_the_code_or_the_environment_it_reads(self):
+        names = ("MISTRAL", "LLM_PROVIDER", "LLM_KEYLESS", "FREELLM", "api.mistral.ai", "api.anthropic.com", "X-Verdict-Route")
+        hits = []
+        for folder in ("verdict_desk", "tools", "scripts"):
+            for path in (ROOT / folder).rglob("*.py"):
+                text = path.read_text(encoding="utf-8")
+                hits += [f"{path.relative_to(ROOT)}: {n}" for n in names if n in text]
+        self.assertEqual(hits, [])
+
 
 if __name__ == "__main__":
     unittest.main()

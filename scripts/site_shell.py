@@ -6,10 +6,8 @@
 
 A page keeps its shell between <!-- shell:header:start --> / <!-- shell:header:end --> and <!-- shell:footer:start --> /
 <!-- shell:footer:end -->. A page that has no markers yet gets them once: its old <nav> is removed, the header is put on top, the
-content is wrapped in <main id="content"> and the footer closes the page. No page logic is touched.
-
-Pages under web/legacy/ belong to the earlier, legal-tech version of the project. They also carry a banner that says so, kept between
-<!-- shell:banner:start --> / <!-- shell:banner:end --> at the top of <main>. Every link the shell writes is relative to the page.
+content is wrapped in <main id="content"> and the footer closes the page. No page logic is touched. Every link the shell writes is relative
+to the page.
 """
 
 import posixpath
@@ -26,11 +24,7 @@ PRIMARY = [("index.html", "Overview"), ("cycle.html", "Cycle"), ("verify.html", 
 AUDIT = (REPO + "/tree/otari#proofs-resource-by-resource", "Audit")
 # Chain tools and views of the reference workload: they stay in place and read the same ledger.
 MORE = [("dashboard.html", "Chain dashboard"), ("witnesses.html", "Witnesses"), ("ask.html", "Ask the record"), ("lab.html", "Lab"),
-        ("narrative.html", "Market voices"), ("scorecard.html", "Scorecard")]
-# The pages of the earlier, legal-tech version of the project, kept under web/legacy/ with a banner.
-EARLIER = [("legacy/judge.html", "Judge path"), ("legacy/evidence.html", "Evidence"), ("legacy/usecase.html", "Use case"),
-           ("legacy/learn.html", "Learn"), ("legacy/exhibit/index.html", "Exhibits")]
-BANNER_TEXT = "Earlier era: the legal-tech version of this project."
+        ("narrative.html", "Market voices")]
 FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1017'/%3E"
            "%3Crect x='4' y='13' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Crect x='11' y='7' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E"
            "%3Cpath d='M21 5h7v20l-1.75-1.3-1.75 1.3-1.75-1.3L21 25z' fill='none' stroke='%23fbbf24' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E")
@@ -61,15 +55,8 @@ def header(page: str) -> str:
             f'<header class="site-header"><nav class="site-nav" aria-label="Primary">'
             f'<a class="brand" href="{rel("index.html", page)}"{" aria-current=\"page\"" if page == "index.html" else ""}>{MARK}<span>{escape(NAME)}</span><span class="brand-sub">{escape(NAME_SUB)}</span></a>'
             f'<ul class="nav-links">{primary}</ul>'
-            f'{menu("More", MORE, page)}{menu("Earlier era", EARLIER, page)}</nav></header>\n'
+            f'{menu("More", MORE, page)}</nav></header>\n'
             f'<!-- shell:header:end -->')
-
-
-def banner(page: str) -> str:
-    return ('<!-- shell:banner:start -->\n<aside class="legacy-banner" role="note"><p><b>' + escape(BANNER_TEXT) + '</b> This page is kept as it was written for '
-            'that audience. The current project is a receipt layer for agents that call models through an AI gateway: see '
-            f'<a href="{rel("index.html", page)}">the overview</a> and <a href="{REPO}/blob/otari/docs/HISTORY.md" rel="noopener">the lineage</a>.</p></aside>\n'
-            '<!-- shell:banner:end -->')
 
 
 def footer() -> str:
@@ -85,21 +72,16 @@ def footer() -> str:
 
 HEAD_RE = re.compile(r"<!-- shell:header:start -->.*?<!-- shell:header:end -->", re.S)
 FOOT_RE = re.compile(r"<!-- shell:footer:start -->.*?<!-- shell:footer:end -->", re.S)
-BANNER_RE = re.compile(r"<!-- shell:banner:start -->.*?<!-- shell:banner:end -->", re.S)
 ICON_RE = re.compile(r'<link rel="icon"[^>]*>')
 
 
 def render(page: str, html: str) -> str:
-    if not HEAD_RE.search(html):  # first time: an earlier-era page without markers
+    if not HEAD_RE.search(html):  # first time: a page without markers
         html = re.sub(r"<nav\b.*?</nav>\s*", "", html, count=1, flags=re.S)
         html = re.sub(r"<body[^>]*>", lambda m: m.group(0) + "\n<!-- shell:header:start --><!-- shell:header:end -->\n<main id=\"content\">", html, count=1)
         html = html.replace("</body>", "</main>\n<!-- shell:footer:start --><!-- shell:footer:end -->\n</body>", 1)
     html = HEAD_RE.sub(lambda _: header(page), html, count=1)
     html = FOOT_RE.sub(lambda _: footer(), html, count=1)
-    if page.startswith("legacy/"):
-        if not BANNER_RE.search(html):
-            html = html.replace('<main id="content">', '<main id="content">\n<!-- shell:banner:start --><!-- shell:banner:end -->', 1)
-        html = BANNER_RE.sub(lambda _: banner(page), html, count=1)
     icon = f'<link rel="icon" href="{FAVICON}">'
     html = ICON_RE.sub(lambda _: icon, html, count=1) if ICON_RE.search(html) else html.replace("</head>", icon + "\n</head>", 1)
     return html

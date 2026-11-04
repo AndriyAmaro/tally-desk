@@ -25,8 +25,6 @@ mkdir -p "$SITE"
 cp -r "$ROOT"/web/. "$SITE"/
 rm -rf "$SITE/ledger"
 cp -r "$ROOT"/ledger "$SITE/ledger"
-python3 -m verdict_desk --ledger "$ROOT/ledger/ledger.jsonl" scorecard --out "$SITE/scorecard.html" >/dev/null
-python3 -m verdict_desk --ledger "$ROOT/ledger/ledger.jsonl" exhibit --recent 3 --outdir "$SITE/legacy/exhibit" --root ../../ >/dev/null
 
 # A stale server on a fixed port serves a different directory and every check lies. Bind a free
 # port, and prove the server we reach is ours by fetching a marker only our SITE contains.
@@ -67,15 +65,10 @@ check() { # check <page> <needle> <label>
 }
 
 check dashboard.html "recomputed in this browser" "dashboard recomputes hashes"
-check dashboard.html "printable exhibit" "dashboard links each decision to its exhibit"
 check dashboard.html "sized LONG or SHORT" "dashboard shows how many dossiers commit"
 check lab.html "policy.js" "lab loads the shared policy"
-check lab.html "printable exhibit" "lab links the selected decision to its exhibit"
 check verify.html "Verify a record you were handed" "verify page renders"
 check verify.html "sample=1" "verify page can prefill from the ledger"
-check scorecard.html "What this table does not tell you" "scorecard prints its caveats"
-check legacy/exhibit/index.html "Decision exhibits" "exhibit index renders"
-check legacy/judge.html "Earlier era: the legal-tech version of this project" "a legacy page carries its banner"
 check narrative.html "the multi-KOL narrative agent" "market voices page renders"
 check narrative.html "Convergences, in order" "market voices lists convergences"
 

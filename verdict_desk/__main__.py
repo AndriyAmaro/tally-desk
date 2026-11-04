@@ -314,52 +314,6 @@ def cmd_market(opts) -> int:
     return 0
 
 
-def cmd_models(opts) -> int:
-    """The model bench, and the routing policy the gateway follows (re-ranked by the fixed rule, never by hand)."""
-    from datetime import datetime, timezone
-    from . import models
-    ledger = dossier.read_ledger(opts.ledger)
-    if not ledger:
-        print("empty ledger: nothing to rank")
-        return 0
-    if opts.route:
-        path = Path(opts.route)
-        current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
-        now = datetime.now(timezone.utc).isoformat()
-        if current and models.frozen(now):
-            print(f"routing policy frozen until {models.FROZEN[1][:10]}: kept as of #{current['as_of_seq']}")
-        elif current and ledger[-1]["seq"] - current["as_of_seq"] < opts.every:
-            print(f"routing policy as of #{current['as_of_seq']} is recent enough (re-ranked every {opts.every} dossiers)")
-        else:
-            fresh = models.policy(ledger)
-            path.write_text(json.dumps(fresh, indent=1) + "\n", encoding="utf-8")
-            print(f"wrote {path}: order {', '.join(fresh['order'])} (as of #{fresh['as_of_seq']})")
-    if opts.out:
-        out = models.bench(ledger)
-        policy_path = Path(opts.policy)
-        if policy_path.exists():
-            raw = policy_path.read_bytes()
-            out["policy"] = json.loads(raw)
-            out["policy_sha256"] = hashlib.sha256(raw).hexdigest()
-        Path(opts.out).write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
-        print(f"wrote {opts.out}: {len(out['models'])} models")
-    return 0
-
-
-def cmd_series(opts) -> int:
-    """The judged series: which model wrote each stretch of the ledger, and why it changed, read from the ledger."""
-    from . import series
-    eras = series.eras(dossier.read_ledger(opts.ledger))
-    if opts.out:
-        Path(opts.out).write_text(json.dumps({"eras": eras}, indent=1) + "\n", encoding="utf-8")
-        print(f"wrote {opts.out}")
-    for e in eras:
-        served = ", ".join(f"{m} x{n}" for m, n in sorted(e["served_by"].items(), key=lambda kv: -kv[1]))
-        print(f"#{e['from_seq']}-#{e['to_seq']} ({e['records']}) {e['model'] or '-'}: {e['status']}"
-              + (f", {e['reason']}" if e["reason"] else "") + (f"; answered by {served}" if served else ""))
-    return 0
-
-
 def cmd_trust_check(opts) -> int:
     """Recompute every frozen trust table from the dossiers before it."""
     ledger = dossier.read_ledger(opts.ledger)
@@ -468,92 +422,6 @@ def cmd_scorecard(opts) -> int:
         return 0
     print(scorecard.render_markdown(result))
     print(f"\nrecords by state: {result['counts']}")
-    return 0
-
-
-def always_published(also=None) -> set[int]:
-    """Dossiers the site keeps serving by number: config/always_published.json plus any --also given."""
-    path = Path(__file__).resolve().parent.parent / "config" / "always_published.json"
-    listed = json.loads(path.read_text(encoding="utf-8")).get("dossiers", []) if path.exists() else []
-    return {int(seq) for seq in listed} | set(also or [])
-
-
-def cmd_exhibit(opts) -> int:
-    """Render dossiers as printable decision exhibits (stdout, a file, or a directory)."""
-    from . import exhibit
-    ledger = dossier.read_ledger(opts.ledger)
-    if not ledger:
-        print(f"no ledger at {opts.ledger}", file=sys.stderr)
-        return 1
-
-    if opts.recent:
-        target = ledger[-opts.recent:]
-    elif opts.seq:
-        target = [d for d in ledger if d.get("seq") == opts.seq]
-        if not target:
-            print(f"no dossier with seq {opts.seq}", file=sys.stderr)
-            return 1
-    else:
-        target = [ledger[-1]]
-
-    chain = exhibit.chain_context(ledger, ledger[-1]["seq"])
-    anchor_info = {}
-    if opts.anchor:
-        try:
-            anchored_seq = anchor.read_latest_seq(opts.rpc, opts.address)
-            onchain = anchor.read_anchor(opts.rpc, opts.address, anchored_seq)
-            onchain["seq"] = anchored_seq
-            anchor_info[anchored_seq] = onchain
-            print(f"anchor: record #{anchored_seq} read from {opts.address} on Sepolia", file=sys.stderr)
-            # O dossie ancorado entra sempre: e ele que prova a custodia na cadeia.
-            if opts.recent and anchored_seq not in {d.get("seq") for d in target}:
-                anchored_row = next((d for d in ledger if d.get("seq") == anchored_seq), None)
-                if anchored_row is not None:
-                    target = [anchored_row] + target
-        except (OSError, ValueError, KeyError) as err:
-            print(f"anchor: could not read the chain ({err}); exhibits are produced without it", file=sys.stderr)
-
-    if opts.recent:
-        # Dossiers a page links by number (the use case walks through one) keep their exhibit after they leave the recent window.
-        have = {d.get("seq") for d in target}
-        target = [d for d in ledger if d.get("seq") in always_published(getattr(opts, "also", None)) - have] + target
-
-    def anchor_for(row):
-        onchain = anchor_info.get(row["seq"])
-        if not onchain:
-            return None
-        # O contrato grava o hash com prefixo 0x e o ledger grava sem: normalizar antes
-        # de comparar. Comparar cru produzia "nao bate" num registro perfeitamente ancorado.
-        published = (row.get("hash") or "").lower().removeprefix("0x")
-        anchored = (onchain.get("head_hash") or "").lower().removeprefix("0x")
-        return {"matches": published == anchored,
-                "anchored_seq": row["seq"], "anchored_at": onchain.get("anchored_at")}
-
-    if opts.outdir:
-        outdir = Path(opts.outdir)
-        outdir.mkdir(parents=True, exist_ok=True)
-        root = getattr(opts, "root", None) or "../"  # from the folder the exhibits are written to up to the site root
-        written = []
-        for row in target:
-            href = None
-            if getattr(opts, "packs", None) and (Path(opts.packs) / f"{row['seq']}.json").exists():
-                href = f"{root}{Path(opts.packs).name}/{row['seq']}.json"
-            page = exhibit.render(row, chain=chain, anchor=anchor_for(row), pack_href=href, root=root)
-            path = outdir / f"exhibit-{row['seq']}.html"
-            path.write_text(page, encoding="utf-8")
-            written.append((row, path))
-            print(f"wrote {path}")
-        index = exhibit.render_index([(row, f"exhibit-{row['seq']}.html") for row, _ in written])
-        (outdir / "index.html").write_text(index, encoding="utf-8")
-        print(f"wrote {outdir / 'index.html'}")
-        return 0
-
-    page = exhibit.render(target[0], chain=chain, anchor=anchor_for(target[0]))
-    if opts.out:
-        Path(opts.out).write_text(page, encoding="utf-8")
-        print(f"wrote {opts.out}")
-    else:
-        sys.stdout.write(page)
     return 0
 
 
@@ -669,20 +537,12 @@ def cmd_export(opts) -> int:
 
 
 def cmd_packs(opts) -> int:
-    """Write evidence packs for the newest dossiers (and the anchored one) into a directory the site serves."""
+    """Write evidence packs for the newest dossiers into a directory the site serves (ask.html reads them)."""
     ledger = dossier.read_ledger(opts.ledger) if Path(opts.ledger).exists() else []
     if not ledger:
         print(f"no ledger at {opts.ledger}", file=sys.stderr)
         return 1
     wanted = {d["seq"] for d in ledger[-opts.recent:]}
-    # Dossiers a page links by number (the use case walks through one) stay served after they leave the recent window.
-    known = {d["seq"] for d in ledger}
-    wanted |= {seq for seq in always_published(getattr(opts, "also", None)) if seq in known}
-    if opts.anchored:
-        root = Path(opts.ledger).resolve().parent.parent
-        found = scoreboard._sepolia(root, ledger, None)
-        if found:
-            wanted.add(found["seq"])
     outdir = Path(opts.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     for seq in sorted(wanted):
@@ -944,18 +804,9 @@ def main() -> int:
     p.add_argument("--stamps", metavar="DIR", help="directory with the timestamped heads (default: <ledger dir>/timestamps)")
     p.add_argument("--out", metavar="FILE", help="also write the full result as JSON")
     p.set_defaults(func=cmd_battery)
-    p = sub.add_parser("models", help="the model bench and the routing policy the LLM gateway follows")
-    p.add_argument("--out", metavar="FILE", help="write the bench, with the policy in force, as JSON (read by judge.html)")
-    p.add_argument("--route", metavar="FILE", help="re-rank the routing policy by its fixed rule when it is due")
-    p.add_argument("--every", type=int, default=24, help="re-rank at most once every N dossiers (default 24)")
-    p.add_argument("--policy", default="config/model_routing.json", help="the policy file to publish with --out")
-    p.set_defaults(func=cmd_models)
     p = sub.add_parser("market", help="every candle the ledger froze, per symbol, as JSON (read by ask.html)")
     p.add_argument("--out", metavar="FILE", required=True)
     p.set_defaults(func=cmd_market)
-    p = sub.add_parser("series", help="the judged series: which model wrote each stretch of the ledger and why it changed")
-    p.add_argument("--out", metavar="FILE", help="write the eras as JSON (the judge page reads series.json)")
-    p.set_defaults(func=cmd_series)
     p = sub.add_parser("witnesses", help="write the index of timestamped heads and the anchor contract that the witnesses page reads")
     p.add_argument("--stamps", metavar="DIR", help="directory with the timestamped heads (default: <ledger dir>/timestamps)")
     p.add_argument("--deployment", default="cre/deployment.sepolia.json", metavar="FILE", help="the anchor deployment record")
@@ -971,28 +822,14 @@ def main() -> int:
     p.add_argument("--seq", type=int, required=True, help="dossier sequence number to export")
     p.add_argument("--out", type=Path, required=True, help="where to write the pack (JSON)")
     p.set_defaults(func=cmd_export)
-    p = sub.add_parser("packs", help="write evidence packs for the newest dossiers (and the anchored one) into a directory the site serves")
+    p = sub.add_parser("packs", help="write evidence packs for the newest dossiers into a directory the site serves")
     p.add_argument("--recent", type=int, default=24, metavar="N", help="how many of the newest dossiers (default 24)")
     p.add_argument("--outdir", required=True, metavar="DIR", help="where to write <seq>.json")
-    p.add_argument("--anchored", action="store_true", help="also write the dossier anchored on Sepolia")
-    p.add_argument("--also", type=int, action="append", metavar="SEQ", help="also write this dossier, whatever its age (repeatable; config/always_published.json is always included)")
     p.set_defaults(func=cmd_packs)
     p = sub.add_parser("scorecard", help="score the decisions against later prices, from the ledger alone")
     p.add_argument("--out", metavar="FILE", help="write the HTML scorecard to FILE")
     p.add_argument("--markdown", action="store_true", help="print a markdown table instead of the HTML page")
     p.set_defaults(func=cmd_scorecard)
-    p = sub.add_parser("exhibit", help="render a dossier as a printable decision exhibit")
-    p.add_argument("seq", nargs="?", type=int, help="dossier seq (default: the latest)")
-    p.add_argument("--recent", type=int, metavar="N", help="render the last N dossiers (use with --outdir)")
-    p.add_argument("--outdir", metavar="DIR", help="write one exhibit per dossier plus an index")
-    p.add_argument("--out", metavar="FILE", help="write a single exhibit to FILE instead of stdout")
-    p.add_argument("--anchor", action="store_true", help="also attach the on-chain anchor status (network read)")
-    p.add_argument("--rpc", default=anchor.DEFAULT_RPC, help="RPC endpoint for --anchor")
-    p.add_argument("--address", default=anchor.DEFAULT_ADDRESS, help="LedgerAnchor address")
-    p.add_argument("--packs", metavar="DIR", help="directory of evidence packs written by `packs`; an exhibit links its pack when the file exists")
-    p.add_argument("--root", metavar="PATH", help="with --outdir: the path from that folder up to the site root, where the verifier lives (default ../; web/legacy/exhibit needs ../../)")
-    p.add_argument("--also", type=int, action="append", metavar="SEQ", help="with --recent, also render this dossier, whatever its age (repeatable; config/always_published.json is always included)")
-    p.set_defaults(func=cmd_exhibit)
     p = sub.add_parser("monitor", help="compare the ledger against the head anchored on Sepolia (read-only)")
     p.add_argument("--rpc", default="https://ethereum-sepolia-rpc.publicnode.com")
     p.add_argument("--address", default="0x50443D51Db71A61E131B147B1d36aF21d48CDdF7")

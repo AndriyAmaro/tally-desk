@@ -14,15 +14,13 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 PAGES = sorted(WEB.glob("**/*.html"))
-LEGACY = [p for p in PAGES if p.relative_to(WEB).parts[0] == "legacy"]
-# Pages the hourly deploy generates next to the static ones; they are not in web/.
-GENERATED = {"scorecard.html", "legacy/exhibit/index.html"}
 NODE = shutil.which("node")
 
 
 class PageTest(unittest.TestCase):
     def test_there_are_pages_to_check(self):
         self.assertGreaterEqual(len(PAGES), 7)
+        self.assertEqual([p for p in PAGES if p.relative_to(WEB).parts[0] == "legacy"], [], "the pages of the earlier project stay in its frozen repository")
 
     def test_every_page_has_a_title_and_a_description_for_link_previews(self):
         for page in PAGES:
@@ -43,24 +41,17 @@ class PageTest(unittest.TestCase):
             for href in re.findall(r'<a [^>]*href="([^"#?]+\.html)"', page.read_text(encoding="utf-8")):
                 target = (page.parent / href).resolve()
                 site_path = target.relative_to(WEB).as_posix() if target.is_relative_to(WEB) else None
-                if href.startswith(("http://", "https://")) or site_path in GENERATED or "$" in href or re.fullmatch(r"(legacy/)?exhibit/exhibit-\d+\.html", site_path or href):
-                    continue  # absolute, generated at deploy time, or built by a script at run time
+                if href.startswith(("http://", "https://")) or "$" in href:
+                    continue  # absolute, or built by a script at run time
                 self.assertTrue(target.is_file(), f"{page.name} links to {href}, which is not in web/")
 
     def test_the_new_pages_are_reachable_from_the_navigation(self):
         index = (WEB / "index.html").read_text(encoding="utf-8")
-        for target in ("narrative.html", "witnesses.html", "legacy/evidence.html", "legacy/learn.html", "ask.html"):
+        for target in ("narrative.html", "witnesses.html", "dashboard.html", "ask.html"):
             self.assertIn(f'href="{target}"', index, f"the landing page does not link to {target}")
 
-    def test_every_legacy_page_says_it_belongs_to_the_earlier_era(self):
-        self.assertGreaterEqual(len(LEGACY), 4)
-        for page in LEGACY:
-            self.assertIn("Earlier era: the legal-tech version of this project.", page.read_text(encoding="utf-8"), page.name)
-
-    def test_no_page_outside_legacy_pitches_lawyers(self):
+    def test_no_page_pitches_lawyers(self):
         for page in PAGES:
-            if page in LEGACY:
-                continue
             body = re.sub(r"<!-- shell:header:start -->.*?<!-- shell:header:end -->", "", page.read_text(encoding="utf-8"), flags=re.S)
             self.assertNotRegex(body, r"(?i)\blawyers?\b|foundation declaration|\bcourt\b", page.name)
 
@@ -86,6 +77,6 @@ class NoEmDashTest(unittest.TestCase):
 
     def test_no_page_template_or_readme_carries_an_em_dash(self):
         root = Path(__file__).resolve().parents[1]
-        files = sorted((root / "web").glob("**/*.html")) + [root / "README.md", root / "docs" / "HISTORY.md", root / "docs" / "architecture.md", root / "verdict_desk" / "exhibit.py", root / "verdict_desk" / "scorecard.py"]
+        files = sorted((root / "web").glob("**/*.html")) + [root / "README.md", root / "docs" / "HISTORY.md", root / "docs" / "architecture.md"]
         hits = [f"{p.relative_to(root)}:{n}" for p in files for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1) if "—" in line]
         self.assertEqual(hits, [])

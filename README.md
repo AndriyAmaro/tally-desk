@@ -367,8 +367,6 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 - **`ethereum-sepolia-rpc.publicnode.com`**, a public Sepolia RPC. Receives: read calls and, only with SEPOLIA_PRIVATE_KEY set, practice transactions. When: not used on the otari branch (no key).
 - **`sepolia.gateway.tenderly.co`**, a public Sepolia RPC (fallback). Receives: read calls. When: not used on the otari branch (no key).
 - **`sepolia.etherscan.io`**, a block explorer link. Receives: nothing from us: it is a link a reader may open. When: never contacted by the code.
-- **`api.mistral.ai`**, the original, pre-Otari LLM provider (the default when OTARI_API_KEY is not set). Receives: prompts, only when MISTRAL_API_KEY is set and OTARI_API_KEY is not. When: never in Otari mode.
-- **`api.anthropic.com`**, the optional native Anthropic provider (LLM_PROVIDER=anthropic). Receives: prompts, only when that provider is selected. When: never in Otari mode.
 <!-- otari:hosts:end -->
 
 </details>
@@ -381,7 +379,7 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 | `verdict_desk/` | the Python package: `llm.py` (the gateway client, receipts, routing, budgets), `agents_v7.py` (rules v7), `otari_*.py` (web tools, MCP, canary, drill, audit and report), `sandbox_rederive.py`, `dossier.py` and `canonical.py` (the hash chain) |
 | `config/` | `otari.json` (roles, models, policies, caps), `voices.json` (news sources), `external_hosts.json` (every host the code names) |
 | `ledger/` | `ledger.jsonl` (the chain), the head files, OpenTimestamps proofs in `timestamps/`, Sigstore bundles in `rekor/` |
-| `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, chain dashboard, witnesses; `web/legacy/` keeps the pages of the earlier project, each with a banner |
+| `web/` | the static pages: landing, call-by-call cycle, in-browser verifier, chain dashboard, witnesses, the record Q and A, the lab and the market voices |
 | `tools/` | `otari_runner.py` (the cycle runner the scheduled job calls) and `otari_catalog_check.py` |
 | `scripts/` | generators for the README blocks and the cards in `docs/readme/` |
 | `docs/` | the [feedback log](docs/FEEDBACK_LOG.md), [architecture](docs/architecture.md), the [lineage](docs/HISTORY.md) and the [evidence files](docs/evidence/) |

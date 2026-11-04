@@ -4,7 +4,7 @@ Verdict Desk on Otari did not start from an empty folder. It began as a snapshot
 
 ## The earlier project (frozen)
 
-The earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk), was written for a legal-tech hackathon and pitched as evidence a lawyer could file. This repository was imported from it at commit `c65bab9`, and the original stays exactly as it was. Its pages are kept here under [`web/legacy/`](../web/legacy/), each with a banner that says so. That pitch is not the product described in this repository.
+The earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk), was written for a legal-tech hackathon and pitched as evidence a lawyer could file. This repository was imported from it at commit `c65bab9`, and the original stays exactly as it was. The pages written for that pitch, the printable exhibits, the self-hosted model gateway and the research tools stay in that frozen repository and are not carried here. That pitch is not the product described in this repository.
 
 The first commit of the Otari era is [`2bdfe40`](https://github.com/AndriyAmaro/verdict-desk-otari/commit/2bdfe40cfdd124f9997dbb617f797870630bcf1b): every model call goes through the gateway, one open-weight model per role, one receipt per call.
 
@@ -17,7 +17,7 @@ The first commit of the Otari era is [`2bdfe40`](https://github.com/AndriyAmaro/
 | Citation validator | `verdict_desk/citations.py` | An analyst claim stands only if it cites an evidence id that exists and every number in it appears in the cited item. |
 | Witnesses | `ledger/timestamps/` (OpenTimestamps), `ledger/rekor/` (Sigstore), `cre/` (Chainlink CRE anchor on Sepolia) | Copies of the chain head that the operator cannot quietly rewrite. The Sigstore bundles stop at dossier 791 and the Sepolia anchor belongs to the earlier era. OpenTimestamps stamps continue. |
 | Tamper battery | `verdict_desk/battery.py` | Attacks a copy of the ledger (edit, delete, swap, forge, truncate, re-hash) and counts what the verifier misses. |
-| Evidence pages | `web/verify.html`, `web/witnesses.html`, `web/dashboard.html` | In-browser verification of the chain. These stayed in place. The pages written for lawyers moved to `web/legacy/`. |
+| Evidence pages | `web/verify.html`, `web/witnesses.html`, `web/dashboard.html` | In-browser verification of the chain. These stayed in place. The pages written for lawyers stay in the frozen repository. |
 
 The ledger is a single chain. Dossiers 1 to 791 were recorded before Otari. The Otari era starts at dossier 792, whose `prev_hash` is the hash of 791, so the chain was continued and not restarted.
 
