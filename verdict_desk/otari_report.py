@@ -83,6 +83,47 @@ def _failed(r: dict) -> bool:
     return bool(r.get("refusal") or r.get("error"))
 
 
+def role_fallback_of(r: dict) -> dict | None:
+    """What a receipt says about the app's own role fallback chain (`role_fallback`, written by llm._otari_chat), or None when the call was
+    served by the first model it asked for. This is the app moving to the next catalog id of the role; it is NOT Otari's own provider
+    failover (`Otari-Fallback`, `attempt_count`), and every count below keeps the two apart. web/cycle.js `roleFallbackOf` writes the same line."""
+    note = r.get("role_fallback")
+    if not isinstance(note, dict) or not isinstance(note.get("skipped"), list):
+        return None
+    skipped = [x for x in note["skipped"] if isinstance(x, dict)]
+    if not skipped:
+        return None
+    chain = note.get("chain") if isinstance(note.get("chain"), list) else []
+    why = ", ".join(f"{x.get('model')} ({x.get('reason')}" + (f", HTTP {x['status']}" if x.get("status") else "") + ")" for x in skipped)
+    if note.get("answered"):
+        kind = "answered"
+        line = f"Role fallback: answered by {note['answered']}, entry {len(skipped) + 1} of {len(chain) or '?'}, after skipping {why}"
+    elif note.get("exhausted"):
+        kind = "exhausted"
+        line = f"Role fallback: all {len(chain) or '?'} models of the chain failed; skipped {why}"
+    else:
+        kind = "stopped"
+        line = f"Role fallback: stopped after skipping {why}; {note.get('stopped_by')} does not move to another model"
+    return {"kind": kind, "skipped": len(skipped), "total": len(chain), "answered": note.get("answered") or None, "stoppedBy": note.get("stopped_by") or None, "line": line}
+
+
+def role_fallback_calls(dossiers: list[dict]) -> list[tuple[int, str, dict]]:
+    """(seq, role label, receipt) of every call, in the given dossiers, that went down its role's fallback chain."""
+    return [(d["seq"], c["label"], c["receipt"]) for d in dossiers for c in calls_of(d) if role_fallback_of(c["receipt"])]
+
+
+def role_fallback_note(dossiers: list[dict]) -> str:
+    """One sentence for the routing row of the audit, or "". It counts the app's own chain apart from Otari's failover and claims nothing for it."""
+    found = role_fallback_calls(dossiers)
+    if not found:
+        return ""
+    served = [x for x in found if role_fallback_of(x[2])["kind"] == "answered"]
+    seqs = sorted({s for s, _, _ in found})
+    tail = f"{len(served)} of them ended on a later model of the role and {len(found) - len(served)} did not" if len(served) != len(found) else "each ended on a later model of the role"
+    return (f"Apart from that, {len(found)} call{'s' if len(found) != 1 else ''} went down the app's own role fallback chain (the first model was refused or failed, so the app asked the next catalog id of the role), "
+            f"in dossier{'s' if len(seqs) > 1 else ''} {', '.join(map(str, seqs))}; {tail}. That is the app's own fallback, not Otari's provider failover, and it is not counted in the proof above")
+
+
 def _rid(r: dict) -> str | None:
     return r.get("request_id") if r.get("request_id_source") == "otari" else None
 
@@ -158,6 +199,9 @@ def audit(ledger: list[dict], evidence: list[dict] | None = None) -> list[dict]:
         row(2, True, [], None, f"drill only (not sealed in the ledger): policy {fb.get('policy')} served by {r.get('served_by')} after {r.get('attempt_count')} attempts (Otari-Fallback true)", source="drill", drill_ids=[r["request_id"]])
     else:
         row(2, False, [], None, "no fallback seen")
+    own = role_fallback_note(newest)
+    if own:  # the app's own role chain is told apart from Otari's failover, and neither the status nor the request ids of the row depend on it
+        rows[-1]["note"] += ". " + own
     # 3 budgets and spend limits: Otari's spend state sealed with the verdict and used by the router (sealed); the 403 refusal itself is a drill
     bd = next((e for e in reversed(evidence) if e.get("drill") == "budget" and e.get("pass")), None)
     capped = next((d["seq"] for d in newest if (d["llm"]["otari"].get("cycle") or {}).get("cap_usd")), None)

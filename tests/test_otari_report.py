@@ -320,6 +320,80 @@ process.stdout.write(JSON.stringify({{ board: C.board(input.ledger), who: era.ma
         self.check(LEDGER + [a, b])
 
 
+SKIPPED = [{"model": "openai/gpt-oss-120b", "reason": "pricing_required", "status": 402, "code": "pricing_required", "request_id": "r-402", "request_id_source": "otari"}]
+ROLE_CASES = [
+    {}, {"role_fallback": "garbage"}, {"role_fallback": {"skipped": []}}, {"role_fallback": {"skipped": "x"}},
+    {"role_fallback": {"chain": ["a", "b", "c"], "skipped": SKIPPED, "answered": "b", "answered_index": 1}},
+    {"role_fallback": {"chain": ["a", "b"], "skipped": SKIPPED, "answered": None, "answered_index": None, "exhausted": True}},
+    {"role_fallback": {"chain": ["a", "b"], "skipped": SKIPPED, "answered": None, "answered_index": None, "stopped_by": "budget_exceeded"}},
+    {"role_fallback": {"skipped": SKIPPED + [{"model": "x", "reason": "gateway_504"}], "answered": "c"}},
+]
+
+
+class RoleFallbackReportTest(unittest.TestCase):
+    """The app's own role chain is reported as such: it never turns into a claim about Otari's failover."""
+
+    def with_chain(self, ledger_dossier):
+        d = json.loads(json.dumps(ledger_dossier))
+        d["llm"]["bull"]["receipt"]["role_fallback"] = {"chain": ["a", "b"], "skipped": SKIPPED, "answered": "b", "answered_index": 1}
+        d["llm"]["bear"]["receipt"]["role_fallback"] = {"chain": ["a", "b"], "skipped": SKIPPED, "answered": None, "answered_index": None, "exhausted": True}
+        return d
+
+    def test_a_receipt_served_by_its_first_model_has_no_role_fallback(self):
+        for case in ROLE_CASES[:4]:
+            self.assertIsNone(rep.role_fallback_of(receipt("bull", "x", **case)))
+
+    def test_the_lines_say_which_entry_answered_and_why_the_earlier_ones_were_skipped(self):
+        got = [rep.role_fallback_of(receipt("bull", "x", **c)) for c in ROLE_CASES[4:7]]
+        self.assertEqual([g["kind"] for g in got], ["answered", "exhausted", "stopped"])
+        self.assertEqual(got[0]["line"], "Role fallback: answered by b, entry 2 of 3, after skipping openai/gpt-oss-120b (pricing_required, HTTP 402)")
+        self.assertIn("all 2 models of the chain failed", got[1]["line"])
+        self.assertIn("budget_exceeded does not move to another model", got[2]["line"])
+
+    def test_the_routing_row_counts_the_app_chain_apart_and_its_status_and_proof_do_not_move(self):
+        base = rep.audit(LEDGER)
+        d = self.with_chain(ANSWERED[-1])
+        d["seq"] = LEDGER[-1]["seq"] + 1
+        after = rep.audit(LEDGER + [d])
+        before_row, after_row = base[1], after[1]
+        self.assertEqual((after_row["status"], after_row["source"]), (before_row["status"], before_row["source"]))
+        chain_ids = {"r-402", d["llm"]["bull"]["receipt"]["request_id"], d["llm"]["bear"]["receipt"]["request_id"]}
+        self.assertFalse(chain_ids & set(after_row["proof"]), "no request id of the app's chain is offered as proof of Otari's routing")
+        self.assertIn("2 calls went down the app's own role fallback chain", after_row["note"])
+        self.assertIn("1 of them ended on a later model of the role and 1 did not", after_row["note"])
+        self.assertIn("not Otari's provider failover", after_row["note"])
+        self.assertNotIn("role fallback", before_row["note"])
+
+    def test_a_ledger_with_only_the_chain_and_no_otari_failover_still_says_no_fallback_seen(self):
+        d = self.with_chain(ANSWERED[-1])
+        d["llm"]["otari"].pop("canary", None)
+        for c in rep.calls_of(d):
+            c["receipt"]["fallback"] = False
+        only = rep.audit([{**d, "seq": 1}], evidence=[])
+        self.assertEqual(only[1]["status"], "NOT PROVEN")
+        self.assertTrue(only[1]["note"].startswith("no fallback seen. Apart from that, 2 calls"))
+
+
+@unittest.skipUnless(NODE, "node is not installed here")
+class RoleFallbackParityTest(unittest.TestCase):
+    def test_the_two_languages_write_the_same_line(self):
+        script = f"""
+const C = require({json.dumps(str(ROOT / 'web' / 'cycle.js'))});
+const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify(input.map((r) => C.roleFallbackOf(r))));
+"""
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+            fh.write(script)
+            path = fh.name
+        try:
+            cases = [receipt("bull", "x", **c) for c in ROLE_CASES]
+            out = subprocess.run([NODE, path], input=json.dumps(cases), capture_output=True, text=True, timeout=60)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        self.assertEqual(out.returncode, 0, out.stderr[:400])
+        self.assertEqual(json.loads(out.stdout), [rep.role_fallback_of(c) for c in cases])
+
+
 @unittest.skipUnless(NODE, "node is not installed here")
 class GateLinesParityTest(unittest.TestCase):
     """The closure and drift lines of the cycle page are written twice (here and in web/cycle.js); they must say the same words, and calls_of

@@ -135,6 +135,8 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     const chips = [];
     if (f) chips.push(`<span class="chip bad">${f.source === "client" ? "stopped here" : "refused"}: ${esc(f.code)}</span>`);
     if (r.fallback) chips.push(`<span class="chip warn">fallback &middot; ${esc(r.attempt_count)} attempts</span>`);
+    const own = C.roleFallbackOf(r);  // the app's own chain of models for the role, apart from Otari's provider failover above
+    if (own) chips.push(`<span class="chip ${own.kind === "answered" ? "warn" : "bad"}">${own.kind === "answered" ? `role fallback &middot; model ${own.skipped + 1} of ${esc(own.total || "?")}` : own.kind === "exhausted" ? "role fallback: chain exhausted" : `role fallback: stopped (${esc(own.stoppedBy)})`}</span>`);
     if (c.label === "canary") chips.push(`<span class="chip warn">failover canary: its answer is never read</span>`);
     if (r.policy) chips.push(`<span class="chip">policy ${esc(r.policy)}</span>`);
     if (r.truncated) chips.push(`<span class="chip warn">answer cut off</span>`);
@@ -158,6 +160,7 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
         ${guard ? `<div><span class="k">Guardrail </span>${guard}</div>` : ""}
         ${r.finish_reason ? `<div><span class="k">Stopped </span>${esc(r.finish_reason)}</div>` : ""}
         ${tools ? `<div><span class="k">Tool </span>${tools}</div>` : ""}
+        ${own ? `<div><span class="k">Role fallback </span>${esc(own.line.replace(/^Role fallback: /, ""))} <span class="mut">(the app's own chain of models for this role, not Otari's provider failover)</span></div>` : ""}
         ${r.route_rule ? `<div><span class="k">Model sent </span>${esc(r.sent_model)} <span class="mut">(${r.route_rule.hard ? "chosen by the routing rule for a hard case" : "the standard judge"}: ${esc(r.route_rule.reason)})</span></div>` : ""}
       </div>
       ${f ? `<div class="remedy"><b>${esc(f.what)}</b><br>${esc(f.fix)}${f.retryAfter ? `<br><span class="mut">Retry after ${esc(f.retryAfter)} s.</span>` : ""}${f.scope ? `<br><span class="mut">Budget that refused: ${esc(f.scope)}.</span>` : ""}</div>` : ""}

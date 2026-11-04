@@ -46,6 +46,30 @@
 
   const era = (ledger) => ledger.filter((d) => d && d.llm && d.llm.otari && typeof d.llm.otari === "object");
   const failed = (r) => !!(r.refusal || r.error);
+
+  /* What a receipt says about the app's own role fallback chain (`role_fallback`), or null when the first model it asked for served the call.
+   * It is the app moving to the next catalog id of a role, not Otari's provider failover (`fallback`, `attempt_count`); verdict_desk/otari_report.py
+   * `role_fallback_of` writes the same line. */
+  function roleFallbackOf(r) {
+    const note = r && r.role_fallback;
+    if (!note || typeof note !== "object" || !Array.isArray(note.skipped)) return null;
+    const skipped = note.skipped.filter((x) => x && typeof x === "object");
+    if (!skipped.length) return null;
+    const total = Array.isArray(note.chain) ? note.chain.length : 0;
+    const why = skipped.map((x) => `${x.model} (${x.reason}${x.status ? ", HTTP " + x.status : ""})`).join(", ");
+    let kind, line;
+    if (note.answered) {
+      kind = "answered";
+      line = `Role fallback: answered by ${note.answered}, entry ${skipped.length + 1} of ${total || "?"}, after skipping ${why}`;
+    } else if (note.exhausted) {
+      kind = "exhausted";
+      line = `Role fallback: all ${total || "?"} models of the chain failed; skipped ${why}`;
+    } else {
+      kind = "stopped";
+      line = `Role fallback: stopped after skipping ${why}; ${note.stopped_by} does not move to another model`;
+    }
+    return { kind, skipped: skipped.length, total, answered: note.answered || null, stoppedBy: note.stopped_by || null, line };
+  }
   const rid = (r) => (r.request_id_source === "otari" ? r.request_id : null);
 
   function callsOf(d) {
@@ -225,5 +249,5 @@
     };
   }
 
-  return { REMEDY, failureOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures, closureLine, driftLine };
+  return { REMEDY, failureOf, roleFallbackOf, era, callsOf, layout, groups, board, whoSaw, percentile, microsOf, microsText, roleClass, stripHtml, figures, closureLine, driftLine };
 });

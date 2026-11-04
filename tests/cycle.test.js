@@ -96,3 +96,25 @@ test("the drift fetch is one of the calls of a dossier, right after the page fet
   assert.match(C.closureLine({ closure: "garbage" }), /not applied/, "a field of the wrong shape is read as absent, never thrown on");
   assert.match(C.driftLine({ drift: 5 }), /not checked/);
 });
+
+test("a receipt that went down the app's own role chain says so, apart from Otari's provider failover", () => {
+  assert.equal(C.roleFallbackOf(rec("bull", "1")), null);
+  assert.equal(C.roleFallbackOf(rec("bull", "1", { role_fallback: { chain: ["a", "b"], skipped: [], answered: "a", answered_index: 0 } })), null);
+  const skipped = [{ model: "a", reason: "pricing_required", status: 402, code: "pricing_required", request_id: "r1", request_id_source: "otari" }];
+  const answered = C.roleFallbackOf(rec("bull", "1", { fallback: false, role_fallback: { chain: ["a", "b", "c"], skipped, answered: "b", answered_index: 1 } }));
+  assert.deepEqual([answered.kind, answered.skipped, answered.total, answered.answered], ["answered", 1, 3, "b"]);
+  assert.equal(answered.line, "Role fallback: answered by b, entry 2 of 3, after skipping a (pricing_required, HTTP 402)");
+  const exhausted = C.roleFallbackOf(rec("bull", "1", { role_fallback: { chain: ["a", "b"], skipped, answered: null, answered_index: null, exhausted: true } }));
+  assert.equal(exhausted.kind, "exhausted");
+  assert.match(exhausted.line, /all 2 models of the chain failed/);
+  const stopped = C.roleFallbackOf(rec("bull", "1", { role_fallback: { chain: ["a", "b"], skipped, answered: null, answered_index: null, stopped_by: "budget_exceeded" } }));
+  assert.deepEqual([stopped.kind, stopped.stoppedBy], ["stopped", "budget_exceeded"]);
+  assert.ok(!/—/.test(answered.line + exhausted.line + stopped.line), "no em dash");
+});
+
+test("a call served by a role fallback still counts in the model table under the model that answered it", () => {
+  const skipped = [{ model: "a", reason: "pricing_required", status: 402 }];
+  const led = [{ seq: 1, llm: { otari: {}, bull: { accepted: [1], receipt: rec("bull", "b", { sent_model: "b", role_fallback: { chain: ["a", "b"], skipped, answered: "b", answered_index: 1 } }) } }, evidence: {} }];
+  const rows = C.board(led);
+  assert.deepEqual([rows[0].model, rows[0].calls, rows[0].ok, rows[0].fallbacks], ["deepinfra:s-bull", 1, 1, 0], "Otari's own failover counter is not touched by the app's chain");
+});
