@@ -146,18 +146,26 @@ class AuditBudgetRowsTest(unittest.TestCase):
         from verdict_desk import otari_report
         return {r["n"]: r for r in otari_report.audit(ledger, [])}
 
+    @staticmethod
+    def newest_good_read_before_the_last(ledger):
+        """The seq the budget row must cite once the newest dossier is broken: the newest earlier Otari-era dossier whose router really read the
+        judge's spend. It is not simply ledger[-2]: a degraded real cycle (the gateway refused the analysts) may sit there."""
+        from verdict_desk import otari_report
+        return next(d["seq"] for d in reversed(otari_report.era(ledger[:-1]))
+                    if ((d["llm"].get("judge") or {}).get("route_rule") or {}).get("gates", {}).get("headroom") and otari_report._judge_read(d))
+
     def test_a_newest_dossier_whose_judge_read_failed_is_not_cited_for_the_budget(self):
         ledger = self.ledger()
         self.break_judge(ledger[-1], "error")
         rows = self.rows(ledger)
-        self.assertEqual(rows[3]["dossier"], ledger[-2]["seq"])
+        self.assertEqual(rows[3]["dossier"], self.newest_good_read_before_the_last(ledger))
         self.assertNotIn("None", rows[3]["note"])
         self.assertRegex(rows[3]["note"], r"USD 0\.\d+ of USD 0\.10")
 
     def test_an_absent_judge_is_not_a_read_of_its_spend_either(self):
         ledger = self.ledger()
         self.break_judge(ledger[-1], "absent")
-        self.assertEqual(self.rows(ledger)[3]["dossier"], ledger[-2]["seq"])
+        self.assertEqual(self.rows(ledger)[3]["dossier"], self.newest_good_read_before_the_last(ledger))
 
     def test_row_four_prints_found_out_of_asked_and_prefers_the_newest_complete_read(self):
         from verdict_desk import otari_report
