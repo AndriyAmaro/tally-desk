@@ -66,15 +66,8 @@ test("when the ledger is not served the page says so and offers the file button"
 // outcome, so the newest dossier alone cannot be assumed to be complete (the ledger grows every hour).
 const NINE = ["bull", "bear", "judge", "checker", "narrator", "searcher", "fetcher", "sandbox", "mcp"];
 function rolesOf(d) {
-  const seen = new Set();
-  (function walk(o) {
-    if (Array.isArray(o)) o.forEach(walk);
-    else if (o && typeof o === "object") {
-      if (o.schema === "otari-receipt/1" && o.role && !o.refusal) seen.add(o.role);
-      Object.values(o).forEach(walk);
-    }
-  })(d);
-  return seen;
+  // the labels the page itself counts: a drift re-fetch carries the role "fetcher" but is labeled "drift", so it is not the page fetch
+  return new Set(require("../web/cycle.js").callsOf(d).map((c) => c.label));
 }
 
 function clone(seq, edit) {
