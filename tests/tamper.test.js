@@ -44,7 +44,9 @@ test("cost: the costliest receipt is made to look cheaper, and the path names wh
   const r = T.apply(dossier, "cost");
   assert.match(r.change.path, /receipt\.cost_usd$|receipts\[\d+\]\.cost_usd$/);
   assert.ok(Number(r.change.after) < Number(r.change.before));
-  assert.equal(Number(r.change.before), 0.010233);  // the sandbox receipt is the costliest of dossier 814 and the newest ledger line is that dossier
+  const all = [];
+  JSON.stringify(dossier, (k, v) => { if (v && v.schema === "otari-receipt/1" && v.cost_usd != null) all.push(Number(v.cost_usd)); return v; });
+  assert.equal(Number(r.change.before), Math.max(...all), "the costliest receipt of the dossier is the one rewritten");
 });
 
 test("cost: a call that cost nothing is made to look like it cost a cent, and a string stays a string", () => {
@@ -75,8 +77,11 @@ test("sentence: the last sentence of a multi-sentence claim goes, the whole clai
   assert.equal(r.change.path, "bull[0].claim");
   assert.equal(r.copy.bull[0].claim, "Trend is up. Volume agrees.");
   assert.equal(r.change.removed, "Funding is neutral.");
-  const single = T.apply(dossier, "sentence");
+  const one = JSON.parse(JSON.stringify(multi));
+  one.bull = [{ claim: "Trend is up", weight: 1 }, { claim: "Volume agrees with the move", weight: 1 }];
+  const single = T.apply(one, "sentence");
   assert.equal(single.change.op, "delete");
+  assert.equal(single.change.path, "bull[1].claim", "the longest claim is the one deleted");
   assert.match(single.change.path, /claim$/);
   assert.equal(getAt(single.copy, single.change.path), undefined);
 });
