@@ -62,9 +62,26 @@ test("when the ledger is not served the page says so and offers the file button"
 });
 
 // The newest real dossier changes with every live cycle, so these tests clone it and set the facts they assert, instead of trusting its contents.
+// The base of the fixtures is the newest dossier in which all nine roles answered: a cycle that skipped a tool role is a real
+// outcome, so the newest dossier alone cannot be assumed to be complete (the ledger grows every hour).
+const NINE = ["bull", "bear", "judge", "checker", "narrator", "searcher", "fetcher", "sandbox", "mcp"];
+function rolesOf(d) {
+  const seen = new Set();
+  (function walk(o) {
+    if (Array.isArray(o)) o.forEach(walk);
+    else if (o && typeof o === "object") {
+      if (o.schema === "otari-receipt/1" && o.role && !o.refusal) seen.add(o.role);
+      Object.values(o).forEach(walk);
+    }
+  })(d);
+  return seen;
+}
+
 function clone(seq, edit) {
   const rows = ledger.trim().split("\n").map(JSON.parse);
-  const d = JSON.parse(JSON.stringify(rows[rows.length - 1]));
+  const complete = rows.filter((r) => r.llm && r.llm.otari && NINE.every((x) => rolesOf(r).has(x)));
+  const base = complete.length ? complete[complete.length - 1] : rows[rows.length - 1];
+  const d = JSON.parse(JSON.stringify(base));
   d.seq = seq;
   (function walk(o) {
     if (Array.isArray(o)) o.forEach(walk);
