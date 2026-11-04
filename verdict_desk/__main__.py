@@ -1,7 +1,6 @@
-"""CLI: python -m verdict_desk decide|replay|verify."""
+"""CLI: python -m verdict_desk decide-v7|replay|verify|otari-audit and the other chain tools (python -m verdict_desk --help)."""
 
 import argparse
-import hashlib
 import json
 import os
 import sys
@@ -9,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import voices as voices_config
-from . import anchor, backtest, battery, cadence, closure, dossier, evidence, journal, learning, livestats, llm, narrative, portfolio, research, scoreboard, trust
+from . import battery, closure, dossier, evidence, livestats, llm, narrative, portfolio, trust
 
 DEFAULT_LEDGER = Path("ledger/ledger.jsonl")
 
@@ -50,44 +49,11 @@ def publish_head(ledger_path: Path) -> None:
 
 
 def write_head_dossier(folder: Path, ledger: list[dict]) -> None:
-    """The whole last dossier, next to head.json: the CRE workflow re-derives its verdict before it anchors.
+    """The whole last dossier, next to head.json (ask.html reads it).
 
-    head.json carries only seq, hash and symbol; the workflow fetches this file from the two publications,
-    checks that it hashes to that head, and replays the verdict from its frozen evidence.
+    head.json carries only seq, hash and symbol; this file lets a reader check that the dossier hashes to that head and replay its verdict from the frozen evidence.
     """
     (folder / "head-dossier.json").write_text(json.dumps(ledger[-1], ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
-
-
-def cmd_decide(opts) -> int:
-    if not may_append(opts.ledger):
-        return 2
-    llm.reset_cycle()
-    feeds = dict(narrative.DEFAULT_FEEDS) if opts.default_feeds else {}
-    for spec in opts.feed or []:
-        name, _, url = spec.partition("=")
-        feeds[name] = url
-    block = None
-    if feeds:
-        # As vozes valem para todos os simbolos: busca e extracao rodam uma vez por execucao.
-        voices = narrative.collect(feeds, log=lambda m: print(m, file=sys.stderr))
-        ask = (lambda system, user: llm.chat(system, user, timeout=narrative.LLM_TIMEOUT, max_tokens=narrative.max_tokens(), role="narrator")) if llm.available() else None
-        block = narrative.build(voices, ask, llm.model_name() if ask else "")
-        print(f"narrative ({block['method']}): {len(voices)} headlines from {len({v['name'] for v in voices})} voices, {len(block['convergence'])} convergences")
-    recorded = 0
-    for symbol in opts.symbols:
-        try:
-            packet = evidence.collect(symbol, opts.interval, with_news=not opts.no_news)
-        except (OSError, ValueError, KeyError) as err:
-            # Lacuna real: nada e gravado e o erro aparece, o historico nao finge uma decisao.
-            print(f"{symbol}: no evidence collected, nothing recorded ({err})", file=sys.stderr)
-            continue
-        if block is not None:
-            packet["narrative"] = block
-        recorded += 1
-        print_record(dossier.append(packet, opts.ledger))
-    if recorded and opts.ledger == DEFAULT_LEDGER:
-        publish_head(opts.ledger)
-    return 0 if recorded else 1
 
 
 def _rules_from_opts(opts, rules_version: str):
@@ -155,8 +121,6 @@ def _decide_flow(opts, rules_version: str) -> int:
         from . import otari_mcp
         market_mcp = otari_mcp.collect()
         print(f"MCP via Otari ({market_mcp['server']}): prices {market_mcp.get('prices')}, code trusted {market_mcp.get('trusted')}" + (f" ({market_mcp['error'][:80]})" if market_mcp.get("error") else ""))
-    from . import practice
-    execute = practice.chain_executor()  # practice trades on Sepolia when the key is present; otherwise simulated as before
     recorded = refused = 0
     gate = llm.otari_active()  # the closure gate guards every dossier of an Otari run
     for symbol in opts.symbols:
@@ -174,7 +138,7 @@ def _decide_flow(opts, rules_version: str) -> int:
             check = otari_mcp.apply(packet, market_mcp, float(llm.otari_config().get("market_check_limit_pct", otari_mcp.LIMIT_PCT)))
             print(f"{symbol}: MCP price check {check['status']}" + (f" ({check['diff_pct']}% from the exchange close, limit {check['limit_pct']}%)" if "diff_pct" in check else f" ({check.get('reason')})"))
         try:
-            record = dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, execute=execute, drift=drift, gate=gate)
+            record = dossier.append(packet, opts.ledger, rules_version=rules_version, rules=rules, drift=drift, gate=gate)
         except closure.ClosureRefused as err:
             refused += 1
             _log_refusal(opts.ledger, err)
@@ -191,22 +155,6 @@ def _log_refusal(ledger_path: Path, err) -> None:
     record = closure.refusal_record(err, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
     closure.log_refusal(ledger_path, record)
     print(f"closure gate REFUSED {record['symbol']} (it would have been dossier {record['seq_not_used']}), nothing appended: {err}; cycle cost USD {record['usd']}", file=sys.stderr)
-
-
-def cmd_decide_v2(opts) -> int:
-    return _decide_flow(opts, "v2")
-
-
-def cmd_decide_v4(opts) -> int:
-    return _decide_flow(opts, "v4")
-
-
-def cmd_decide_v5(opts) -> int:
-    return _decide_flow(opts, "v5")
-
-
-def cmd_decide_v6(opts) -> int:
-    return _decide_flow(opts, "v6")
 
 
 def cmd_decide_v7(opts) -> int:
@@ -294,14 +242,14 @@ def cmd_battery(opts) -> int:
 
 
 def cmd_witnesses(opts) -> int:
-    """Write the index the witnesses page reads: the stamped heads, their proofs, the anchor contract."""
+    """Write the index the witnesses page reads: the stamped heads, their proofs and the signed heads."""
     stamps = Path(opts.stamps) if opts.stamps else opts.ledger.parent / "timestamps"
     rekor = Path(opts.rekor) if opts.rekor else opts.ledger.parent / "rekor"
-    index = battery.witness_index(stamps, Path(opts.deployment), rekor=rekor)
+    index = battery.witness_index(stamps, rekor=rekor)
     if opts.out:
         Path(opts.out).write_text(json.dumps(index, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         print(f"wrote {opts.out}")
-    print(f"{len(index['heads'])} stamped heads, {len(index['rekor'])} signed in the Sigstore log" + (f", anchor contract {index['anchor']['address']}" if index["anchor"] else ", no anchor contract on file"))
+    print(f"{len(index['heads'])} stamped heads, {len(index['rekor'])} signed in the Sigstore log")
     return 0
 
 
@@ -323,10 +271,6 @@ def cmd_trust_check(opts) -> int:
         print(problem, file=sys.stderr)
     print(f"trust tables: {frozen} frozen, {len(problems)} that the earlier ledger does not support")
     return 1 if problems else 0
-
-
-def cmd_decide_v3(opts) -> int:
-    return _decide_flow(opts, "v3")
 
 
 def print_record(record: dict) -> None:
@@ -404,27 +348,6 @@ def print_record(record: dict) -> None:
         print("  LLM analysts off (no OTARI_API_KEY): deterministic core only")
 
 
-def cmd_scorecard(opts) -> int:
-    """Score the decisions against what the market did next, from the ledger alone."""
-    from . import scorecard
-    ledger = dossier.read_ledger(opts.ledger)
-    if not ledger:
-        print(f"no ledger at {opts.ledger}", file=sys.stderr)
-        return 1
-    result = scorecard.compute(ledger)
-    summary = portfolio.summarize(ledger)
-    if opts.out:
-        Path(opts.out).write_text(scorecard.render(result, summary), encoding="utf-8")
-        print(f"wrote {opts.out}")
-        return 0
-    if opts.markdown:
-        print(scorecard.render_markdown(result))
-        return 0
-    print(scorecard.render_markdown(result))
-    print(f"\nrecords by state: {result['counts']}")
-    return 0
-
-
 def cmd_replay(opts) -> int:
     ledger = dossier.read_ledger(opts.ledger)
     targets = [d for d in ledger if opts.seq is None or d["seq"] == opts.seq]
@@ -447,22 +370,6 @@ def cmd_verify(opts) -> int:
         print("\n".join(problems))
         return 1
     print(f"Chain intact: {len(ledger)} dossiers, head {ledger[-1]['hash'][:16] if ledger else '(empty)'}")
-    return 0
-
-
-def cmd_head(opts) -> int:
-    ledger = dossier.read_ledger(opts.ledger)
-    try:
-        head = dossier.head(ledger)
-    except ValueError as err:
-        print(err, file=sys.stderr)
-        return 1
-    text = json.dumps(head, separators=(",", ":"))
-    if opts.out:
-        opts.out.parent.mkdir(parents=True, exist_ok=True)
-        opts.out.write_text(text + "\n", encoding="utf-8")
-        write_head_dossier(opts.out.parent, ledger)
-    print(text)
     return 0
 
 
@@ -552,71 +459,6 @@ def cmd_packs(opts) -> int:
     return 0
 
 
-def cmd_monitor(opts) -> int:
-    from . import anchor as anchor_mod
-
-    ledger = dossier.read_ledger(opts.ledger)
-    try:
-        result = anchor_mod.monitor(ledger, rpc_url=opts.rpc, address=opts.address, seq=opts.seq)
-    except Exception as err:  # rede fora do ar nao deve ser confundido com adulteracao
-        print(f"could not read the anchor: {err}", file=sys.stderr)
-        return 2
-    d = result["price_decimals"] if result.get("price_decimals") is not None else 0
-    price = result["price"] / (10 ** d) if result.get("price") is not None else None
-    print(f"anchor on chain : seq {result['anchored_seq']}  {result['anchored_hash']}")
-    if result.get("anchored_at"):
-        import datetime as _dt
-        when = _dt.datetime.fromtimestamp(result["anchored_at"], tz=_dt.timezone.utc).isoformat(timespec="seconds")
-        print(f"                  anchored at {when}" + (f", BTC/USD {price:,.2f}" if price else ""))
-    print(f"published ledger: seq {result['published_seq']}  {result['published_hash']}")
-    if result.get("ledger_head_seq") is not None:
-        print(f"                  ledger has {result.get('ledger_length')} dossiers, head at seq {result['ledger_head_seq']}")
-    if result["matches"]:
-        print("RESULT: MATCH — the anchored dossier still has the hash that was anchored")
-        return 0
-    print("RESULT: MISMATCH — the published history no longer matches what the chain anchored")
-    for p in result["problems"]:
-        print(f"  - {p}")
-    return 1
-
-
-def _count_tests() -> int:
-    import unittest
-    return unittest.defaultTestLoader.discover(str(Path(__file__).resolve().parent.parent / "tests")).countTestCases()
-
-
-def cmd_scoreboard(opts) -> int:
-    """Print (or save) the scoreboard block for the build page, or check a saved one against the ledger."""
-    ledger = dossier.read_ledger(opts.ledger)
-    if not ledger:
-        print("The ledger is empty; nothing to count.", file=sys.stderr)
-        return 1
-    root = Path(opts.ledger).resolve().parent.parent
-    tests = opts.tests if opts.tests is not None else _count_tests()
-    if opts.check:
-        problems = scoreboard.check(Path(opts.check).read_text(encoding="utf-8"), ledger, root, tests)
-        for problem in problems:
-            print(problem, file=sys.stderr)
-        print(f"scoreboard {opts.check}: " + ("every figure reproduced from the ledger" if not problems else f"{len(problems)} figure line(s) differ"))
-        return 1 if problems else 0
-    seq = opts.seq or ledger[-1]["seq"]
-    text = scoreboard.render(scoreboard.compute(ledger, seq, root, tests))
-    if opts.out:
-        Path(opts.out).write_text(text, encoding="utf-8")
-        print(f"wrote {opts.out} (as of dossier {seq})")
-    else:
-        print(text, end="")
-    return 0
-
-
-def cmd_due(opts) -> int:
-    """Print `run=true` or `run=false` for a workflow to append to its outputs; never fails the job."""
-    now = datetime.now(timezone.utc)
-    ledger = dossier.read_ledger(opts.ledger) if Path(opts.ledger).exists() else []
-    print(f"run={'true' if cadence.due(ledger, now, opts.min_minutes) else 'false'}")
-    return 0
-
-
 def cmd_stats(opts) -> int:
     ledger = dossier.read_ledger(opts.ledger)
     if not ledger:
@@ -643,149 +485,10 @@ def cmd_portfolio(opts) -> int:
     return 0
 
 
-def cmd_backtest(opts) -> int:
-    candles = backtest.fetch_history(opts.symbol, opts.interval, opts.candles)
-    if len(candles) < backtest.WINDOW + opts.max_hold:
-        print("Not enough history.", file=sys.stderr)
-        return 1
-    rep = backtest.report(opts.symbol, opts.interval, candles, max_hold=opts.max_hold, fee_pct=opts.fee_pct)
-    s = rep["summary"]
-    print(f"{rep['label']}: {rep['symbol']} {rep['interval']}, {rep['data']['candles']} candles, data sha256 {rep['data']['sha256'][:16]}")
-    print(f"Trades {s['trades']} (long {s['longs']}, short {s['shorts']}), exits {s['by_exit']}, win rate {s['win_rate_pct']}%, profit factor {s['profit_factor']}")
-    print(f"Net {s['net_pnl']} ({s['return_pct']}% of {s['start_capital']}), fees {s['fees_paid']}, max drawdown {s['max_drawdown_pct']}%, buy and hold {s['buy_and_hold_pct']}%")
-    for seg in rep["segments"]:
-        print(f"  part {seg['part']}: {seg['trades']} trades, net {seg['net_pnl']}")
-    if opts.out:
-        opts.out.parent.mkdir(parents=True, exist_ok=True)
-        opts.out.write_text(json.dumps(rep, indent=1) + "\n", encoding="utf-8")
-        print(f"Saved {opts.out}")
-    return 0
-
-
-def cmd_research(opts) -> int:
-    studies = []
-    for symbol in opts.symbols:
-        candles = backtest.fetch_history(symbol, opts.interval, opts.candles)
-        if len(candles) < backtest.WINDOW + backtest.MAX_HOLD * 4:
-            print(f"{symbol}: not enough history.", file=sys.stderr)
-            continue
-        studies.append(research.study(symbol, candles, fee_pct=opts.fee_pct))
-    if not studies:
-        return 1
-    print(research.LABEL)
-    for s in studies:
-        v1, v2 = s["v1_test"], s["v2"]
-        print(f"{s['symbol']}: data sha256 {s['data']['sha256'][:16]}, train {s['data']['train_candles']} candles, test {s['data']['test_candles']} candles")
-        print(f"  v1 on test : {v1['trades']} trades, net {v1['net_pnl']} ({v1['return_pct']}%), profit factor {v1['profit_factor']}, buy and hold {v1['buy_and_hold_pct']}%")
-        if v2:
-            print(f"  v2 chosen on train {v2['chosen']} (train net {v2['train']['net_pnl']}, {v2['train_configs_with_positive_net']} of {v2['configs_scored']} configs positive on train)")
-            print(f"  v2 on test : {v2['test']['trades']} trades, net {v2['test']['net_pnl']} ({v2['test']['return_pct']}%), profit factor {v2['test']['profit_factor']}; beats v1: {v2['test_beats_v1']}")
-    summary = research.verdict(studies)
-    print(f"Verdict: v2 beats v1 out of sample on {summary['v2_beats_v1_out_of_sample']}, net positive on {summary['v2_net_positive_out_of_sample']}. {summary['reading']}")
-    if opts.out:
-        opts.out.parent.mkdir(parents=True, exist_ok=True)
-        opts.out.write_text(json.dumps({"label": research.LABEL, "verdict": summary, "studies": studies}, indent=1) + "\n", encoding="utf-8")
-        print(f"Saved {opts.out}")
-    return 0
-
-
-def cmd_audit_journal(opts) -> int:
-    rows = journal.read_journal(opts.journal)
-    print(f"{journal.LABEL}\nJournal: {len(rows)} turns, sha256 of the file lines kept per turn")
-    result = journal.audit(rows, pause=0.2)
-    outcomes = journal.mark_outcomes(result)
-    summary = journal.summarize(result, outcomes)
-    c = summary["journal_check"]
-    print(f"Check against public Binance spot data (the journal reads futures, so volume is not compared): {c['closed_within_basis']} of {c['candles_closed']} closed candles agree within 0.3% ({c['closed_within_basis_pct']}%), "
-          f"{c['candles_recorded'] - c['candles_closed']} candles were still forming and are not counted; "
-          f"price inside the candle range on {c['prices_plausible']} of {c['prices_checked']} turns")
-    print(f"Shadow decisions: {summary['shadow_decisions']} (one per symbol, hour and decision type), desk actions {summary['desk_actions']}")
-    print(f"Automaton / desk: {summary['automaton_vs_desk']}")
-    print(f"Hypothetical positions closed: {summary['hypothetical_closed']}, net {summary['hypothetical_net']} (past data, not a trade result); skipped turns {summary['skipped']}")
-    if opts.out:
-        opts.out.parent.mkdir(parents=True, exist_ok=True)
-        opts.out.write_text(json.dumps({"summary": summary, "outcomes": outcomes, "skipped": result["skipped"]}, indent=1) + "\n", encoding="utf-8")
-        print(f"Saved {opts.out}")
-    if opts.shadow_ledger:
-        opts.shadow_ledger.parent.mkdir(parents=True, exist_ok=True)
-        opts.shadow_ledger.write_text("".join(json.dumps(d, ensure_ascii=False) + "\n" for d in result["ledger"]), encoding="utf-8")
-        print(f"Saved shadow ledger {opts.shadow_ledger} (chain intact: {not dossier.verify(result['ledger'])})")
-    return 0
-
-
-def cmd_learn(opts) -> int:
-    """Analyze past decisions and outcomes to learn adaptive weights."""
-    if opts.reset:
-        learning.LEARNING_FILE = learning.LEARNING_FILE  # ensure Path
-        if learning.LEARNING_FILE.exists():
-            learning.LEARNING_FILE.unlink()
-            print(f"Removed {learning.LEARNING_FILE}")
-        return 0
-    if opts.apply:
-        result = learning.apply_learned_weights()
-        if result:
-            print(f"Learned {len(result.get('adaptive_weights', {}))} weight adjustments")
-        return 0
-    learning.print_learning_report(opts.ledger)
-    return 0
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(prog="verdict_desk")
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("decide", help="collect evidence, debate, record a simulated decision")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.set_defaults(func=cmd_decide)
-    p = sub.add_parser("decide-v2", help="decide with agents_v2 + features_v2 (RSI, MACD, Bollinger)")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
-    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
-    p.set_defaults(func=cmd_decide_v2)
-    p = sub.add_parser("decide-v3", help="decide with rules v3: same sizing as v2, but a declined entry says why (WATCH_REVERSAL / REDUCE_EXPOSURE)")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
-    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
-    p.set_defaults(func=cmd_decide_v3)
-    p = sub.add_parser("decide-v4", help="decide with rules v4: v3 + a multi-KOL convergence becomes a deterministic signal")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
-    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
-    p.set_defaults(func=cmd_decide_v4)
-    p = sub.add_parser("decide-v5", help="decide with rules v5: v4 + each convergence voice weighted by its measured skill above chance")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
-    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
-    p.set_defaults(func=cmd_decide_v5)
-    p = sub.add_parser("decide-v6", help="decide with rules v6: v5 + an LLM judge that counts only on claims that passed the citation validator, capped below the entry band")
-    p.add_argument("symbols", nargs="+", metavar="SYMBOL")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--no-news", action="store_true")
-    p.add_argument("--feed", action="append", metavar="NAME=URL", help="public RSS or Atom voice for the narrative agent (repeatable, up to 20)")
-    p.add_argument("--default-feeds", action="store_true", help="also read the built-in public crypto news voices")
-    p.add_argument("--risk-pct", type=float, metavar="PCT", help="risk per practice position as %% of simulated capital (max 25, default 1)")
-    p.add_argument("--config", metavar="PATH", help="voices and risk limit chosen by the user (JSON, see config/voices.json); its hash is recorded in every dossier")
-    p.set_defaults(func=cmd_decide_v6)
     p = sub.add_parser("decide-v7", help="decide with rules v7: v6 + the citation checker has a consequence: a judge ruling that relies on a claim the checker marked unsupported carries no weight")
     p.add_argument("symbols", nargs="+", metavar="SYMBOL")
     p.add_argument("--interval", default="1h")
@@ -807,9 +510,8 @@ def main() -> int:
     p = sub.add_parser("market", help="every candle the ledger froze, per symbol, as JSON (read by ask.html)")
     p.add_argument("--out", metavar="FILE", required=True)
     p.set_defaults(func=cmd_market)
-    p = sub.add_parser("witnesses", help="write the index of timestamped heads and the anchor contract that the witnesses page reads")
+    p = sub.add_parser("witnesses", help="write the index of timestamped and signed heads that the witnesses page reads")
     p.add_argument("--stamps", metavar="DIR", help="directory with the timestamped heads (default: <ledger dir>/timestamps)")
-    p.add_argument("--deployment", default="cre/deployment.sepolia.json", metavar="FILE", help="the anchor deployment record")
     p.add_argument("--rekor", metavar="DIR", help="directory with the Sigstore bundles (default: <ledger dir>/rekor)")
     p.add_argument("--out", metavar="FILE", help="write the index as JSON")
     p.set_defaults(func=cmd_witnesses)
@@ -826,15 +528,6 @@ def main() -> int:
     p.add_argument("--recent", type=int, default=24, metavar="N", help="how many of the newest dossiers (default 24)")
     p.add_argument("--outdir", required=True, metavar="DIR", help="where to write <seq>.json")
     p.set_defaults(func=cmd_packs)
-    p = sub.add_parser("scorecard", help="score the decisions against later prices, from the ledger alone")
-    p.add_argument("--out", metavar="FILE", help="write the HTML scorecard to FILE")
-    p.add_argument("--markdown", action="store_true", help="print a markdown table instead of the HTML page")
-    p.set_defaults(func=cmd_scorecard)
-    p = sub.add_parser("monitor", help="compare the ledger against the head anchored on Sepolia (read-only)")
-    p.add_argument("--rpc", default="https://ethereum-sepolia-rpc.publicnode.com")
-    p.add_argument("--address", default="0x50443D51Db71A61E131B147B1d36aF21d48CDdF7")
-    p.add_argument("--seq", type=int, help="check a specific anchored sequence instead of the latest")
-    p.set_defaults(func=cmd_monitor)
     p = sub.add_parser("otari-drill", help="real Otari requests that prove a routing fallback and a budget refusal; receipts go to an evidence file, not to the ledger")
     p.add_argument("which", choices=["fallback", "budget", "mcp", "users", "all"])
     p.add_argument("--evidence", type=Path, default=None, help="evidence file to append to (default docs/evidence/otari-drills.jsonl)")
@@ -846,18 +539,6 @@ def main() -> int:
     p.set_defaults(func=cmd_otari_audit)
     p = sub.add_parser("verify", help="check the hash chain")
     p.set_defaults(func=cmd_verify)
-    p = sub.add_parser("head", help="print the verified head of the chain as JSON, for the CRE anchor workflow")
-    p.add_argument("--out", type=Path, help="also write the JSON to this file (published next to the ledger)")
-    p.set_defaults(func=cmd_head)
-    p = sub.add_parser("scoreboard", help="the exact-numbers block for the build page, counted from the raw ledger; --check recomputes a saved block and fails on any difference")
-    p.add_argument("--seq", type=int, metavar="N", help="count as of dossier N (default: the head)")
-    p.add_argument("--out", metavar="FILE", help="write the block to FILE")
-    p.add_argument("--check", metavar="FILE", help="recompute the block FILE cites and fail if any figure differs")
-    p.add_argument("--tests", type=int, metavar="N", help="the number of tests (default: counted by discovering the suite)")
-    p.set_defaults(func=cmd_scoreboard)
-    p = sub.add_parser("due", help="print run=true when the last decision is old enough for a new one (the workflow is triggered several times an hour)")
-    p.add_argument("--min-minutes", type=float, default=50, metavar="N", help="minimum minutes since the newest dossier (default 50)")
-    p.set_defaults(func=cmd_due)
     p = sub.add_parser("stats", help="live-operation numbers counted from the verified ledger: dossiers, window, cadence, citation validator results")
     p.add_argument("--first-llm-seq", type=int, default=livestats.FIRST_LLM_SEQ, help="first dossier of the LLM era (default %(default)s)")
     p.add_argument("--last-llm-seq", type=int, default=None, help="last dossier of the range to count (default: the head)")
@@ -866,30 +547,6 @@ def main() -> int:
     p.set_defaults(func=cmd_stats)
     p = sub.add_parser("portfolio", help="mark simulated positions against later candles")
     p.set_defaults(func=cmd_portfolio)
-    p = sub.add_parser("backtest", help="walk-forward test on past candles (separate from the live ledger)")
-    p.add_argument("symbol")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--candles", type=int, default=4000)
-    p.add_argument("--max-hold", type=int, default=backtest.MAX_HOLD)
-    p.add_argument("--fee-pct", type=float, default=backtest.FEE_PCT_PER_SIDE, help="taker fee per side, in percent")
-    p.add_argument("--out", type=Path)
-    p.set_defaults(func=cmd_backtest)
-    p = sub.add_parser("research", help="v2 rule search with a time split: choose on train, judge on test (separate from the live ledger)")
-    p.add_argument("symbols", nargs="+")
-    p.add_argument("--interval", default="1h")
-    p.add_argument("--candles", type=int, default=4000)
-    p.add_argument("--fee-pct", type=float, default=backtest.FEE_PCT_PER_SIDE)
-    p.add_argument("--out", type=Path)
-    p.set_defaults(func=cmd_research)
-    p = sub.add_parser("audit-journal", help="check a third-party agent journal against public data and replay it in shadow")
-    p.add_argument("journal", type=Path)
-    p.add_argument("--out", type=Path, help="summary and per-turn outcomes (no free-text reasoning)")
-    p.add_argument("--shadow-ledger", type=Path, help="write the shadow dossiers as a separate hash chain")
-    p.set_defaults(func=cmd_audit_journal)
-    p = sub.add_parser("learn", help="analyze past outcomes and show adaptive weight adjustments")
-    p.add_argument("--apply", action="store_true", help="save learned weights for v2 agent")
-    p.add_argument("--reset", action="store_true", help="reset learned weights")
-    p.set_defaults(func=cmd_learn)
     opts = parser.parse_args()
     return opts.func(opts)
 

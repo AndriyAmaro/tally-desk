@@ -177,10 +177,9 @@ def _rules_for(m: dict, dossier_or_rules=None, rules_version: str = "v1"):
 
 
 def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True, rules_version: str = "v1", rules=None,
-          execute=None, closed: list | None = None, drift: dict | None = None, frozen: str | None = None, closer=None) -> dict:
+          drift: dict | None = None, frozen: str | None = None) -> dict:
     """The sealed dossier of one packet. `frozen` (the digest of the evidence when collection ended) switches the closure gate on: it
-    runs after the cycle's calls and BEFORE anything leaves the process on chain, and raises closure.ClosureRefused when a hard check
-    fails. `closer` makes the closes of earlier positions after the gate, for the same reason."""
+    runs after the cycle's calls and before the dossier is hashed, and raises closure.ClosureRefused when a hard check fails."""
     m = _mods(rules_version)
     feats = m["features"].compute(packet)
     narrative = packet.get("narrative")
@@ -210,28 +209,16 @@ def build(packet: dict, prev_hash: str, seq: int, ask=None, use_llm: bool = True
     if frozen is not None:
         from . import closure
         body["closure"] = closure.seal(body, frozen)
-    if closer is not None:
-        closed = closer()
-    # Practice trades on Sepolia (practice.py): the transaction is sent before sealing, so its hash is inside the dossier.
-    from . import practice
-    execution = practice.execute_open(seq, packet.get("symbol"), debate["verdict"], packet, execute)
-    if execution is not None:
-        body["execution"] = execution
-    if closed:
-        body["executions_closed"] = closed
     return {**body, "hash": digest(body)}
 
 
-def append(packet: dict, path: Path, ask=None, rules_version: str = "v1", rules=None, execute=None, drift: dict | None = None, gate: bool = False) -> dict:
+def append(packet: dict, path: Path, ask=None, rules_version: str = "v1", rules=None, drift: dict | None = None, gate: bool = False) -> dict:
     """Builds and appends one dossier. With `gate` the closure gate inspects the finished candidate first and raises
-    closure.ClosureRefused, with nothing appended and nothing sent on chain, when a hard check fails."""
+    closure.ClosureRefused, with nothing appended, when a hard check fails."""
     ledger = read_ledger(path)
     prev = ledger[-1]["hash"] if ledger else GENESIS
-    from . import practice
     frozen = digest(packet) if gate else None  # the evidence as collected, before anything in build can touch it
-    closed = None if gate else practice.execute_closes(ledger, packet.get("symbol"), packet, execute)
-    closer = (lambda: practice.execute_closes(ledger, packet.get("symbol"), packet, execute)) if gate else None
-    dossier = build(packet, prev, len(ledger) + 1, ask, rules_version=rules_version, rules=rules, execute=execute, closed=closed, drift=drift, frozen=frozen, closer=closer)
+    dossier = build(packet, prev, len(ledger) + 1, ask, rules_version=rules_version, rules=rules, drift=drift, frozen=frozen)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(dossier, ensure_ascii=False) + "\n")
@@ -337,7 +324,7 @@ def verify(ledger: list[dict], prev: str = GENESIS) -> list[str]:
 
 
 def head(ledger: list[dict]) -> dict:
-    """Ponta da cadeia para publicar e ancorar (fluxo CRE). Recusa cadeia quebrada ou vazia."""
+    """Ponta da cadeia para publicar e carimbar (OpenTimestamps). Recusa cadeia quebrada ou vazia."""
     if not ledger:
         raise ValueError("the ledger is empty; nothing to anchor")
     problems = verify(ledger)

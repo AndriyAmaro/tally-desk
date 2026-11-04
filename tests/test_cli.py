@@ -18,7 +18,7 @@ class DecideCommandTest(unittest.TestCase):
         evidence.collect = collect
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
-                code = cli.cmd_decide(opts)
+                code = cli.cmd_decide_v7(opts)
         finally:
             evidence.collect = original
         return code, path, err.getvalue()
@@ -52,7 +52,6 @@ class DecideCommandTest(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertFalse(path.exists())
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

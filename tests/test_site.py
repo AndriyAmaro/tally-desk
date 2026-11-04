@@ -46,7 +46,6 @@ class SiteTest(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stdout[-800:] + out.stderr[-400:])
 
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

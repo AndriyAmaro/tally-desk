@@ -15,7 +15,7 @@ The first commit of the Otari era is [`2bdfe40`](https://github.com/AndriyAmaro/
 | Hash chain | `verdict_desk/dossier.py`, `verdict_desk/canonical.py`, `ledger/ledger.jsonl` | One append-only JSONL file. Each dossier holds the SHA-256 of the one before it, taken over canonical JSON that Python and the browser produce identically. |
 | Replay | `dossier.replay` | Recomputes the features and the verdict from the evidence frozen in the dossier and compares them with what was recorded. |
 | Citation validator | `verdict_desk/citations.py` | An analyst claim stands only if it cites an evidence id that exists and every number in it appears in the cited item. |
-| Witnesses | `ledger/timestamps/` (OpenTimestamps), `ledger/rekor/` (Sigstore), `cre/` (Chainlink CRE anchor on Sepolia) | Copies of the chain head that the operator cannot quietly rewrite. The Sigstore bundles stop at dossier 791 and the Sepolia anchor belongs to the earlier era. OpenTimestamps stamps continue. |
+| Witnesses | `ledger/timestamps/` (OpenTimestamps), `ledger/rekor/` (Sigstore) | Copies of the chain head that the operator cannot quietly rewrite. The Sigstore bundles stop at dossier 791. OpenTimestamps stamps continue. The earlier project also anchored heads on the Sepolia testnet with a Chainlink CRE workflow; that workflow and its contract stay in the frozen repository and are not used here. |
 | Tamper battery | `verdict_desk/battery.py` | Attacks a copy of the ledger (edit, delete, swap, forge, truncate, re-hash) and counts what the verifier misses. |
 | Evidence pages | `web/verify.html`, `web/witnesses.html`, `web/dashboard.html` | In-browser verification of the chain. These stayed in place. The pages written for lawyers stay in the frozen repository. |
 

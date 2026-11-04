@@ -15,7 +15,7 @@ close of its newest candle) with a tolerance that grows with that candle's age: 
 for every candle interval of age (the interval is the packet's own, 1h, 15m, 4h...; with an interval we cannot read there is no
 allowance), because a price may move that much while the candle waits. Beyond the tolerance the two sources DIVERGE,
 and that is a blocking freshness class of its own, `classes.divergence`, next to the untouched `classes.market` (age of the candle).
-The packet's freshness `ok` becomes false, which is the fail-closed path the replay, the browser verifier and the CRE workflow already
+The packet's freshness `ok` becomes false, which is the fail-closed path the replay and the browser verifier already
 know (`BLOCKED_STALE`, no position, the refusal recorded with the numbers); the original staleness reason is never overwritten.
 
 A missing or untrusted MCP price is recorded as unavailable and blocks nothing. A third-party server cannot make the agent trade

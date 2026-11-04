@@ -188,7 +188,6 @@ class CycleTest(FlowEnv):
         self.assertEqual(d["closure"]["outcome"], "pass", "a recorded refusal is an accounted call")
 
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

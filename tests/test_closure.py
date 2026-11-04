@@ -71,11 +71,6 @@ class CleanCycleTest(Gate):
         self.assertFalse(r["closure_ok"])
         self.assertFalse(r["matches"])
 
-    def test_the_gate_runs_after_the_calls_and_before_the_closes_of_earlier_positions(self):
-        with mock.patch("verdict_desk.practice.execute_closes", return_value=[]) as closes:
-            self.clean()
-        closes.assert_called_once()
-
 
 class PlantedFaultTest(Gate):
     def test_a_missing_receipt_is_refused(self):
@@ -182,13 +177,11 @@ class AnalystsAnsweredTest(Gate):
                 from tests.test_otari import message
                 raise urllib.error.HTTPError(request.full_url, 402, "Payment Required", message({"Otari-Request-ID": "req-402", "Otari-Error-Code": "pricing_required"}), io.BytesIO(b'{"code": "pricing_required"}'))
             return real(request, timeout)
-        with mock.patch.object(self, "reply", reply), mock.patch("verdict_desk.practice.execute_open") as opens, mock.patch("verdict_desk.practice.execute_closes") as closes:
+        with mock.patch.object(self, "reply", reply):
             code, out, ledger = self.run_flow(rules_version="v7")
         self.assertEqual((code, ledger), (closure.EXIT_CODE, []))
         self.assertFalse(self.ledger.exists(), "no dossier, not even a half-written one")
         self.assertEqual(head.read_text(), '{"seq": 0}\n', "the head file is as it was")
-        opens.assert_not_called()
-        closes.assert_not_called()
         line = closure.read_refusals(self.ledger)[0]
         self.assertEqual([f["name"] for f in line["failed"]], ["analysts_answered"])
         self.assertEqual({f["code"] for f in line["roles_failed"]}, {"pricing_required"})
@@ -222,13 +215,10 @@ class SoftCheckTest(Gate):
 
 class RefusedCycleTest(Gate):
     def test_a_refused_cycle_appends_nothing_logs_the_reason_and_exits_with_the_refusal_code(self):
-        with mock.patch.object(dossier, "_served", lambda m, block: None), mock.patch("verdict_desk.practice.execute_closes") as closes, \
-                mock.patch("verdict_desk.practice.execute_open") as opens:
+        with mock.patch.object(dossier, "_served", lambda m, block: None):
             code, out, ledger = self.run_flow(rules_version="v7")
         self.assertEqual((code, ledger), (closure.EXIT_CODE, []))
         self.assertFalse(self.ledger.exists(), "nothing was appended")
-        closes.assert_not_called()
-        opens.assert_not_called()
         lines = closure.read_refusals(self.ledger)
         self.assertEqual(len(lines), 1)
         line = lines[0]
@@ -288,7 +278,6 @@ class OldDossiersTest(unittest.TestCase):
             self.assertEqual(hard, [] if not closure.analyst_failures(d) else ["analysts_answered"], d["seq"])  # only a cycle whose analysts were refused is stopped
 
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

@@ -53,11 +53,10 @@ class RekorHeadsTest(unittest.TestCase):
 
     def test_the_witness_index_carries_them(self):
         root = workspace()
-        index = battery.witness_index(root / "timestamps", root / "nope.json", rekor=root / "rekor")
+        index = battery.witness_index(root / "timestamps", rekor=root / "rekor")
         self.assertEqual([h["seq"] for h in index["rekor"]], [7])
-        self.assertEqual(battery.witness_index(root / "timestamps", root / "nope.json")["rekor"], [])
+        self.assertEqual(battery.witness_index(root / "timestamps")["rekor"], [])
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

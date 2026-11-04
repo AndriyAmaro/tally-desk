@@ -1,9 +1,7 @@
 """Bitcoin timestamps: the third-party clock that needs no wallet.
 
-The Sepolia anchor proves custody through a contract we deployed. This is independent of us in a
-different way: the published head is submitted to OpenTimestamps calendars, which commit the digest
-into a Bitcoin block. No key, no funds, no account — which matters, because the on-chain cadence
-pauses whenever the CI secrets are missing and this does not.
+The published head is submitted to OpenTimestamps calendars, which commit the digest into a Bitcoin
+block. No key, no funds, no account: it is independent of the operator, and it needs no secret to run.
 
 The trap this file guards against: a `.ots` proof proves *the exact bytes that were stamped*. If
 each hourly run overwrote one proof file, every earlier proof would stop verifying with no error
@@ -139,7 +137,6 @@ class TimestampTest(unittest.TestCase):
                 return False
             return run.returncode == 0 and "BitcoinBlockHeaderAttestation" in info.stdout + info.stderr
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

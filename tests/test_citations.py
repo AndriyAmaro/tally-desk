@@ -130,4 +130,3 @@ class LlmTest(unittest.TestCase):
         self.assertTrue(all(re.fullmatch(r"E\d+", cid) for cid in cited_ids), "All cited ids must match E\\d+ format")
         self.assertIn("E3", cited_ids)  # at least the example id from the prompt
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

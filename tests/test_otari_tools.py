@@ -1027,8 +1027,7 @@ class FlowEnv(Env):
         voices = [{"name": "Voice", "title": "Bitcoin rally hits record", "link": ""}]
         with mock.patch.dict(os.environ, extra_env or {}), mock.patch.object(urllib.request, "urlopen", self.reply), \
                 mock.patch.object(evidence, "collect", lambda *a, **k: json.loads(json.dumps(self.pkt))), \
-                mock.patch.object(narrative, "collect_with_gaps", lambda feeds, log=None: (voices, {})), \
-                mock.patch("verdict_desk.practice.chain_executor", lambda: None):
+                mock.patch.object(narrative, "collect_with_gaps", lambda feeds, log=None: (voices, {})):
             out = io.StringIO()
             with mock.patch("sys.stdout", out):
                 code = cli._decide_flow(opts, rules_version)
@@ -1101,7 +1100,6 @@ class DecideFlowTest(FlowEnv):
         self.assertTrue("web" not in d["evidence"] and "market_mcp" not in d["evidence"] and "sandbox" not in d)
         self.assertNotIn("[otari web]", out)
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

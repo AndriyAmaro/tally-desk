@@ -325,7 +325,7 @@
       b.say(`The fingerprint recomputed in your browser, ${recomputed}, does NOT match the recorded one, ${d.hash}: this copy was changed after it was written. Do not rely on it.`, refs);
     }
     if (d.prev_hash) b.say(`It is chained to the record before it, whose fingerprint is ${d.prev_hash}; changing any earlier record breaks that link.`, [b.cite("prev_hash", "previous fingerprint", d.prev_hash)]);
-    b.say("To check that this is the record we published, and when: the Witnesses page compares the chain's head with Bitcoin, the Sigstore log and the Sepolia anchor, none of which we control.");
+    b.say("To check that this is the record we published, and when: the Witnesses page compares the chain's head with Bitcoin and the Sigstore log, neither of which we control.");
   }
 
   function help(d, b) {
@@ -334,7 +334,7 @@
 
   // ---------------------------------------------------------------- phase 2: chart, what happened next, data, voices, Sepolia
 
-  /** Python's round() (web/trust.js and cre/anchor/verdict.ts carry the same port). */
+  /** Python's round() (web/trust.js carries the same port). */
   function pyRound(x, places) {
     const long = x.toFixed(places + 20);
     const dot = long.indexOf(".");
@@ -496,7 +496,7 @@
     }
   }
 
-  // The test tokens of cre/practice.sepolia.json: an on-chain amount is an integer count of the token's smallest unit.
+  // The test tokens of the earlier project's Sepolia practice desk (read only here, for old dossiers): an on-chain amount is an integer count of the token's smallest unit.
   const TOKENS = { "0xfff9976782d46cc05630d1f6ebab18b2324d6b14": ["WETH", 18], "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238": ["USDC", 6] };
   function units(raw, token) {
     const known = TOKENS[String(token).toLowerCase()];

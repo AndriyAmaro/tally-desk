@@ -76,7 +76,6 @@ class LedgerTest(unittest.TestCase):
         ledger[0] = {**body, "hash": dossier.digest(body)}
         self.assertTrue(any("seq 2" in p and "prev_hash" in p for p in dossier.verify(ledger)))
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()
@@ -88,7 +87,7 @@ class HeadTest(unittest.TestCase):
         for trend in (0.004, -0.004):
             dossier.append(packet(trend), self.path)
 
-    def test_head_is_the_last_hash_in_the_shape_the_anchor_workflow_parses(self):
+    def test_head_is_the_last_hash_in_the_shape_the_stamping_step_reads(self):
         import re
 
         ledger = dossier.read_ledger(self.path)

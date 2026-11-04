@@ -129,7 +129,7 @@
     }
 
     // One reader of the dossier, shared with the parity tests (policy.js): the evidence is refused for its age OR for any reason the
-    // sealed freshness block gives (fresh.ok === false), the way the Python judge and the CRE workflow read it.
+    // sealed freshness block gives (fresh.ok === false), the way the Python judge reads it.
     const { input, rederived, agrees, rulesVersion } = P.checkDossier(d);
     return { d, intact, recomputed, linked, linkNote, rederived, agrees, rulesVersion, bull: input.bull, bear: input.bear, atrPct: input.atrPct,
              age: input.ageMinutes, windowMinutes: input.windowMinutes, blockReason: input.freshOk === false ? input.blockReason : null };

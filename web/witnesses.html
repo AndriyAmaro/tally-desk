@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Verdict Desk · witnesses</title>
-<meta name="description" content="Clocks nobody here controls: the ledger head stamped in Bitcoin, signed in the Sigstore transparency log, anchored on Ethereum Sepolia and held in git history, each re-checked in your own browser, plus a battery of attacks on our own verifier.">
+<meta name="description" content="Clocks nobody here controls: the ledger head stamped in Bitcoin, signed in the Sigstore transparency log, held in git history, each re-checked in your own browser, plus a battery of attacks on our own verifier.">
 <meta property="og:title" content="Verdict Desk · witnesses">
-<meta property="og:description" content="Your browser reads the Bitcoin proof, asks two block explorers and the Sepolia contract, and compares every one with the ledger. Then we show how many attacks on our verifier got through.">
+<meta property="og:description" content="Your browser reads the Bitcoin proof, asks two block explorers and the Sigstore log, and compares every one with the ledger. Then we show how many attacks on our verifier got through.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1017'/%3E%3Crect x='4' y='13' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Crect x='11' y='7' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Cpath d='M21 5h7v20l-1.75-1.3-1.75 1.3-1.75-1.3L21 25z' fill='none' stroke='%23fbbf24' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
@@ -33,7 +33,7 @@ button[disabled]{opacity:.5;cursor:default}
 <main id="content">
 
 <h1>Witnesses: clocks nobody here controls</h1>
-<p class="mut">A hash chain proves a record was not edited <i>after</i> it was written, but whoever runs it could rewrite the whole chain, or cut the end off. What stops that is a copy of the head held somewhere the operator cannot reach. Every hour the head is stamped in Bitcoin and signed, with no key of ours, in the public Sigstore transparency log; it is also written to Ethereum Sepolia and sits in git history. This page <b>re-checks each of those in your browser</b>: it reads the proof, asks two independent block explorers, the transparency log and a public Ethereum node, and compares what they say with the ledger it just downloaded. Nothing below is a number we typed.</p>
+<p class="mut">A hash chain proves a record was not edited <i>after</i> it was written, but whoever runs it could rewrite the whole chain, or cut the end off. What stops that is a copy of the head held somewhere the operator cannot reach. Every cycle the head is stamped in Bitcoin (OpenTimestamps); the heads up to dossier 791 were also signed, with no key of ours, in the public Sigstore transparency log by the earlier project's workflow; and it all sits in git history. This page <b>re-checks each of those in your browser</b>: it reads the proof, asks two independent block explorers and the transparency log, and compares what they say with the ledger it just downloaded. Nothing below is a number we typed.</p>
 
 <section>
   <h2>1. Does the ledger still agree with every head that was stamped?</h2>
@@ -50,27 +50,20 @@ button[disabled]{opacity:.5;cursor:default}
 </section>
 
 <section>
-  <h2>3. Ethereum Sepolia, through the Chainlink CRE workflow</h2>
-  <div id="eth"><span class="mut">asking a public Sepolia node…</span></div>
-  <div id="ethhist"></div>
-  <p class="mut">The contract only accepts strictly increasing sequence numbers, so an anchored head can never be overwritten. This is a <b>testnet</b>. Two routes write here, and each transaction says which: the CRE workflow run with <code>cre workflow simulate --broadcast</code> from the operator's machine, and, after each new head is published, from GitHub's runners, <code>cre/anchor/direct.ts</code>, which is <b>not the CRE runtime</b> (this account cannot create the CRE API key CI would need) but runs the same checks with the same code: two publications agree on the head, its dossier re-derives its own verdict, the Data Feed agrees on Sepolia and mainnet; then it hands the same report to the same forwarder, with the workflow name <code>gh-actions</code> in the report header. The history above, read from the contract's own events and each transaction's input, shows the real cadence, every gap and the route of every anchor.</p>
-</section>
-
-<section>
-  <h2>4. Sigstore transparency log, signed by the GitHub workflow</h2>
+  <h2>3. Sigstore transparency log</h2>
   <div id="sig"><span class="mut">asking the public log…</span></div>
-  <p class="mut">Every hour a workflow (<code>.github/workflows/rekor.yml</code>) signs the saved head with <b>no key and no secret</b>: GitHub tells Sigstore which repository and which workflow is running, Sigstore issues a certificate that lasts minutes and names that identity, and the signature goes into <a href="https://search.sigstore.dev/">Rekor</a>, a public log that records its own time. Your browser asks Rekor for each entry, checks that the digest the log holds is the sha256 of the head it just downloaded, and reads the certificate to see who signed. It does <b>not</b> check the certificate chain or the log's inclusion proof: for that, run <code>cosign verify-blob --bundle ledger/rekor/&lt;seq&gt;.bundle.json --certificate-identity-regexp '^https://github.com/AndriyAmaro/verdict-desk/.github/workflows/rekor.yml@refs/' --certificate-oidc-issuer https://token.actions.githubusercontent.com ledger/timestamps/&lt;seq&gt;.json</code>. The log's clock and the signer's identity are the point: neither belongs to the person who runs the ledger.</p>
+  <p class="mut">For the heads up to dossier 791 a workflow of the earlier project (<code>.github/workflows/rekor.yml</code> in AndriyAmaro/verdict-desk, not in this repository) signed the saved head with <b>no key and no secret</b>: GitHub tells Sigstore which repository and which workflow is running, Sigstore issues a certificate that lasts minutes and names that identity, and the signature goes into <a href="https://search.sigstore.dev/">Rekor</a>, a public log that records its own time. Your browser asks Rekor for each entry, checks that the digest the log holds is the sha256 of the head it just downloaded, and reads the certificate to see who signed. It does <b>not</b> check the certificate chain or the log's inclusion proof: for that, run <code>cosign verify-blob --bundle ledger/rekor/&lt;seq&gt;.bundle.json --certificate-identity-regexp '^https://github.com/AndriyAmaro/verdict-desk/.github/workflows/rekor.yml@refs/' --certificate-oidc-issuer https://token.actions.githubusercontent.com ledger/timestamps/&lt;seq&gt;.json</code>. The log's clock and the signer's identity are the point: neither belongs to the person who runs the ledger.</p>
   <p><button id="sigall" type="button">Check every signature</button> <span class="mut" id="signote"></span></p>
 </section>
 
 <section>
-  <h2>5. Git history</h2>
+  <h2>4. Git history</h2>
   <div id="git"><span class="mut">asking GitHub…</span></div>
   <p class="mut">The weakest witness: the commit times belong to the operator's own account. Its value is that every clone made earlier still holds the old history, so a rewrite would show.</p>
 </section>
 
 <section>
-  <h2>6. We attacked our own verifier</h2>
+  <h2>5. We attacked our own verifier</h2>
   <div id="battery"><span class="mut">loading…</span></div>
   <p class="mut">Reproduce it: <code>python3 -m verdict_desk battery</code> (the seed is the head hash, so you get the same attacks). The two attacks the hash chain cannot see alone are listed on purpose: cutting the end off, and rewriting history and re-hashing every later record. They pass <code>verify</code> by design and are caught only by the stamped heads in section 1.</p>
 </section>
@@ -80,8 +73,7 @@ button[disabled]{opacity:.5;cursor:default}
   <ul class="mut">
     <li>That a decision was <i>right</i>, or that a source said something true. A timestamp proves the bytes existed by a time, not that they are correct.</li>
     <li>Who wrote the record. Integrity after recording is the claim, not authorship at collection time.</li>
-    <li>That the Sepolia anchor is current: it is a testnet and its cadence is shown above.</li>
-    <li>That nobody could attack the way we did not think of. The battery counts the attacks we tried, no more.</li>
+        <li>That nobody could attack the way we did not think of. The battery counts the attacks we tried, no more.</li>
   </ul>
 </section>
 
@@ -174,69 +166,9 @@ button[disabled]{opacity:.5;cursor:default}
         done++; $("allnote").textContent = `${done} of ${confirmed.length} confirmed proofs checked`; paint();
       }
     });
-
-    // 3. Ethereum Sepolia
-    try {
-      const a = index.anchor;
-      if (!a) throw new Error("no anchor contract on file");
-      const rpc = async (data) => (await (await fetch(a.rpc, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: a.address, data }, "latest"] }) })).json()).result;
-      const latest = parseInt(await rpc("0x1075b671"), 16);
-      const word = (hex, i) => hex.replace(/^0x/, "").slice(i * 64, (i + 1) * 64);
-      const body = await rpc("0xfa210653" + latest.toString(16).padStart(64, "0"));
-      const onchainHash = word(body, 0), anchoredAt = parseInt(word(body, 4), 16);
-      const mine = ledger[latest - 1];
-      const same = mine && mine.hash === onchainHash;
-      const gap = ledger[ledger.length - 1].seq - latest;
-      $("eth").innerHTML = `<p>Contract <a href="${esc(a.explorer || "#")}"><code>${esc(a.address)}</code></a> (${esc(a.network)}) says the latest anchored record is <b>#${latest}</b>, written ${utc(anchoredAt)} with hash <code>${esc(onchainHash.slice(0, 16))}…</code>.</p>` +
-        `<p class="${same ? "ok" : "bad"}">${same ? `✓ the ledger's dossier #${latest} has exactly that hash` : `✗ the ledger's dossier #${latest} does NOT have that hash`}</p>` +
-        `<p class="${gap > 24 ? "warn" : "mut"}">The ledger is ${gap} dossier${gap === 1 ? "" : "s"} past that anchor.</p>`;
-      // Anchor history from the contract's Anchored events, so the cadence is read on-chain, not from our logs.
-      anchorHistory(a, rpc, word).catch((e) => { $("ethhist").innerHTML = `<p class="mut">The anchor history could not be read here (${esc(e.message || e)}); every anchor is on <a href="${esc(a.explorer || "https://sepolia.etherscan.io")}">the explorer</a>.</p>`; });
-    } catch (e) { $("eth").innerHTML = `<span class="mut">Could not reach a public Sepolia node from here (${esc(e.message || e)}). The contract is in <code>cre/deployment.sepolia.json</code>.</span>`; }
   }).catch((e) => { $("agree").innerHTML = `<span class="bad">Could not load the ledger or the witness list here: ${esc(e.message || e)}. Open this page from the deployed site.</span>`; });
 
-  // The anchor history, read from the contract's own Anchored events. The whole history comes from a node that keeps
-  // old blocks; if it cannot be reached, the last ~17 hours come from the node above (which prunes older ones), and the
-  // page says so. A failure here never hides the latest anchor shown above.
-  async function anchorHistory(a, rpc, word) {
-    const ANCHORED = "0x43fd32c7e0eebd332a0c60efbf6c8c8a64b80609ef27f6262bf060b938a26f6c";
-    const call = async (url, method, params) => {
-      const r = await (await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json();
-      if (r.error) throw new Error(r.error.message || "node error");
-      return r.result;
-    };
-    let url = a.history_rpc || a.rpc, logs, partial = false;
-    try {
-      logs = await call(url, "eth_getLogs", [{ address: a.address, fromBlock: "0x" + (a.deploy_block || 0).toString(16), toBlock: "latest", topics: [ANCHORED] }]);
-    } catch (e) {
-      url = a.rpc; partial = true;
-      const tip = parseInt(await call(url, "eth_blockNumber", []), 16);
-      logs = await call(url, "eth_getLogs", [{ address: a.address, fromBlock: "0x" + Math.max(0, tip - 5000).toString(16), toBlock: "latest", topics: [ANCHORED] }]);
-    }
-    try {
-      const recent = logs.slice(-12).reverse();
-      const rows = [];
-      for (const l of recent) {
-        const seq = parseInt(l.topics[1], 16);
-        const at = parseInt(word(await rpc("0xfa210653" + seq.toString(16).padStart(64, "0")), 4), 16);
-        // The route is read from the transaction itself: the workflow name in the report header (rawReport bytes 77..87).
-        const input = (await call(url, "eth_getTransactionByHash", [l.transactionHash])).input.slice(10);
-        const raw = input.slice(parseInt(word(input, 1), 16) * 2 + 64);
-        const name = raw.slice(154, 174).match(/../g).map((h) => String.fromCharCode(parseInt(h, 16))).join("");
-        rows.push({ seq, at, tx: l.transactionHash, route: name === "gh-actions" ? "GitHub Actions, direct (not the CRE runtime)" : "CRE workflow, operator's machine" });
-      }
-      const day = Date.now() / 1000 - 86400;
-      const lastDay = rows.filter((r) => r.at >= day).length;
-      $("ethhist").innerHTML = (partial
-          ? `<p class="mut">The node that keeps the full history could not be reached, so these are the anchors of the last ~17 hours only (${logs.length}).</p>`
-          : `<p class="mut">${logs.length} anchors on this contract so far; ${lastDay} of the last 12 fall in the past 24 hours.</p>`) +
-        `<table><thead><tr><th>Record</th><th>Anchored (UTC)</th><th>Route</th><th>Transaction</th></tr></thead><tbody>` +
-        rows.map((r) => `<tr><td>#${r.seq}</td><td>${utc(r.at)}</td><td>${esc(r.route)}</td><td><a href="https://sepolia.etherscan.io/tx/${esc(r.tx)}"><code>${esc(r.tx.slice(0, 18))}…</code></a></td></tr>`).join("") + `</tbody></table>`;
-    } catch (e) { $("ethhist").innerHTML = `<p class="mut">The anchor history could not be read here (${esc(e.message || e)}); every anchor is on <a href="${esc(a.explorer || "https://sepolia.etherscan.io")}">the explorer</a>.</p>`; }
-  }
-
-
-  // 4. Sigstore transparency log
+  // 3. Sigstore transparency log
   const REKOR = "https://rekor.sigstore.dev/api/v1/log/entries";
   const SIGNER = { repo: "AndriyAmaro/verdict-desk", workflow: "rekor.yml" };
   async function inspectSignature(head, ledger) {
@@ -276,7 +208,7 @@ button[disabled]{opacity:.5;cursor:default}
     if (list.length <= 6) $("sigall").style.display = "none";
   }).catch(() => { $("sig").innerHTML = '<span class="mut">Could not load the witness list here. Open this page from the deployed site.</span>'; });
 
-  // 5. Git history
+  // 4. Git history
   fetch("https://api.github.com/repos/AndriyAmaro/verdict-desk/commits?path=ledger/ledger.jsonl&per_page=1").then(async (r) => {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const last = (r.headers.get("link") || "").match(/[?&]page=(\d+)>; rel="last"/);
@@ -284,7 +216,7 @@ button[disabled]{opacity:.5;cursor:default}
     $("git").innerHTML = `<p>${last ? `<b>${last[1]}</b> commits have touched <code>ledger/ledger.jsonl</code>. ` : ""}The latest is <a href="${esc(c.html_url)}"><code>${esc(c.sha.slice(0, 8))}</code></a> by ${esc(c.commit.author.name)}, ${esc(c.commit.committer.date.slice(0, 16).replace("T", " "))} UTC.</p>`;
   }).catch((e) => { $("git").innerHTML = `<span class="mut">GitHub's public API did not answer here (${esc(e.message || e)}); the history is at github.com/AndriyAmaro/verdict-desk/commits.</span>`; });
 
-  // 6. The battery
+  // 5. The battery
   fetch("battery.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((b) => {
     const rows = b.attacks.map((a) => `<tr><td>${esc(a.attack)}</td><td>${a.trials}</td><td class="${a.missed ? "bad" : "ok"}">${a.caught} caught${a.missed ? `, ${a.missed} MISSED` : ""}</td><td>${esc(a.caught_by)}${a.chain_alone_missed ? `<br><span class="warn">the hash chain alone missed ${a.chain_alone_missed} of ${a.trials}</span>` : ""}</td></tr>`).join("");
     $("battery").innerHTML = `<div class="verdict ${b.all_caught ? "ok" : "bad"}">${b.total_trials} attacks on ${b.dossiers} dossiers: ${b.total_missed} got through</div>` +

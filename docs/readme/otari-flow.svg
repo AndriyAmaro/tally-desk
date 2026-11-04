@@ -69,7 +69,7 @@
 <text x="695" y="319" class="tx" font-size="14" font-weight="650" text-anchor="start">Outside witnesses</text>
 <text x="673" y="348" class="mu" font-size="11.5" font-weight="400" text-anchor="start">OpenTimestamps each cycle.</text>
 <text x="673" y="365" class="mu" font-size="11.5" font-weight="400" text-anchor="start">Sigstore head lookup.</text>
-<text x="673" y="382" class="mu" font-size="11.5" font-weight="400" text-anchor="start">Sepolia: earlier era only.</text>
+<text x="673" y="382" class="mu" font-size="11.5" font-weight="400" text-anchor="start">Git history.</text>
 <rect x="671" y="437" width="89.6" height="21" rx="10.5" class="bd" stroke-width="1" stroke-dasharray="3 3"/><text x="715.8" y="452" class="su" font-size="11" font-weight="500" text-anchor="middle">Third parties</text>
 <path d="M206 151.0 H228" class="sa" stroke-width="1.6"/><path d="M224 147.0 L229 151.0 L224 155.0" class="sa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M418 151.0 H440" class="sa" stroke-width="1.6"/><path d="M436 147.0 L441 151.0 L436 155.0" class="sa" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>

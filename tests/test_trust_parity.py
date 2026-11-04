@@ -77,7 +77,6 @@ class TrustParityTest(unittest.TestCase):
         ledger += [make(len(ledger) + 1, 104, [call("Late", "bearish", "just now")])]  # cannot settle yet
         self.assert_same(ledger)
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

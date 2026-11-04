@@ -4,7 +4,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1017'/%3E%3Crect x='4' y='13' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Crect x='11' y='7' width='8' height='8' rx='2' fill='none' stroke='%232dd4bf' stroke-width='2.4'/%3E%3Cpath d='M21 5h7v20l-1.75-1.3-1.75 1.3-1.75-1.3L21 25z' fill='none' stroke='%23fbbf24' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <meta name="description" content="A public, tamper-evident ledger of AI agent decisions: frozen evidence, a citation-enforced bull/bear debate, deterministic verdicts, and every hash recomputed in your browser.">
 <meta property="og:title" content="Verdict Desk · simulated decision ledger">
-<meta property="og:description" content="A live, hash-chained ledger of AI agent decisions, anchored on Sepolia and in Bitcoin. Break the chain yourself in 30 seconds.">
+<meta property="og:description" content="A live, hash-chained ledger of AI agent decisions, stamped in Bitcoin. Break the chain yourself in 30 seconds.">
 <meta property="og:type" content="website">
 <style>
 :root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--ok:#0a7a3d;--bad:#b3261e;--card:#f6f6f6;--accent:#1f5fbf}
@@ -75,15 +75,15 @@ a.btn[hidden]{display:none}
   <section class="diff" aria-labelledby="diff-title">
     <h2 id="diff-title">What you can check here that a debate log cannot show</h2>
     <div class="diff-grid">
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M6 21h12M4 7h16M4 7l-2.5 6a3 3 0 0 0 5 0L4 7zm16 0-2.5 6a3 3 0 0 0 5 0L20 7z"/></svg>The verdict is re-derived, not only re-hashed</p><p>The deterministic judge rules again from the frozen evidence. Chainlink CRE acts as an independent auditor: before it anchors a head, it re-derives that verdict and refuses a forged one.</p><a href="verify.html">Re-derive a record →</a></div>
+      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M6 21h12M4 7h16M4 7l-2.5 6a3 3 0 0 0 5 0L4 7zm16 0-2.5 6a3 3 0 0 0 5 0L20 7z"/></svg>The verdict is re-derived, not only re-hashed</p><p>The deterministic judge rules again from the frozen evidence. Your browser does it too, and so does <code>python3 -m verdict_desk replay</code>, so a forged verdict is refused.</p><a href="verify.html">Re-derive a record →</a></div>
       <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 6 6M8.2 10.5h4.6M10.5 8.2v4.6"/></svg>Every number an AI states must be in its evidence</p><p>An analyst claim that cites an item which does not hold its number is refused, and kept with the reason.</p><a href="#ledger-table">Open any row below →</a></div>
-      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.2 7 21l5-2.5 5 2.5-1.5-7.8M10 9l1.5 1.5L14.5 7.5"/></svg>Three outside witnesses</p><p>The head is timestamped into Bitcoin, signed in the public Sigstore log by a GitHub workflow, and anchored on Sepolia. None of them is ours to rewrite.</p><a href="witnesses.html">Ask the witnesses →</a></div>
+      <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.2 7 21l5-2.5 5 2.5-1.5-7.8M10 9l1.5 1.5L14.5 7.5"/></svg>Outside witnesses</p><p>The head is timestamped into Bitcoin on every cycle, and the heads up to dossier 791 were signed in the public Sigstore log by a GitHub workflow. Neither is ours to rewrite.</p><a href="witnesses.html">Ask the witnesses →</a></div>
       <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M10 11h6M10 15h6M4 6v15h12"/></svg>A long public record, gaps included</p><p>Every decision is kept, the losing ones too, and every gap between runs is shown, never filled in.</p><a href="#stats">See the cadence →</a></div>
       <div class="diff-card"><p class="t"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 14 10M14 10l3-3 3 3-3 3zM9 4l1.5 3M4 9l3 1.5M15 14l2 5-5-2"/></svg>We attack our own verifier and publish the score</p><p>Edits, deletions, swaps, forged heads, a truncated tail and re-hashed history, on a copy of the ledger, every hour.</p><a href="witnesses.html#battery">See the score →</a></div>
     </div>
   </section>
   <div class="stats-grid" id="hero-stats"><div class="stat"><div class="k">Loading</div><div class="v">…</div></div></div>
-  <figure class="hero-diagram"><img src="custody.svg" alt="Verdict Desk chain of custody: evidence, debate, validator, judge, dossier, anchored"></figure>
+  <figure class="hero-diagram"><img src="custody.svg" alt="Verdict Desk chain of custody: evidence, debate, validator, judge, dossier, witnessed"></figure>
 </header>
 <p class="mut">Ledger: <code id="source"></code> <label>or open a file <input id="file" type="file" accept=".jsonl,.json,.txt"></label></p>
 <div id="banner" class="mut">Loading...</div>
@@ -184,7 +184,7 @@ function renderHero(dossiers, broken, e, nar, p) {
     card("LLM claims", `${accepted} / ${accepted + rejected}`, `${rejected} refused for bad citations`) +
     card("Narratives", nar.convergences, `${nar.voices} voices · ${nar.tokens.join(", ") || "no token yet"}`) +
     card("Win rate", winRate, `max drawdown ${dd} · simulated`) +
-    card("Anchored", "Sepolia + Bitcoin", "independent third-party clock");
+    card("Witnessed", "Bitcoin + Sigstore", "independent third-party clock");
 }
 
 function renderStats(dossiers, broken) {
@@ -255,7 +255,6 @@ function showDetail(r) {
     const drops = sens.drop_one.map((x) => `Without the ${x.side} argument "${x.claim}" (weight ${x.weight}): edge ${x.edge_without}, verdict ${x.action_without}${x.flips ? " (this alone flips the verdict)" : ""}`);
     list(box, `What would change this verdict: ${sens.needs_for_long} more net edge for LONG, ${sens.needs_for_short} more for SHORT`, drops);
   }
-  if (e.origin) box.appendChild(el("p", `Origin: ${e.origin.kind}, journal turn ${e.origin.turn_id} (the agent itself did: ${e.origin.automaton_decision}). Shadow replay, not a trade result.`, "mut"));
   const n = e.narrative;
   if (n) {
     const accepted = n.extractions || [], rejected = n.rejected || [];
@@ -349,7 +348,7 @@ async function tamper(level) {
   for (let i = k + 1; i < list.length; i++) { list[i].prev_hash = list[i - 1].hash; await rehash(list[i]); }
   const oldHead = state.real.list[state.real.list.length - 1].hash, newHead = list[list.length - 1].hash;
   const result = await showTampered(list, k, `${what} Then re-hashed it and every dossier after it (${list.length - k} in total). The head hash is now ${short(newHead, 16)} instead of ${short(oldHead, 16)} (first 16 characters of each).`,
-    "Only a copy of the head that the operator does not control (git history, other clones, an on-chain anchor) can expose this rewrite.");
+    "Only a copy of the head that the operator does not control (git history, other clones, a Bitcoin timestamp) can expose this rewrite.");
   return result;
 }
 

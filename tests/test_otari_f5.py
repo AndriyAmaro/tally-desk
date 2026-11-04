@@ -429,8 +429,8 @@ class TimestampHelperTest(unittest.TestCase):
 
 class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
     """The ledger grows every three hours. Append one synthetic dossier of each kind the scheduled job can write (a plain one, one with a
-    real fallback on an analyst call, one whose headroom read failed, one with a flagged checker mark under v7) to a copy of the real ledger
-    and run every reader of the ledger over it: the chain, the replay, the audit, the scoreboard, the README blocks and who-saw."""
+    real fallback on an analyst call, one whose headroom read failed, one with a flagged checker mark under v7, one served by a role fallback) to a copy of the real ledger
+    and run every reader of the ledger over it: the chain, the replay, the audit, the README blocks and who-saw."""
 
     @staticmethod
     def appended():
@@ -451,6 +451,10 @@ class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
         flagged = copy.deepcopy(base)
         flagged["llm"]["checker"] = {"advisory": True, "checks": [{"label": "B1", "supported": False, "note": "x"}], "checked": 1, "supported": 0, "claims": 1}
         kinds["flagged mark"] = flagged
+        chain = copy.deepcopy(base)
+        chain["llm"]["bull"]["receipt"]["role_fallback"] = {"chain": ["a", "b"], "skipped": [{"model": "a", "reason": "pricing_required", "status": 402, "code": "pricing_required", "request_id": "r1", "request_id_source": "otari"}],
+                                                            "answered": "b", "answered_index": 1}
+        kinds["role fallback"] = chain
         out = list(real)
         for d in kinds.values():  # re-seal each as the next link of the chain: only receipts and marks differ, so the verdicts still replay
             body = {k: v for k, v in d.items() if k != "hash"}
@@ -459,7 +463,7 @@ class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
         return real, out, otari_report
 
     def test_every_reader_of_the_ledger_accepts_each_kind_of_new_dossier(self):
-        from verdict_desk import dossier, scoreboard
+        from verdict_desk import dossier
         real, out, otari_report = self.appended()
         prev = dossier.GENESIS
         for d in out:
@@ -477,7 +481,6 @@ class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
         self.assertIn("<!-- otari:proofs:end -->", text)
         for d in otari_report.era(out)[-4:]:
             self.assertTrue(otari_report.who_saw(d)["providers"])
-        self.assertIsNotNone(scoreboard)
 
     def test_a_failed_lookup_in_the_newest_dossier_moves_the_budget_proof_to_the_newest_good_read(self):
         real, out, otari_report = self.appended()
@@ -487,4 +490,3 @@ class NextDossierCannotBreakTheSuiteTest(unittest.TestCase):
         self.assertNotIn("None", rows[3]["note"])
 
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)

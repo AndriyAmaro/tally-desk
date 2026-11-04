@@ -117,27 +117,16 @@ def rekor_heads(rekor: Path, stamps: Path) -> list[dict]:
     return sorted(heads, key=lambda h: h["seq"])
 
 
-def witness_index(stamps: Path, deployment: Path, rekor: Path | None = None) -> dict:
-    """O que a pagina de testemunhas le: as pontas carimbadas (com onde estao os arquivos), as assinadas no
-    log do Sigstore e o contrato de ancora. A pagina confere tudo sozinha; este indice so diz onde procurar."""
+def witness_index(stamps: Path, rekor: Path | None = None) -> dict:
+    """O que a pagina de testemunhas le: as pontas carimbadas (com onde estao os arquivos) e as assinadas no
+    log do Sigstore. A pagina confere tudo sozinha; este indice so diz onde procurar."""
     stamps = Path(stamps)
     root = stamps.parent.parent
     heads = []
     for head in sorted(timestamped_heads(stamps), key=lambda h: h["seq"]):
         snapshot = stamps / f"{head['seq']}.json"
         heads.append({**head, "snapshot": snapshot.relative_to(root).as_posix(), "proof": snapshot.with_name(snapshot.name + ".ots").relative_to(root).as_posix()})
-    anchor = None
-    try:
-        data = json.loads(Path(deployment).read_text(encoding="utf-8"))
-        anchor = {"address": data["contract"], "chain_id": data["chainId"], "network": data["network"],
-                  "rpc": "https://ethereum-sepolia-rpc.publicnode.com", "explorer": data.get("explorer", {}).get("contract"),
-                  "deploy_block": data.get("deployBlock"),
-                  # publicnode keeps only recent blocks (eth_getLogs over older ones answers "pruned history
-                  # unavailable", seen 26 Oct); the anchor history is read from a node that keeps it all.
-                  "history_rpc": "https://sepolia.gateway.tenderly.co"}
-    except (OSError, ValueError, KeyError):
-        pass
-    return {"heads": heads, "anchor": anchor, "rekor": rekor_heads(rekor, stamps) if rekor else []}
+    return {"heads": heads, "rekor": rekor_heads(rekor, stamps) if rekor else []}
 
 
 def witness_problems(ledger: list[dict], heads: list[dict]) -> list[str]:

@@ -200,7 +200,7 @@ FLOW_STEPS = [
     ("5", "Rules engine", ["Deterministic code turns", "the judge's lean into a", "paper-trade verdict."], [("local", "Our code, no model")]),
     ("6", "Re-derive and check", ["The verdict is re-run in a", "sandbox, and prices are", "read through MCP."], [("otari", "Code execution"), ("otari", "MCP")]),
     ("7", "Sealed dossier", ["Evidence, verdict and a", "receipt per call, hashed", "into the ledger chain."], [("local", "Hash chain, replayable")]),
-    ("8", "Outside witnesses", ["OpenTimestamps each cycle.", "Sigstore head lookup.", "Sepolia: earlier era only."], [("local", "Third parties")]),
+    ("8", "Outside witnesses", ["OpenTimestamps each cycle.", "Sigstore head lookup.", "Git history."], [("local", "Third parties")]),
 ]
 
 

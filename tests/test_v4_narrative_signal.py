@@ -85,7 +85,6 @@ class ReplayIntegrationTest(unittest.TestCase):
             rv = d.get("verdict", {}).get("rules_version", "v1")
             self.assertTrue(dossier.replay(d, rules_version=rv)["matches"], f"seq {d['seq']} ({rv}) no longer replays")
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

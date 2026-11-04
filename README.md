@@ -39,7 +39,7 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 5. **The rules engine** is ordinary deterministic code. It turns the judge's lean into a paper-trade verdict, and `replay` recomputes it from the frozen evidence.
 6. **Two independent checks** run through Otari: the verdict is re-derived in Otari's code sandbox and compared with the local run, and prices are read through an MCP server and compared with the market data.
 7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
-8. **Outside witnesses** let a reader check the head of the chain without trusting the operator: OpenTimestamps (Bitcoin) on each cycle, the public Sigstore log for published heads, and, in the earlier era only, an anchor on the Sepolia testnet.
+8. **Outside witnesses** let a reader check the head of the chain without trusting the operator: OpenTimestamps (Bitcoin) on each cycle, and the public Sigstore log for the heads published up to dossier 791.
 
 <img src="docs/readme/icons/score.svg" width="44" height="44" alt="">
 
@@ -364,9 +364,6 @@ Every prompt goes to the gateway, then to the upstream provider named in the rec
 - **`search.sigstore.dev`**, the public Sigstore transparency log. Receives: a lookup of a published head hash. When: only in the witness checks.
 - **`andriyamaro.github.io`**, the published site and ledger (read-only). Receives: a GET of public files. When: only in the verification tools.
 - **`github.com`**, the source repository and its workflow evidence. Receives: git pushes of dossiers (branch otari) and reads of public pages. When: when a dossier is pushed or a witness is read.
-- **`ethereum-sepolia-rpc.publicnode.com`**, a public Sepolia RPC. Receives: read calls and, only with SEPOLIA_PRIVATE_KEY set, practice transactions. When: not used on the otari branch (no key).
-- **`sepolia.gateway.tenderly.co`**, a public Sepolia RPC (fallback). Receives: read calls. When: not used on the otari branch (no key).
-- **`sepolia.etherscan.io`**, a block explorer link. Receives: nothing from us: it is a link a reader may open. When: never contacted by the code.
 <!-- otari:hosts:end -->
 
 </details>
@@ -411,7 +408,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.
 - **Earlier era.** Dossiers before 792 have no gateway receipts and are not part of the Otari audit.
-- **Sepolia is not used on this branch** (no key); the anchor belongs to the earlier era.
+- **No on-chain anchor.** The earlier project also anchored heads on the Sepolia testnet; that workflow stays in its frozen repository and nothing here uses a chain.
 
 </details>
 

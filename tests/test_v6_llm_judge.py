@@ -166,20 +166,7 @@ class ParseRulingTest(unittest.TestCase):
         self.assertEqual(llm.parse_ruling(None), {})
 
 
-JUDGE_PAGE = Path(__file__).resolve().parents[1] / "web" / "legacy" / "judge.html"
 
-
-class JudgePageStatesTheMoatTest(unittest.TestCase):
-    """The judge path must say what the bounty is judged on, with the numbers the judge actually runs."""
-
-    def test_the_page_says_the_verdict_is_code_and_quotes_the_band_it_enforces(self):
-        html = JUDGE_PAGE.read_text(encoding="utf-8")
-        self.assertIn("The verdict is deterministic code, not an LLM\u2019s call", html)
-        cap = max(citations.JUDGE_WEIGHT.values())
-        band = agents_v6.V6.entry_threshold
-        self.assertIn(f"capped at {cap:.1f} against an entry band of {band:.1f}", html)
-
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,8 +43,8 @@
       return { state: "BLOCKED_STALE", edge, stale: true,
                rule: `price age ${ageMinutes} min > window ${windowMinutes} min` };
     }
-    // The freshness block sealed in the dossier can refuse the evidence for a reason other than age (the Python judge and the CRE
-    // workflow read `ok` the same way): for example two price sources that diverge beyond their tolerance. The reason is the sealed one.
+    // The freshness block sealed in the dossier can refuse the evidence for a reason other than age (the Python judge reads
+    // `ok` the same way): for example two price sources that diverge beyond their tolerance. The reason is the sealed one.
     if (input.freshOk === false) {
       return { state: "BLOCKED_STALE", edge, stale: false, divergent: !!input.divergent,
                rule: `evidence refused by the sealed freshness check: ${input.blockReason || "no reason recorded"}` };

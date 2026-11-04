@@ -207,15 +207,6 @@ class PublishedHeadTest(unittest.TestCase):
         self.assertEqual(published, dossier.read_ledger(path)[-1])
         self.assertEqual(published["hash"], json.loads((path.parent / "head.json").read_text())["hash"])
 
-    def test_the_head_command_also_writes_the_head_dossier_beside_its_output(self):
-        path = Path(tempfile.mkdtemp()) / "ledger.jsonl"
-        dossier.append(packet(0.004), path)
-        out = path.parent / "pub" / "head.json"
-        argv = ["verdict_desk", "--ledger", str(path), "head", "--out", str(out)]
-        with mock.patch("sys.argv", argv), contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(cli.main(), 0)
-        self.assertEqual(json.loads((out.parent / "head-dossier.json").read_text())["seq"], 1)
-
     def test_publish_head_leaves_the_old_head_alone_when_the_chain_is_broken(self):
         path = Path(tempfile.mkdtemp()) / "ledger.jsonl"
         dossier.append(packet(0.004), path)
@@ -238,8 +229,8 @@ class PublishedHeadTest(unittest.TestCase):
         try:
             with mock.patch.dict(os.environ, {"VERDICT_DESK_APPEND_PUBLIC": "1"}), mock.patch.object(evidence, "collect", lambda symbol, interval, with_news: {**packet(0.004), "symbol": symbol}):
                 with contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(cli.cmd_decide(opts), 0)
-                    self.assertEqual(cli.cmd_decide_v2(opts), 0)
+                    self.assertEqual(cli.cmd_decide_v7(opts), 0)
+                    self.assertEqual(cli.cmd_decide_v7(opts), 0)
             head = json.loads((work / "ledger" / "head.json").read_text())
             ledger = dossier.read_ledger(work / "ledger" / "ledger.jsonl")
         finally:
@@ -256,7 +247,7 @@ class PublishedHeadTest(unittest.TestCase):
             clean = {k: v for k, v in os.environ.items() if k not in ("GITHUB_ACTIONS", "VERDICT_DESK_APPEND_PUBLIC")}
             with mock.patch.dict(os.environ, {**clean, **env}, clear=True), mock.patch.object(evidence, "collect", lambda symbol, interval, with_news: {**packet(0.004), "symbol": symbol}):
                 with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
-                    code = cli.cmd_decide(opts)
+                    code = cli.cmd_decide_v7(opts)
             return code, (work / "ledger" / "ledger.jsonl").exists(), err.getvalue()
         finally:
             os.chdir(previous)
@@ -278,7 +269,7 @@ class PublishedHeadTest(unittest.TestCase):
         opts = argparse.Namespace(symbols=["BTCUSDT"], interval="1h", no_news=True, feed=None, default_feeds=False, ledger=path)
         with mock.patch.object(evidence, "collect", lambda symbol, interval, with_news: {**packet(0.004), "symbol": symbol}):
             with contextlib.redirect_stdout(io.StringIO()):
-                cli.cmd_decide(opts)
+                cli.cmd_decide_v7(opts)
         self.assertFalse((path.parent / "head.json").exists())
 
 
@@ -289,7 +280,7 @@ SHIPPED_HEAD = ROOT / "ledger" / "head.json"
 @unittest.skipUnless(SHIPPED_LEDGER.exists() and SHIPPED_HEAD.exists(), "no shipped ledger")
 class ShippedLedgerTest(unittest.TestCase):
     def test_published_head_is_the_head_of_the_published_ledger(self):
-        """ledger/head.json is what the CRE workflow anchors: it must never lag the chain."""
+        """ledger/head.json is what the runner stamps and the witnesses page reads: it must never lag the chain."""
         head = json.loads(SHIPPED_HEAD.read_text())
         self.assertEqual(head, dossier.head(dossier.read_ledger(SHIPPED_LEDGER)))
 
@@ -318,7 +309,6 @@ class StatsCrossLanguageTest(unittest.TestCase):
     def test_shipped_ledger(self):
         self.check(SHIPPED_LEDGER)
 
-from tests import chain_guard  # noqa: E402,F401  (no test may send a transaction to Sepolia)
 
 if __name__ == "__main__":
     unittest.main()
