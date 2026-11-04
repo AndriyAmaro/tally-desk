@@ -25,6 +25,8 @@ HEADER = OUT / "otari-header.svg"
 FIGURES = OUT / "otari-figures.svg"
 FIGURES_JSON = ROOT / "web" / "otari-figures.json"
 FLOW = OUT / "otari-flow.svg"
+FEATURES = OUT / "otari-features.svg"
+ICON_DIR = OUT / "icons"
 # (slug, label, icon, style): the first button is the primary action, the others are quiet
 BUTTONS = [
     ("cycle", "Call-by-call view", "play", "primary"),
@@ -90,24 +92,101 @@ def _slip(x, y):
 
 
 def header_svg() -> str:
-    width, height = 860, 250
+    """The cover: brand, a two-line promise, what it is in one breath, four chips and a receipt slip, on a dotted field with two soft glows."""
+    width, height = 860, 300
     chips, x = [], 40
     for label in ["Open-weight only", "A receipt per call", "Hash-chained ledger", "Paper trades only"]:
-        svg, w = _chip(x, 188, label)
+        svg, w = _chip(x, 238, label)
         chips.append(svg)
         x += w + 8
-    defs = '<radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="objectBoundingBox"><stop offset="0" style="stop-color:var(--glow);stop-opacity:var(--glowo)"/><stop offset="1" style="stop-color:var(--glow);stop-opacity:0"/></radialGradient><clipPath id="clip"><rect x="1" y="1" width="858" height="248" rx="16"/></clipPath>'
-    body = f"""<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="16" class="bg"/>
-<g clip-path="url(#clip)"><ellipse cx="120" cy="20" rx="420" ry="260" fill="url(#glow)"/></g>
-<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="16" class="bd" stroke-width="1.5"/>
-{_mark(38, 30, 28)}
-{_text(76, 50, "Verdict Desk on Otari", "mu", 15, 600, spacing="-0.1")}
-{_text(40, 112, "Every model call, on the record.", "tx", 38, 650, spacing="-1.2")}
-{_text(40, 148, "A paper-trading agent. Every call goes through the Otari gateway,", "mu", 15)}
-{_text(40, 169, "on open-weight models, and leaves a receipt anyone can re-verify offline.", "mu", 15)}
+    defs = ('<radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="objectBoundingBox"><stop offset="0" style="stop-color:var(--glow);stop-opacity:var(--glowo)"/><stop offset="1" style="stop-color:var(--glow);stop-opacity:0"/></radialGradient>'
+            '<radialGradient id="g2" cx="1" cy="1" r="1" gradientUnits="objectBoundingBox"><stop offset="0" style="stop-color:var(--am);stop-opacity:.10"/><stop offset="1" style="stop-color:var(--am);stop-opacity:0"/></radialGradient>'
+            '<linearGradient id="edge" x1="0" y1="0" x2="1" y2="0"><stop offset="0" style="stop-color:var(--ac)"/><stop offset="1" style="stop-color:var(--am)"/></linearGradient>'
+            '<pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" style="fill:var(--bd)"/></pattern>'
+            f'<clipPath id="clip"><rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="18"/></clipPath>')
+    body = f"""<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="18" class="bg"/>
+<g clip-path="url(#clip)"><rect width="{width}" height="{height}" fill="url(#dots)" opacity=".55"/><ellipse cx="140" cy="10" rx="460" ry="280" fill="url(#g1)"/><ellipse cx="780" cy="300" rx="380" ry="220" fill="url(#g2)"/><rect x="0" y="0" width="{width}" height="4" fill="url(#edge)"/></g>
+<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="18" class="bd" stroke-width="1.5"/>
+{_mark(40, 34, 30)}
+{_text(82, 56, "Verdict Desk on Otari", "mu", 15, 600, spacing="-0.1")}
+{_text(40, 122, "Every model call,", "tx", 46, 700, spacing="-1.6")}
+{_text(40, 172, "on the record.", "ac", 46, 700, spacing="-1.6")}
+{_text(40, 204, "A paper-trading agent on the Otari gateway and open-weight models.", "mu", 14.5)}
+{_text(40, 224, "Each call leaves a receipt anyone can re-verify offline.", "mu", 14.5)}
 {''.join(chips)}
-{_slip(628, 28)}"""
+{_slip(618, 46)}"""
     return _svg(width, height, body, defs)
+
+
+# Line icons on a 24 grid (stroke only, drawn with currentColor), used by the section markers and the feature cards.
+LINE_ICONS = {
+    "layers": '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/>',
+    "route": '<circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/>',
+    "gauge": '<path d="M4 18a9 9 0 1 1 16 0"/><path d="m12 14 4-5"/><circle cx="12" cy="14" r="1.3"/>',
+    "users": '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.2c2.4.3 4 2.2 4 4.8"/>',
+    "shield": '<path d="M12 3 4.5 6v5.5c0 4.4 3.1 7.8 7.5 9.5 4.4-1.7 7.5-5.1 7.5-9.5V6L12 3Z"/>',
+    "shield-check": '<path d="M12 3 4.5 6v5.5c0 4.4 3.1 7.8 7.5 9.5 4.4-1.7 7.5-5.1 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/>',
+    "globe": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.7 3.9 5.7 3.9 9S14.6 18.3 12 21c-2.6-2.7-3.9-5.7-3.9-9S9.4 5.7 12 3Z"/>',
+    "terminal": '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7.5 9.5 3 2.5-3 2.5"/><path d="M13 15h3.5"/>',
+    "plug": '<path d="M9 3v4M15 3v4"/><path d="M6 7h12v4a6 6 0 0 1-12 0V7Z"/><path d="M12 17v4"/>',
+    "workflow": '<rect x="3" y="3" width="8" height="8" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
+    "cpu": '<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+    "target": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+    "rocket": '<path d="M5 19c.5-3 2-4.5 4-5"/><path d="M14 4c3.5.3 6 2.8 6.3 6.3-1.4 3.1-4.2 5.9-8.3 7.7l-5.5-5.5C8.3 8.4 11 5.6 14 4Z"/><circle cx="15" cy="9" r="1.4"/><path d="M9 14l-3 .5L4.5 17M10 15l-.5 3L7 19.5"/>',
+    "file-check": '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/><path d="m9.5 14 2 2 3.5-4"/>',
+    "bars": '<path d="M5 20v-7M12 20V5M19 20V9"/>',
+    "message": '<path d="M4 5h16v11H9l-5 4V5Z"/><path d="M8 9h8M8 12.5h5"/>',
+    "book": '<path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h10"/>',
+    "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+}
+# README section -> icon. Each one is a small tile drawn above its heading, so the heading text (and its link anchor) stays plain.
+SECTION_ICONS = {
+    "how": "workflow", "models": "cpu", "score": "target", "start": "rocket", "verify": "shield-check", "proofs": "file-check",
+    "board": "bars", "learn": "message", "details": "book", "about": "info", "why": "layers",
+}
+# audit row number -> (icon, short name for the card)
+FEATURE_CARDS = {1: ("layers", "Models in roles"), 2: ("route", "Routing, fallback"), 3: ("gauge", "Budgets"), 4: ("users", "Budget per user"),
+                 5: ("shield", "Guardrails"), 6: ("globe", "Search and fetch"), 7: ("terminal", "Code execution"), 8: ("plug", "MCP")}
+
+
+def _line_icon(name: str, x: float, y: float, size: float, color: str = "var(--ac)") -> str:
+    k = size / 24
+    return (f'<g transform="translate({x} {y}) scale({k:.3f})" fill="none" stroke="{color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{LINE_ICONS[name]}</g>')
+
+
+def section_icon_svg(icon: str) -> str:
+    """A 44 px tile: a tinted rounded square with the line icon in the accent color."""
+    body = ('<rect x="1" y="1" width="42" height="42" rx="12" class="pn"/><rect x="1" y="1" width="42" height="42" rx="12" class="bd" stroke-width="1.2"/>'
+            '<rect x="1" y="1" width="42" height="42" rx="12" fill="var(--ac)" fill-opacity=".08"/>' + _line_icon(icon, 10, 10, 24))
+    return _svg(44, 44, body)
+
+
+def features_svg(ledger: list[dict], evidence: list[dict] | None = None) -> str:
+    """The eight Otari resources as cards: icon, name, status and the dossier that proves it. Status and dossier come from the audit of the ledger."""
+    rows = {r["n"]: r for r in otari_report.audit(ledger, evidence)}
+    width, margin, gap, cw, ch = 860, 16, 14, 193, 96
+    top = 54
+    height = top + 2 * ch + gap + margin
+    parts = [f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="16" class="bg"/><rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="16" class="bd" stroke-width="1.5"/>',
+             _text(margin + 8, 33, "Eight Otari resources, each one checked against the ledger", "tx", 14, 650, spacing="-0.1")]
+    for i, n in enumerate(range(1, 9)):
+        r = rows[n]
+        icon, name = FEATURE_CARDS[n]
+        x, y = margin + (i % 4) * (cw + gap), top + (i // 4) * (ch + gap)
+        ok = r["status"] == "PASS"
+        tone = "var(--ac)" if ok else "var(--am)"
+        label = "PASS" if ok else "NOT PROVEN"
+        pill_w = rc.text_width(label, 10.5, bold=True) + 20
+        sub = f"dossier {r['dossier']}" if r["dossier"] else "no dossier"
+        parts.append(f'<rect x="{x}" y="{y}" width="{cw}" height="{ch}" rx="12" class="pn"/><rect x="{x + .5}" y="{y + .5}" width="{cw - 1}" height="{ch - 1}" rx="11.5" class="bd" stroke-width="1"/>')
+        parts.append(f'<rect x="{x + 14}" y="{y + 14}" width="36" height="36" rx="10" fill="{tone}" fill-opacity=".12"/>' + _line_icon(icon, x + 20, y + 20, 24, tone))
+        parts.append(_text(x + 60, y + 29, name, "tx", 13, 650, spacing="-0.1"))
+        parts.append(_text(x + 60, y + 46, sub, "su", 11, 400, mono=True))
+        parts.append(f'<rect x="{x + 14}" y="{y + 62}" width="{pill_w:.1f}" height="22" rx="11" fill="{tone}" fill-opacity=".14"/>'
+                     + _text(f"{x + 14 + pill_w / 2:.1f}", y + 77, label, "ac" if ok else "am", 10.5, 700, "middle", spacing="0.4"))
+        if ok:
+            parts.append(_text(x + 14 + pill_w + 8, y + 77, "sealed" if r["source"] == "sealed" else "drill only", "su", 11))
+    return _svg(width, height, "\n".join(parts))
 
 
 # One cycle, step by step. Each step names what it does, and a chip says whether it goes through Otari (and which feature) or runs in our own code.
@@ -238,6 +317,9 @@ def write_static() -> list[Path]:
     files = {HEADER: header_svg(), FLOW: flow_svg()}
     for slug, label, icon, style in BUTTONS:
         files[OUT / f"otari-button-{slug}.svg"] = button_svg(label, icon, style)
+    ICON_DIR.mkdir(parents=True, exist_ok=True)
+    for slug, icon in SECTION_ICONS.items():
+        files[ICON_DIR / f"{slug}.svg"] = section_icon_svg(icon)
     for path, text in files.items():
         path.write_text(text, encoding="utf-8")
     return list(files)
@@ -246,7 +328,7 @@ def write_static() -> list[Path]:
 def refresh_figures(check: bool = False) -> bool:
     """Redraws the figures card and its JSON twin for the site; returns True when both were already current."""
     ledger, evidence = load()
-    wanted = {FIGURES: figures_svg(ledger, evidence), FIGURES_JSON: json.dumps(figures_payload(ledger, evidence), indent=2) + "\n"}
+    wanted = {FIGURES: figures_svg(ledger, evidence), FEATURES: features_svg(ledger, evidence), FIGURES_JSON: json.dumps(figures_payload(ledger, evidence), indent=2) + "\n"}
     current = True
     for path, text in wanted.items():
         if not path.exists() or path.read_text(encoding="utf-8") != text:
@@ -264,4 +346,4 @@ if __name__ == "__main__":
     for path in write_static():
         print(f"wrote {path.relative_to(ROOT)}")
     refresh_figures()
-    print(f"wrote {FIGURES.relative_to(ROOT)} and {FIGURES_JSON.relative_to(ROOT)}")
+    print(f"wrote {FIGURES.relative_to(ROOT)}, {FEATURES.relative_to(ROOT)} and {FIGURES_JSON.relative_to(ROOT)}")

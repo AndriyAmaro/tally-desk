@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<style>
+:root{--bg:#0d1017;--panel:#12161f;--bd:#262d3b;--tx:#e7ebf2;--mu:#a9b2c2;--su:#8a94a6;--ac:#2dd4bf;--onac:#03201d;--am:#fbbf24;--bull:#34d399;--bear:#fb7185;--chk:#a78bfa;--glow:#2dd4bf;--glowo:.13}
+@media (prefers-color-scheme:light){:root{--bg:#ffffff;--panel:#f6f7fa;--bd:#dfe3ea;--tx:#0b1020;--mu:#475166;--su:#586377;--ac:#0f766e;--onac:#ffffff;--am:#b45309;--bull:#047857;--bear:#be123c;--chk:#6d28d9;--glow:#0f766e;--glowo:.07}}
+.bg{fill:var(--bg)}.pn{fill:var(--panel)}.bd{stroke:var(--bd);fill:none}.ln{stroke:var(--bd)}
+.tx{fill:var(--tx)}.mu{fill:var(--mu)}.su{fill:var(--su)}.ac{fill:var(--ac)}.am{fill:var(--am)}.onac{fill:var(--onac)}
+.sa{stroke:var(--ac);fill:none}.sm{stroke:var(--am);fill:none}.fb{fill:var(--bull)}.fr{fill:var(--bear)}.fj{fill:var(--am)}.fc{fill:var(--chk)}
+.sk{fill:var(--bd)}
+</style>
+<defs></defs>
+<rect x="1" y="1" width="42" height="42" rx="12" class="pn"/><rect x="1" y="1" width="42" height="42" rx="12" class="bd" stroke-width="1.2"/><rect x="1" y="1" width="42" height="42" rx="12" fill="var(--ac)" fill-opacity=".08"/><g transform="translate(10 10) scale(1.000)" fill="none" stroke="var(--ac)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 7.8 7.5 9.5 4.4-1.7 7.5-5.1 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></g>
+</svg>

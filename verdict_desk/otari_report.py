@@ -353,15 +353,30 @@ def who_saw(d: dict, cfg: dict | None = None) -> dict:
 # ---------------------------------------------------------------- README blocks
 
 def proofs_markdown(rows: list[dict]) -> str:
-    lines = ["| # | Resource | Status | Where the proof lives | Dossier | Request id(s) | Code |", "|---|---|---|---|---|---|---|"]
+    """A short table to scan, then one block per resource: the evidence in a sentence, one request id per line, the code that does it."""
     where = {1: "`config/otari.json`, `llm.py`", 2: "`otari_canary.py`", 3: "`llm.read_headroom`, `llm.route_decision`", 4: "`llm._end_user`, `llm.read_headroom`", 5: "`llm.parse_receipt`",
              6: "`otari_web.py`", 7: "`sandbox_rederive.py`", 8: "`otari_mcp.py`"}
-    origin = {"sealed": "sealed receipts in the ledger", "drill": "a drill file, not sealed", "none": "-"}
+    origin = {"sealed": "Sealed receipts in the ledger", "drill": "A drill file, not sealed", "none": "No proof"}
+    lines = ["| # | Resource | Status | Dossier |", "|---|---|---|---|"]
     for r in rows:
-        ids = "<br>".join([f"`{i}`" for i in r["proof"]] + [f"`{i}` (drill, not sealed)" for i in r["drill_proof"]]) or "-"
-        lines.append(f"| {r['n']} | {r['resource']} | **{r['status']}** | {(origin[r['source']] + ': ' + r['note']) if r['source'] == 'sealed' else r['note']} | {r['dossier'] or '-'} | {ids} | {where[r['n']]} |")
+        lines.append(f"| {r['n']} | {r['resource']} | **{r['status']}** | {r['dossier'] or '-'} |")
     lines.append("")
     lines.append(f"**{summary_line(rows)}.**")
+    for r in rows:
+        lines.append("")
+        lines.append(f"#### {r['n']}. {r['resource']}")
+        lines.append("")
+        lines.append(f"**{r['status']}** &nbsp;|&nbsp; {origin[r['source']]} &nbsp;|&nbsp; dossier {r['dossier'] or '-'}")
+        lines.append("")
+        lines.append(f"> {r['note']}")
+        ids = [f"- `{i}`" for i in r["proof"]] + [f"- `{i}` (drill, not sealed)" for i in r["drill_proof"]]
+        if ids:
+            lines.append("")
+            lines.append("Request ids:")
+            lines.append("")
+            lines.extend(ids)
+        lines.append("")
+        lines.append(f"Code: {where[r['n']]}")
     return "\n".join(lines)
 
 
@@ -375,9 +390,9 @@ def board_markdown(rows: list[dict]) -> str:
 
 def hosts_markdown(cfg: dict | None = None) -> str:
     cfg = cfg or json.loads(HOSTS.read_text(encoding="utf-8"))
-    lines = ["| Host | What it is | What it receives | When |", "|---|---|---|---|"]
+    lines = []
     for h in cfg["hosts"]:
-        lines.append(f"| `{h['host']}` | {h['what']} | {h['receives']} | {h['when']} |")
+        lines.append(f"- **`{h['host']}`**, {h['what']}. Receives: {h['receives']}. When: {h['when']}.")
     return "\n".join(lines)
 
 
@@ -404,7 +419,7 @@ def models_markdown(ledger: list[dict], cfg: dict | None = None) -> str:
             if r.get("served_by") and not _failed(r):
                 bucket = answered.setdefault(c["label"], {})
                 bucket[r["served_by"]] = bucket.get(r["served_by"], 0) + 1
-    lines = ["| Role | Asked for (open weights) | Answered by, from the receipts | Why this model |", "|---|---|---|---|"]
+    lines: list[str] = []
     for name, job, roles, why in ROLE_ROWS:
         specs = [cfg["roles"][r] for r in roles if r in cfg.get("roles", {})]
         asked = sorted({s["model"] for s in specs})
@@ -414,9 +429,15 @@ def models_markdown(ledger: list[dict], cfg: dict | None = None) -> str:
             for key, n in answered.get(r, {}).items():
                 merged[key] = merged.get(key, 0) + n
         top = sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))
-        shown = "<br>".join(f"`{k}` ({n})" for k, n in top[:3]) + (f"<br>and {len(top) - 3} more" if len(top) > 3 else "")
-        asked_cell = "<br>".join(f"`{m}`" for m in asked) + (f"<br>{', '.join(vendors)}" if vendors else "")
-        lines.append(f"| **{name}**<br>{job} | {asked_cell or '-'} | {shown or '-'} | {why} |")
+        shown = ", ".join(f"`{k}` ({n})" for k, n in top[:3]) + (f", and {len(top) - 3} more" if len(top) > 3 else "")
+        asked_cell = ", ".join(f"`{m}`" for m in asked) + (f" ({', '.join(vendors)})" if vendors else "")
+        if lines:
+            lines.append("")
+        lines.append(f"**{name}** &nbsp;|&nbsp; {job}")
+        lines.append("")
+        lines.append(f"- Asked for (open weights): {asked_cell or '-'}")
+        lines.append(f"- Answered by, from the receipts: {shown or '-'}")
+        lines.append(f"- Why this model: {why}")
     return "\n".join(lines)
 
 

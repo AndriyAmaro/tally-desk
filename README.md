@@ -5,6 +5,9 @@
   <img src="docs/readme/otari-figures.svg" width="100%" alt="Figures counted from the ledger: Otari-era dossiers, sealed receipts, provider and model routes that answered, resources proven, backup-route answers">
 </p>
 <p align="center">
+  <img src="docs/readme/otari-features.svg" width="100%" alt="The eight Otari resources with the status the audit gives each one: seven proven from sealed receipts, guardrails not proven">
+</p>
+<p align="center">
   <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="40" alt="Call-by-call view"></a>
   <a href="web/verify.html"><img src="docs/readme/otari-button-verify.svg" height="40" alt="Verify a record"></a>
   <a href="#proofs-resource-by-resource"><img src="docs/readme/otari-button-audit.svg" height="40" alt="Proofs table"></a>
@@ -13,9 +16,13 @@
 
 **Verdict Desk decides on paper trades and answers for every model call it makes.** It is an autonomous trading agent that runs on [Otari](https://otari.ai), the gateway that sits between an app and its model providers. Each of its four decision roles (a bull analyst, a bear analyst, a citation checker and a judge) runs on a different open-weight model, and every call, to a model or to a tool, leaves a receipt: who asked, which model answered through which provider, what it cost, how it stopped. The receipts are sealed into a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
 
+<img src="docs/readme/icons/why.svg" width="44" height="44" alt="">
+
 ## Why it matters
 
 An agent that acts alone has to be able to answer for each thing it asked a model to do. Logs written by the agent itself are not an answer, because the agent wrote them. Here the gateway's own response headers and usage records are captured on every call, the verdict is recomputed from frozen evidence by plain code, and the whole record is checked by a script or a browser tab with nothing to trust but a hash. A judge, an auditor or a stranger can read one cycle call by call and confirm that the model it names is the model that answered.
+
+<img src="docs/readme/icons/how.svg" width="44" height="44" alt="">
 
 ## How it works
 
@@ -32,6 +39,8 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
 8. **Outside witnesses** let a reader check the head of the chain without trusting the operator: OpenTimestamps (Bitcoin) on each cycle, the public Sigstore log for published heads, and, in the earlier era only, an anchor on the Sepolia testnet.
 
+<img src="docs/readme/icons/score.svg" width="44" height="44" alt="">
+
 ## Score map
 
 | Rubric line | What we did | Where to verify |
@@ -44,20 +53,51 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 
 Receipts are also checked against Otari's own usage log with free GET calls. The latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows. The 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key.
 
+<img src="docs/readme/icons/models.svg" width="44" height="44" alt="">
+
 ## Models and roles
 
 Each role is billed to its own end user and asked for one open-weight catalog id. The "Answered by" column is not the config: it is counted from the sealed receipts, so a route that really answered, and the provider that carried it, shows up whatever the config says.
 
 <!-- otari:models:start -->
-| Role | Asked for (open weights) | Answered by, from the receipts | Why this model |
-|---|---|---|---|
-| **Bull analyst**<br>argues the long case | `openai/gpt-oss-120b`<br>OpenAI | `deepinfra:openai/gpt-oss-120b` (17)<br>`ovhcloud:gpt-oss-120b` (1) | an open-weight 120B model from a different vendor than the bear, so the two sides do not echo one model |
-| **Bear analyst**<br>argues the short case | `nvidia/nemotron-3-super-120b-a12b`<br>NVIDIA | `bedrock:nvidia.nemotron-super-3-120b` (18) | an open-weight 120B model from another vendor, so a claim's side can be traced to one model |
-| **Judge**<br>weighs the validated claims | `deepseek/deepseek-v4-flash-0731`<br>DeepSeek | `deepinfra:deepseek-ai/DeepSeek-V4-Pro` (11)<br>`deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (7) | a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget |
-| **Citation checker**<br>re-reads each claim against the evidence it cites | `google/gemma-3-27b-it`<br>Google | `nebius:google/gemma-3-27b-it` (18) | small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1) |
-| **Narrator**<br>reads news headlines in batches | `alibaba/qwen3-235b-a22b-instruct-2507`<br>Alibaba | `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` (180)<br>`bedrock:qwen.qwen3-235b-a22b-2507-v1:0` (27) | a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies |
-| **Tool drivers**<br>search, fetch, sandbox, MCP | `deepseek/deepseek-v4-flash-0731`<br>DeepSeek | `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (63) | the tool does the work and the model only drives it, so a small fast model is enough |
+**Bull analyst** &nbsp;|&nbsp; argues the long case
+
+- Asked for (open weights): `openai/gpt-oss-120b` (OpenAI)
+- Answered by, from the receipts: `deepinfra:openai/gpt-oss-120b` (16), `ovhcloud:gpt-oss-120b` (1)
+- Why this model: an open-weight 120B model from a different vendor than the bear, so the two sides do not echo one model
+
+**Bear analyst** &nbsp;|&nbsp; argues the short case
+
+- Asked for (open weights): `nvidia/nemotron-3-super-120b-a12b` (NVIDIA)
+- Answered by, from the receipts: `bedrock:nvidia.nemotron-super-3-120b` (17)
+- Why this model: an open-weight 120B model from another vendor, so a claim's side can be traced to one model
+
+**Judge** &nbsp;|&nbsp; weighs the validated claims
+
+- Asked for (open weights): `deepseek/deepseek-v4-flash-0731` (DeepSeek)
+- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Pro` (10), `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (7)
+- Why this model: a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget
+
+**Citation checker** &nbsp;|&nbsp; re-reads each claim against the evidence it cites
+
+- Asked for (open weights): `google/gemma-3-27b-it` (Google)
+- Answered by, from the receipts: `nebius:google/gemma-3-27b-it` (17)
+- Why this model: small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1)
+
+**Narrator** &nbsp;|&nbsp; reads news headlines in batches
+
+- Asked for (open weights): `alibaba/qwen3-235b-a22b-instruct-2507` (Alibaba)
+- Answered by, from the receipts: `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` (165), `bedrock:qwen.qwen3-235b-a22b-2507-v1:0` (27)
+- Why this model: a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies
+
+**Tool drivers** &nbsp;|&nbsp; search, fetch, sandbox, MCP
+
+- Asked for (open weights): `deepseek/deepseek-v4-flash-0731` (DeepSeek)
+- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (59)
+- Why this model: the tool does the work and the model only drives it, so a small fast model is enough
 <!-- otari:models:end -->
+
+<img src="docs/readme/icons/start.svg" width="44" height="44" alt="">
 
 ## Quickstart
 
@@ -76,6 +116,8 @@ python3 -m verdict_desk otari-audit --reconcile
 
 Python 3 and its standard library are enough; there is no install step. To see a cycle rendered, run `python3 -m http.server` in the repository root and open `http://localhost:8000/web/cycle.html`.
 
+<img src="docs/readme/icons/verify.svg" width="44" height="44" alt="">
+
 ## Verify without trusting us
 
 You need no key, no account and none of our word for the first three.
@@ -87,24 +129,136 @@ You need no key, no account and none of our word for the first three.
 
 The pages are static: serve the repository as shown in the quickstart to see them rendered.
 
+<img src="docs/readme/icons/proofs.svg" width="44" height="44" alt="">
+
 ## Proofs, resource by resource
 
 <!-- otari:proofs:start -->
-| # | Resource | Status | Where the proof lives | Dossier | Request id(s) | Code |
-|---|---|---|---|---|---|---|
-| 1 | Several open-weight models in distinct roles | **PASS** | sealed receipts in the ledger: bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia.nemotron-super-3-120b, judge deepseek-ai/DeepSeek-V4-Pro, checker google/gemma-3-27b-it | 809 | `d451ceb7-7c4a-4271-a026-04cd8d1dc6ce`<br>`854fa6f2-7e31-4160-ac9f-852dedd08fc3`<br>`40027e6d-73c5-40b1-8867-d47825560ba9`<br>`5fde1821-8cdd-42af-94b0-eafeb630db3c` | `config/otari.json`, `llm.py` |
-| 2 | Routing and fallback | **PASS** | sealed receipts in the ledger: 28 real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count 2), in dossiers 800, 801, 802, 805; newest: a narrator call sent as alibaba/qwen3-235b-a22b-instruct-2507 (the plain catalog id, no routing policy of ours, so this is Otari's own provider failover and not the vd-judge policy) was answered on its second attempt by bedrock:qwen.qwen3-235b-a22b-2507-v1:0. Besides, the failover canary of dossier 809 is the deliberate test of the same route: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true). All sealed in the ledger | 805 | `08856bea-76c3-4819-808d-d6ea75ca619d`<br>`5d1bf032-e3bb-4922-beae-420bef338295`<br>`83482feb-9a56-4443-bc50-f4de77f39f2b`<br>`1dd7daa2-c2ea-4c8f-81b7-aec04e383a71` (drill, not sealed) | `otari_canary.py` |
-| 3 | Budgets and spend limits | **PASS** | sealed receipts in the ledger: budget-aware routing: Otari's spend for the judge's end user (USD 0.003789 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed) | 809 | `40027e6d-73c5-40b1-8867-d47825560ba9`<br>`d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7` (drill, not sealed) | `llm.read_headroom`, `llm.route_decision` |
-| 4 | Budget per user | **PASS** | sealed receipts in the ledger: 10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts | 800 | `7ec3d2a2-e537-40ae-8a49-8e33ecafb57f`<br>`97330c21-9573-4dfa-ad03-1b08a554f3b7`<br>`6dffacf3-82c3-4761-b3e4-774f4cb96753`<br>`07ecf971-850b-47a5-b3b5-f9b0d55aa03f` | `llm._end_user`, `llm.read_headroom` |
-| 5 | Guardrails | **NOT PROVEN** | attached to the vd-judge policy, but Otari reported valid null on 5 calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted | 805 | `214591ee-0f32-4521-92f8-86a7445b93f1`<br>`ccdd5c02-8411-47d2-aafe-1ed6e60a650d` | `llm.parse_receipt` |
-| 6 | Web search and fetch | **PASS** | sealed receipts in the ledger: one search and one page fetch through Otari's tools; 3 sources and an excerpt frozen (excerpt_verified True); the analysts cited 2 of 3 source titles and 1 of 1 page excerpts in the claims the judge weighed | 809 | `c2c68885-0db7-4820-9f98-b2ce054d8740`<br>`917824bd-a3e1-4724-9bd4-427ecc45d0b0` | `otari_web.py` |
-| 7 | Code execution | **PASS** | sealed receipts in the ledger: the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent | 809 | `a93d9fc7-4504-44dc-99db-f851fd495393` | `sandbox_rederive.py` |
-| 8 | MCP | **PASS** | sealed receipts in the ledger: prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok) | 809 | `2a548d7a-cd01-4b5f-b1e0-246a3a680ef4` | `otari_mcp.py` |
+| # | Resource | Status | Dossier |
+|---|---|---|---|
+| 1 | Several open-weight models in distinct roles | **PASS** | 808 |
+| 2 | Routing and fallback | **PASS** | 805 |
+| 3 | Budgets and spend limits | **PASS** | 808 |
+| 4 | Budget per user | **PASS** | 800 |
+| 5 | Guardrails | **NOT PROVEN** | 805 |
+| 6 | Web search and fetch | **PASS** | 796 |
+| 7 | Code execution | **PASS** | 808 |
+| 8 | MCP | **PASS** | 808 |
 
 **8 resources: 7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN.**
+
+#### 1. Several open-weight models in distinct roles
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 808
+
+> bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia.nemotron-super-3-120b, judge deepseek-ai/DeepSeek-V4-Pro, checker google/gemma-3-27b-it
+
+Request ids:
+
+- `72f04cb2-e0e9-4fb4-ab14-0f98c3896d5d`
+- `f156e877-0e26-4170-b426-38fe11a049dc`
+- `0ebaa632-5ab1-45fa-9d7e-fbc760033982`
+- `c35c00cd-bfac-4922-b05a-1242513b5b2e`
+
+Code: `config/otari.json`, `llm.py`
+
+#### 2. Routing and fallback
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 805
+
+> 28 real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count 2), in dossiers 800, 801, 802, 805; newest: a narrator call sent as alibaba/qwen3-235b-a22b-instruct-2507 (the plain catalog id, no routing policy of ours, so this is Otari's own provider failover and not the vd-judge policy) was answered on its second attempt by bedrock:qwen.qwen3-235b-a22b-2507-v1:0. Besides, the failover canary of dossier 808 is the deliberate test of the same route: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true). All sealed in the ledger
+
+Request ids:
+
+- `08856bea-76c3-4819-808d-d6ea75ca619d`
+- `5d1bf032-e3bb-4922-beae-420bef338295`
+- `6c9aa670-29b2-444e-9149-4e880bc8b244`
+- `1dd7daa2-c2ea-4c8f-81b7-aec04e383a71` (drill, not sealed)
+
+Code: `otari_canary.py`
+
+#### 3. Budgets and spend limits
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 808
+
+> budget-aware routing: Otari's spend for the judge's end user (USD 0.002219 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed)
+
+Request ids:
+
+- `0ebaa632-5ab1-45fa-9d7e-fbc760033982`
+- `d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7` (drill, not sealed)
+
+Code: `llm.read_headroom`, `llm.route_decision`
+
+#### 4. Budget per user
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 800
+
+> 10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts
+
+Request ids:
+
+- `0b49f686-1395-46e6-bc10-e5afaf95374b`
+- `ca5fce9d-728d-43a2-b5e6-3ac41cdd59ee`
+- `cae1600e-17e8-44dd-bf65-2771f5de65a3`
+- `4fb7832a-ae40-4b6d-b008-b2a8ebcead88`
+
+Code: `llm._end_user`, `llm.read_headroom`
+
+#### 5. Guardrails
+
+**NOT PROVEN** &nbsp;|&nbsp; No proof &nbsp;|&nbsp; dossier 805
+
+> attached to the vd-judge policy, but Otari reported valid null on 5 calls: nothing was evaluated (the hosted gateway has no guardrails service); not counted
+
+Request ids:
+
+- `214591ee-0f32-4521-92f8-86a7445b93f1`
+- `ccdd5c02-8411-47d2-aafe-1ed6e60a650d`
+
+Code: `llm.parse_receipt`
+
+#### 6. Web search and fetch
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 796
+
+> one search and one page fetch through Otari's tools; 3 sources and an excerpt frozen (excerpt_verified True); the analysts cited 2 of 3 source titles and 0 of 1 page excerpts in the claims the judge weighed
+
+Request ids:
+
+- `7e7888e0-8902-4ddf-8af7-98e98554c458`
+- `607c9d50-6e28-44bb-a427-7a6c0f025b63`
+
+Code: `otari_web.py`
+
+#### 7. Code execution
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 808
+
+> the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent
+
+Request ids:
+
+- `1ab08d76-8da0-40bb-906d-0aad584679fc`
+
+Code: `sandbox_rederive.py`
+
+#### 8. MCP
+
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 808
+
+> prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok)
+
+Request ids:
+
+- `15cf7fe8-86b6-4353-972a-42524d82d11e`
+
+Code: `otari_mcp.py`
 <!-- otari:proofs:end -->
 
 `otari-audit` prints this table from the ledger. A proof "sealed" lives in the hash-chained ledger and is replayed offline; a "drill" proof lives in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) and is not sealed. The guardrail row is NOT PROVEN on purpose: it is attached to the `vd-judge` policy, but Otari reported no verdict (`valid: null`) on every call.
+
+<img src="docs/readme/icons/board.svg" width="44" height="44" alt="">
 
 ## Open-model scoreboard
 
@@ -114,13 +268,13 @@ The pages are static: serve the repository as shown in the quickstart to see the
 <!-- otari:board:start -->
 | Model (provider:model) | Calls | OK | Refusals / failures | p50 ms | p95 ms | Fallbacks | Accepted claims | USD per claim |
 |---|---|---|---|---|---|---|---|---|
-| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 180 | 180 | - | 20544 | 29292 | 0 | - | - |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 82 | 82 | - | 3281 | 11182 | 12 | - | - |
+| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 165 | 165 | - | 20444 | 29453 | 0 | - | - |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 77 | 77 | - | 3458 | 11916 | 11 | - | - |
 | `bedrock:qwen.qwen3-235b-a22b-2507-v1:0` | 27 | 27 | - | 7059 | 13228 | 27 | - | - |
-| `bedrock:nvidia.nemotron-super-3-120b` | 18 | 18 | - | 1974 | 2944 | 0 | 76 | 0.000161 |
-| `nebius:google/gemma-3-27b-it` | 18 | 18 | - | 5944 | 23428 | 0 | - | - |
-| `deepinfra:openai/gpt-oss-120b` | 17 | 17 | - | 19580 | 24990 | 0 | 68 | 0.000086 |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 11 | 11 | - | 1859 | 2867 | 0 | - | - |
+| `bedrock:nvidia.nemotron-super-3-120b` | 17 | 17 | - | 1974 | 2944 | 0 | 72 | 0.000159 |
+| `nebius:google/gemma-3-27b-it` | 17 | 17 | - | 5944 | 23428 | 0 | - | - |
+| `deepinfra:openai/gpt-oss-120b` | 16 | 16 | - | 19580 | 24990 | 0 | 64 | 0.000084 |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 10 | 10 | - | 1724 | 2867 | 0 | - | - |
 | `(no answer) alibaba/qwen3-235b-a22b-instruct-2507` | 7 | 0 | 409 x7 | - | - | 0 | - | - |
 | `ovhcloud:gpt-oss-120b` | 1 | 1 | - | - | - | 1 | 4 | 0.000186 |
 <!-- otari:board:end -->
@@ -128,6 +282,8 @@ The pages are static: serve the repository as shown in the quickstart to see the
 Every call of every Otari-era dossier, grouped by the model that answered. The fallbacks in this table have two sources. Real traffic: calls that Otari re-routed to a second provider when the first did not answer (receipts with `Otari-Fallback: true` and attempt count 2). They are mostly narrator batches, with an occasional analyst call, all sent as plain catalog ids with no routing policy of ours, so this is Otari's own provider failover and not the `vd-judge` policy; the audit row above counts them from the ledger. The deliberate test: the failover canary, one small call per cycle through a policy built to fail over, which shows the backup route working even when no real call needs it.
 
 </details>
+
+<img src="docs/readme/icons/learn.svg" width="44" height="44" alt="">
 
 ## What we learned about Otari
 
@@ -140,6 +296,8 @@ Putting a real agent behind the gateway turned up friction worth reporting. Ever
 - MCP activity is invisible on Chat Completions, so the proof needs a streamed Messages request (entry 16).
 
 The log also records what worked on the first try (entry 19), since that is feedback too. No GitHub issue has been opened for these yet, so the log is the one place to read them.
+
+<img src="docs/readme/icons/details.svg" width="44" height="44" alt="">
 
 ## Details
 
@@ -162,11 +320,21 @@ Four models take part in every decision: a bull and a bear analyst, a judge, and
 
 Three different things, kept apart on purpose:
 
-| Layer | Who enforces it | What it is | Proof in this repository |
-|---|---|---|---|
-| Budget objects on the Otari side | **Otari** | `vd-analyst`: USD 0.10 a day per end user, attached to each role's end user (`vd-bull`, `vd-judge`, and so on) through the `Otari-End-User-Budget` header when the end user is created; `vd-org-lifetime`: a USD 1.50 a day ceiling for the organization; `vd-drill-tiny`: USD 0.01, for one drill | the echoed budget id on the receipts (audit row 4); a refusal `403 budget_exceeded` (scope `user`) in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl) |
-| Otari's spend state, read by the app | Otari holds the numbers, the **app only reads them** | each cycle reads `GET /end-users` (spend plus reserve per end user) and the judge may use the larger model only while its end user is under 80 percent of its day; the read, with the HTTP status of every lookup, is sealed in `llm.otari.headroom` | audit row 3, from the newest dossier whose read of the judge worked |
-| Cycle caps and runner limits | **The app alone** (`llm._cycle_check`, `tools/otari_runner.py`) | no new call starts once a cycle has spent USD 0.02 on the core roles or USD 0.06 on the tool roles; the runner stops at USD 2.00 in all and at 8 cycles a day | a refusal by a cap is a client-side receipt (`cycle_cap_exceeded`, `source: client`), never an Otari refusal |
+**1. Budget objects on the Otari side** &nbsp;|&nbsp; enforced by **Otari**
+
+- What it is: `vd-analyst`, USD 0.10 a day per end user, attached to each role's end user (`vd-bull`, `vd-judge`, and so on) through the `Otari-End-User-Budget` header when the end user is created; `vd-org-lifetime`, a USD 1.50 a day ceiling for the organization; `vd-drill-tiny`, USD 0.01, for one drill.
+- Proof in this repository: the echoed budget id on the receipts (audit row 4), and a `403 budget_exceeded` refusal (scope `user`) in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl).
+
+**2. Otari's spend state, read by the app** &nbsp;|&nbsp; Otari holds the numbers, the **app only reads them**
+
+- What it is: each cycle reads `GET /end-users` (spend plus reserve per end user), and the judge may use the larger model only while its end user is under 80 percent of its day. The read, with the HTTP status of every lookup, is sealed in `llm.otari.headroom`.
+- Proof in this repository: audit row 3, from the newest dossier whose read of the judge worked.
+
+**3. Cycle caps and runner limits** &nbsp;|&nbsp; **the app alone** (`llm._cycle_check`, `tools/otari_runner.py`)
+
+- What it is: no new call starts once a cycle has spent USD 0.02 on the core roles or USD 0.06 on the tool roles; the runner stops at USD 2.00 in all and at 8 cycles a day.
+- Proof in this repository: a refusal by a cap is a client-side receipt (`cycle_cap_exceeded`, `source: client`), never an Otari refusal.
+
 
 What is and is not shown: Otari's own `403 budget_exceeded` refusal has been seen once, in a deliberate drill against the USD 0.01 budget, and is **not** in a sealed production dossier. No production cycle has been refused by an Otari budget. The cycle caps are our own code and are not an Otari feature.
 
@@ -178,27 +346,25 @@ What is and is not shown: Otari's own `403 budget_exceeded` refusal has been see
 Every prompt goes to the gateway, then to the upstream provider named in the receipt (the page shows it per dossier). Every other host the code names:
 
 <!-- otari:hosts:start -->
-| Host | What it is | What it receives | When |
-|---|---|---|---|
-| `otari.ai` | the Otari gateway (base URL https://otari.ai/api/v1) | every prompt of every model call, the tool requests (search, fetch, sandbox code, MCP), and our end-user ids | every cycle, with OTARI_API_KEY set |
-| `mcp.api.coingecko.com` | CoinGecko's public MCP server | the TypeScript price query the model writes and Otari sends; our code never contacts it | once per cycle, by Otari |
-| `data-api.binance.vision` | Binance public market data | our IP address and the symbol asked for (no key) | every decision |
-| `www.okx.com` | OKX public market data (funding rate) | our IP address and the instrument asked for (no key) | every decision |
-| `api.gdeltproject.org` | GDELT news search | our IP address and the search words (no key) | every decision, unless news is off |
-| `cointelegraph.com` | public RSS feed | our IP address (a GET of the feed) | every cycle, narrative voices |
-| `www.coindesk.com` | public RSS feed | our IP address (a GET of the feed) | every cycle, narrative voices |
-| `decrypt.co` | public RSS feed | our IP address (a GET of the feed) | every cycle, narrative voices |
-| `www.theblock.co` | public RSS feed | our IP address (a GET of the feed) | every cycle, narrative voices |
-| `cryptoslate.com` | public RSS feed | our IP address (a GET of the feed) | every cycle, narrative voices |
-| `t.me` | Telegram public channel previews (t.me/s/...) | our IP address (a GET of a public preview page) | every cycle, narrative voices |
-| `search.sigstore.dev` | the public Sigstore transparency log | a lookup of a published head hash | only in the witness checks |
-| `andriyamaro.github.io` | the published site and ledger (read-only) | a GET of public files | only in the verification tools |
-| `github.com` | the source repository and its workflow evidence | git pushes of dossiers (branch otari) and reads of public pages | when a dossier is pushed or a witness is read |
-| `ethereum-sepolia-rpc.publicnode.com` | a public Sepolia RPC | read calls and, only with SEPOLIA_PRIVATE_KEY set, practice transactions | not used on the otari branch (no key) |
-| `sepolia.gateway.tenderly.co` | a public Sepolia RPC (fallback) | read calls | not used on the otari branch (no key) |
-| `sepolia.etherscan.io` | a block explorer link | nothing from us: it is a link a reader may open | never contacted by the code |
-| `api.mistral.ai` | the original, pre-Otari LLM provider (the default when OTARI_API_KEY is not set) | prompts, only when MISTRAL_API_KEY is set and OTARI_API_KEY is not | never in Otari mode |
-| `api.anthropic.com` | the optional native Anthropic provider (LLM_PROVIDER=anthropic) | prompts, only when that provider is selected | never in Otari mode |
+- **`otari.ai`**, the Otari gateway (base URL https://otari.ai/api/v1). Receives: every prompt of every model call, the tool requests (search, fetch, sandbox code, MCP), and our end-user ids. When: every cycle, with OTARI_API_KEY set.
+- **`mcp.api.coingecko.com`**, CoinGecko's public MCP server. Receives: the TypeScript price query the model writes and Otari sends; our code never contacts it. When: once per cycle, by Otari.
+- **`data-api.binance.vision`**, Binance public market data. Receives: our IP address and the symbol asked for (no key). When: every decision.
+- **`www.okx.com`**, OKX public market data (funding rate). Receives: our IP address and the instrument asked for (no key). When: every decision.
+- **`api.gdeltproject.org`**, GDELT news search. Receives: our IP address and the search words (no key). When: every decision, unless news is off.
+- **`cointelegraph.com`**, public RSS feed. Receives: our IP address (a GET of the feed). When: every cycle, narrative voices.
+- **`www.coindesk.com`**, public RSS feed. Receives: our IP address (a GET of the feed). When: every cycle, narrative voices.
+- **`decrypt.co`**, public RSS feed. Receives: our IP address (a GET of the feed). When: every cycle, narrative voices.
+- **`www.theblock.co`**, public RSS feed. Receives: our IP address (a GET of the feed). When: every cycle, narrative voices.
+- **`cryptoslate.com`**, public RSS feed. Receives: our IP address (a GET of the feed). When: every cycle, narrative voices.
+- **`t.me`**, Telegram public channel previews (t.me/s/...). Receives: our IP address (a GET of a public preview page). When: every cycle, narrative voices.
+- **`search.sigstore.dev`**, the public Sigstore transparency log. Receives: a lookup of a published head hash. When: only in the witness checks.
+- **`andriyamaro.github.io`**, the published site and ledger (read-only). Receives: a GET of public files. When: only in the verification tools.
+- **`github.com`**, the source repository and its workflow evidence. Receives: git pushes of dossiers (branch otari) and reads of public pages. When: when a dossier is pushed or a witness is read.
+- **`ethereum-sepolia-rpc.publicnode.com`**, a public Sepolia RPC. Receives: read calls and, only with SEPOLIA_PRIVATE_KEY set, practice transactions. When: not used on the otari branch (no key).
+- **`sepolia.gateway.tenderly.co`**, a public Sepolia RPC (fallback). Receives: read calls. When: not used on the otari branch (no key).
+- **`sepolia.etherscan.io`**, a block explorer link. Receives: nothing from us: it is a link a reader may open. When: never contacted by the code.
+- **`api.mistral.ai`**, the original, pre-Otari LLM provider (the default when OTARI_API_KEY is not set). Receives: prompts, only when MISTRAL_API_KEY is set and OTARI_API_KEY is not. When: never in Otari mode.
+- **`api.anthropic.com`**, the optional native Anthropic provider (LLM_PROVIDER=anthropic). Receives: prompts, only when that provider is selected. When: never in Otari mode.
 <!-- otari:hosts:end -->
 
 </details>
@@ -250,6 +416,8 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 ## More
 
 [Architecture of the code](docs/architecture.md), [evidence files](docs/evidence/), and, as background that is not part of the Otari work, the earlier chain and its tooling (hash-chained dossiers, the citation validator, a Chainlink CRE anchor on Sepolia) in [`docs/HISTORY.md`](docs/HISTORY.md).
+
+<img src="docs/readme/icons/about.svg" width="44" height="44" alt="">
 
 ## About this repository
 

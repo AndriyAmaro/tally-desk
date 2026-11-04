@@ -222,7 +222,7 @@ class ReadmeBlocksTest(unittest.TestCase):
         self.assertNotIn("old", out)
         self.assertIn("| 1 | Several open-weight models", out)
         self.assertIn("| Model (provider:model) |", out)
-        self.assertIn("| `otari.ai` |", out)
+        self.assertIn("- **`otari.ai`**,", out)
         self.assertEqual(rep.refresh_readme(out, LEDGER, EVIDENCE), out, "refreshing twice changes nothing")
 
     def test_the_models_table_counts_answers_from_the_receipts_and_asks_only_open_weights(self):
