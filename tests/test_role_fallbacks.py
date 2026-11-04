@@ -216,6 +216,12 @@ class ConfigTest(unittest.TestCase):
         bull = self.cfg["roles"]["bull"]
         self.assertNotEqual(bull["fallbacks"][0].split("/")[0], bull["model"].split("/")[0], "the first fallback of the bull is another vendor")
 
+    def test_the_run_summary_sealed_in_the_dossier_lists_the_chains(self):
+        with mock.patch.dict(os.environ, {"OTARI_API_KEY": KEY}):
+            summary = llm.otari_summary()
+        self.assertEqual(summary["fallbacks"], {r: s["fallbacks"] for r, s in self.cfg["roles"].items() if s.get("fallbacks")})
+        self.assertEqual(sorted(summary["fallbacks"]), ["bear", "bull", "checker", "judge", "narrator"])
+
     def test_the_tool_roles_have_no_chain_because_their_tool_loop_is_proven_on_one_model(self):
         for role in ("searcher", "fetcher", "sandbox", "mcp"):
             self.assertNotIn("fallbacks", self.cfg["roles"][role])

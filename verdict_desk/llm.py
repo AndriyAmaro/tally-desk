@@ -249,7 +249,7 @@ def _otari_interval(cfg: dict) -> float:
 
 
 def otari_summary() -> dict | None:
-    """What the dossier records about the run: the base URL, the sha256 of the role config and the model of each role."""
+    """What the dossier records about the run: the base URL, the sha256 of the role config, the model of each role and the fallback chain of the roles that have one."""
     if not otari_active():
         return None
     cfg = otari_config()
@@ -257,6 +257,7 @@ def otari_summary() -> dict | None:
             "config_sha256": hashlib.sha256(OTARI_CONFIG.read_bytes()).hexdigest(),
             "roles": {name: spec["model"] for name, spec in cfg["roles"].items()},
             "sent": {name: sent_model(name, cfg) for name in cfg["roles"]},
+            "fallbacks": {name: list(spec["fallbacks"]) for name, spec in cfg["roles"].items() if spec.get("fallbacks")},
             "cycle_cap_usd": None if cycle_cap(cfg) is None else format(cycle_cap(cfg), "f")}
 
 
