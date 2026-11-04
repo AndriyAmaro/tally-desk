@@ -186,7 +186,7 @@ fetch('../series.json', { cache: 'no-store' }).then(function (r) { if (!r.ok) th
   var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var rows = s.eras.map(function (e) {
     var served = Object.keys(e.served_by || {}).sort(function (a, b) { return e.served_by[b] - e.served_by[a]; }).map(function (m) { return esc(m) + ' ×' + e.served_by[m]; }).join(', ');
-    return '<tr><td>#' + e.from_seq + '–#' + e.to_seq + '</td><td>' + esc((e.from_time || '').slice(0, 16).replace('T', ' ')) + ' → ' + esc((e.to_time || '').slice(0, 16).replace('T', ' ')) + '</td><td>' + esc(e.model || '·') + '</td><td>' + esc(e.status) + (e.reason ? ': ' + esc(e.reason) : '') + '</td><td>' + (served || '·') + '</td></tr>';
+    return '<tr><td>#' + e.from_seq + ' to #' + e.to_seq + '</td><td>' + esc((e.from_time || '').slice(0, 16).replace('T', ' ')) + ' → ' + esc((e.to_time || '').slice(0, 16).replace('T', ' ')) + '</td><td>' + esc(e.model || '·') + '</td><td>' + esc(e.status) + (e.reason ? ': ' + esc(e.reason) : '') + '</td><td>' + (served || '·') + '</td></tr>';
   }).join('');
   document.getElementById('series').innerHTML = '<table><thead><tr><th>Records</th><th>From → to (UTC)</th><th>Configured model</th><th>Outcome</th><th>Answered by</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }).catch(function () { document.getElementById('series').textContent = 'The series is written on each hourly run (python3 -m verdict_desk series).'; });
