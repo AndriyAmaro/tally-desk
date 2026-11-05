@@ -5,7 +5,7 @@
   <img src="docs/readme/otari-figures.svg" width="100%" alt="Figures counted from the ledger: Otari-era dossiers, sealed receipts, provider and model routes that answered, resources proven, backup-route answers">
 </p>
 <p align="center">
-  <img src="docs/readme/otari-features.svg" width="100%" alt="The eight Otari resources with the status the audit gives each one: seven proven from sealed receipts, guardrails not proven">
+  <img src="docs/readme/otari-features.svg" width="100%" alt="The eight Otari resources with the status the audit gives each one: all eight proven from sealed receipts">
 </p>
 <p align="center">
   <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="40" alt="Call-by-call view"></a>
@@ -35,7 +35,7 @@ An agent that acts alone has to be able to answer for each thing it asked a mode
 1. **Evidence** is gathered from public market data and news, then frozen. Otari's web search and fetch tools add one sourced page.
 2. **Bull and bear** argue from the same evidence, each on its own open-weight model.
 3. **The citation checker** re-reads every claim against the evidence it cites. From rules v7 its marks have a consequence for the verdict (see the details below).
-4. **The judge** weighs only the claims that were validated. A guardrail is attached to its policy, but Otari never reported a result, so that feature is **NOT PROVEN** and not claimed. A guardrail service of our own is built for it (see the details below) but is not deployed, so nothing changes in the audit until live receipts exist.
+4. **The judge** weighs only the claims that were validated. Every call that reads outside text is screened by a guardrail service of our own, mandated in the Otari dashboard (details below), and Otari reports its verdict in each receipt.
 5. **The rules engine** is ordinary deterministic code. It turns the judge's lean into a paper-trade verdict, and `replay` recomputes it from the frozen evidence.
 6. **Two independent checks** run through Otari: the verdict is re-derived in Otari's code sandbox and compared with the local run, and prices are read through an MCP server and compared with the market data.
 7. **The sealed dossier** holds the evidence, the verdict and one receipt per call, linked by hash to the one before it.
@@ -55,7 +55,7 @@ Three safeguards sit around those steps, each with its own receipts or sealed fi
 |---|---|---|
 | Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard), [models and roles](#models-and-roles) |
 | Otari features, 10 each, max 6 (60) | Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP | [Proofs](#proofs-resource-by-resource) rows 2, 3, 4, 6, 7, 8, each with request ids |
-| Guardrails | **NOT PROVEN, and not claimed.** Attached to the `vd-judge` policy, but Otari reported `valid: null` on every call, so nothing was evaluated. A service of our own for the prompt-injection screen is built ([`services/guardrail/`](services/guardrail/README.md)) and switched off until it is deployed | [Proofs](#proofs-resource-by-resource) row 5 |
+| Guardrails | **Proven.** Our own prompt-injection screen ([`services/guardrail/`](services/guardrail/README.md), on Cloudflare Workers) is mandated in the Otari dashboard in monitor mode, and Otari evaluates it on every call that reads outside text. A live drill in block mode served a normal headline and refused an injection with a 403 | [Proofs](#proofs-resource-by-resource) row 5 |
 | Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](web/cycle.html) |
 | Our feedback to Otari | Every real snag met with the gateway, with symptom, steps to reproduce and status | [`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md) |
 
@@ -219,13 +219,15 @@ Code: `llm._end_user`, `llm.read_headroom`
 
 **PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 818
 
-> the custom profile tally-web-injection was evaluated by Otari on 50 sealed calls (50 passed, 0 flagged) in dossiers 817, 818; newest: dossier 818, narrator call, request 3e820a2c-3e3e-407c-ba92-6686331bc0c3, header status evaluated, mode monitor, valid true, score 0
+> the custom profile tally-web-injection was evaluated by Otari on 50 sealed calls (50 passed, 0 flagged) in dossiers 817, 818; newest: dossier 818, narrator call, request 3e820a2c-3e3e-407c-ba92-6686331bc0c3, header status evaluated, mode monitor, valid true, score 0. The guardrail drill (block mode, not sealed, not counted) served a benign headline with an evaluated verdict and refused a malicious one with 403 guardrail_violation (score 0.985)
 
 Request ids:
 
 - `3e820a2c-3e3e-407c-ba92-6686331bc0c3`
 - `8790116d-816e-4c68-a1ae-97c0a013d0ab`
 - `2a77acf5-668b-48cd-9ad6-ac3872607188`
+- `34854aa9-88ba-4992-a6d3-63cb2a825e96` (drill, not sealed)
+- `eda1a945-0631-4704-b6ef-4793b490d999` (drill, not sealed)
 
 Code: `llm.guardrail_request`, `llm.parse_receipt`, `services/guardrail/`
 
@@ -329,14 +331,14 @@ Four models take part in every decision: a bull and a bear analyst, a judge, and
 </details>
 
 <details>
-<summary>Guardrails: the screen we built, and what is not proven yet</summary>
+<summary>Guardrails: the screen we built, and what it proves</summary>
 
-Our agents put untrusted text in prompts: news headlines, fetched web pages, Telegram previews. A prompt-injection screen on that text is a real need. The hosted Otari gateway has no guardrails service of its own (feedback log, entries 11 and 13), but Otari lets an organization mandate a profile that points at a service of its own, with a bearer credential, so we wrote one.
+Our agents put untrusted text in prompts: news headlines, fetched web pages, Telegram previews. A prompt-injection screen on that text is a real need. The built-in `prompt-injection` profile has no service behind it on the hosted Otari gateway (it gave `valid: null` on every call; feedback log, entries 11 and 13), but Otari lets an organization mandate a profile that points at a service of its own, with a bearer credential, so we wrote one.
 
 - **The service** is [`services/guardrail/`](services/guardrail/README.md): a zero-dependency JavaScript service for Cloudflare Workers (Vercel functions also work) that speaks Otari's `POST /validate` contract with the profile `tally-web-injection`. It is **rules, not a model**: weighted patterns for instruction override, system prompt exfiltration, role or format hijack, requests to send data to a URL, and hidden characters, with a score from 0 to 1 and `valid: false` at 0.7 or more. It is tested on 48 injection samples and 80 benign ones, and on every text of this repository's ledger (news titles, page excerpts, the evidence the analysts read, narrative voices, claims; 20,252 distinct texts) where it flags none, because a false positive blocks a cycle. It misses rephrased and translated attacks, and says so.
-- **The switch** is `guardrails.enabled` in `config/otari.json`, and it is **false**. When it is true, the requests of the analysts, the checker, the judge, the narrator and the search and fetch tools carry `guardrails: [{"profile": "tally-web-injection", "mode": "monitor", "on_unavailable": "monitor"}]`, so a service outage never stops a cycle. The endpoint and the credential live in an organization mandate in the Otari dashboard, never in this repository. Each receipt records the `Otari-Guardrails` entry (profile, mode, valid, score, status, reason), the cycle page shows a chip per call, and a soft closure check `guardrail_ran` exists only for a cycle run with the switch on.
-- **The drill** `python3 -m verdict_desk otari-drill guardrail` sends a benign and a deliberately malicious headline through the narrator in `block` mode and writes an evidence line. Nothing has been run yet, so there is no result to report.
-- **What the audit says** stays **NOT PROVEN** until live receipts exist. It turns to PASS only from sealed receipts whose header says `status: evaluated` for the custom profile, and it names the dossier and request ids then. Until the owner deploys the service, sets the token as a Worker secret and pastes it into the Otari dashboard, and sets the switch, no receipt can show that.
+- **The switch** is `guardrails.enabled` in `config/otari.json`, and it is **true** since 2026-11-05. The requests of the analysts, the checker, the judge, the narrator and the search and fetch tools carry `guardrails: [{"profile": "tally-web-injection", "mode": "monitor", "on_unavailable": "monitor"}]`, so a service outage never stops a cycle. The endpoint and the credential live in an organization mandate in the Otari dashboard, never in this repository; the credential is a random token held as a Worker secret. Each receipt records the `Otari-Guardrails` entry (profile, mode, valid, score, status, reason), the cycle page shows a chip per call, and a soft closure check `guardrail_ran` applies to a cycle run with the switch on.
+- **The drill** `python3 -m verdict_desk otari-drill guardrail` sends a benign and a deliberately malicious headline through the narrator in `block` mode and writes an evidence line. Run on 2026-11-05 with a service key: the benign headline was served (`valid: true`, score 0, `status: evaluated`, request `34854aa9-88ba-4992-a6d3-63cb2a825e96`), and the injection was refused with HTTP 403 `guardrail_violation`, score 0.985, no provider call (request `eda1a945-0631-4704-b6ef-4793b490d999`). The line is in [`docs/evidence/otari-drills.jsonl`](docs/evidence/otari-drills.jsonl); it is a drill, not sealed in the ledger.
+- **What the audit says** is **PASS** (row 5), and it counts only sealed receipts whose header says `status: evaluated` for the custom profile; it names the dossiers and request ids. Production cycles run in monitor mode, so they record a verdict and never block; the block is what the drill shows.
 
 </details>
 
@@ -424,7 +426,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 <summary>Limits and honest caveats</summary>
 
 - **Paper trading only.** No order is routed anywhere and there is no key with trading rights. The verdicts are simulated positions, not advice.
-- **Guardrails are NOT PROVEN, and the service we built for them is not deployed.** The policy has one attached, but Otari reported `valid: null` on every call; since dossier 805 the header says `unavailable, not_configured` (the hosted gateway has no guardrails service we could find; feedback log, entries 11 and 13). It is not counted anywhere.
+- **Guardrails run in monitor mode in production.** They record a verdict on every screened call and never stop a cycle; the block is shown in a drill, not in a sealed cycle. The detector is rules, not a model: it misses rephrased and translated attacks, and it flags an article that quotes an attack verbatim. Before our own service, the built-in `prompt-injection` profile gave `valid: null` on every call (since dossier 805 the header says `unavailable, not_configured`; feedback log, entries 11 and 13).
 - **Otari's budget refusal was seen once, in a drill.** No production cycle has been refused by an Otari budget; the per-cycle caps are our own code, not an Otari feature.
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.

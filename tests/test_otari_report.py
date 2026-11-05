@@ -30,6 +30,8 @@ def answered(d):
 
 ANSWERED = [d for d in ERA if answered(d)]
 EVIDENCE = rep.read_evidence()
+# The ledger as it stood before our own guardrail service was switched on (2026-11-05): the dossiers that carry no verdict of the custom profile.
+PRE_GUARD = LEDGER[:next((i for i, d in enumerate(LEDGER) if "tally-web-injection" in json.dumps(d)), len(LEDGER))]
 
 
 def receipt(role, rid, **kw):
@@ -72,11 +74,18 @@ class CallsTest(unittest.TestCase):
 
 
 class AuditTest(unittest.TestCase):
-    def rows(self):
-        return {r["n"]: r for r in rep.audit(LEDGER, EVIDENCE)}
+    def rows(self, ledger=None):
+        return {r["n"]: r for r in rep.audit(LEDGER if ledger is None else ledger, EVIDENCE)}
 
-    def test_the_real_ledger_proves_seven_of_eight_and_says_why_the_guardrail_does_not_count(self):
+    def test_the_whole_real_ledger_proves_eight_of_eight_with_the_custom_guardrail_sealed(self):
         rows = self.rows()
+        self.assertEqual([rows[n]["status"] for n in range(1, 9)], ["PASS"] * 8)
+        self.assertEqual(rows[5]["source"], "sealed")
+        self.assertTrue(rows[5]["proof"], "row 5 names request ids")
+        self.assertEqual(rep.summary_line(list(rows.values())), "8 resources: 8 proven from sealed receipts + 0 from drills (not sealed) + 0 NOT PROVEN")
+
+    def test_the_ledger_before_the_custom_guardrail_proves_seven_of_eight_and_says_why_the_guardrail_does_not_count(self):
+        rows = self.rows(PRE_GUARD)
         self.assertEqual([rows[n]["status"] for n in range(1, 9)], ["PASS", "PASS", "PASS", "PASS", "NOT PROVEN", "PASS", "PASS", "PASS"])
         self.assertIn("valid null", rows[5]["note"])
         self.assertIn("not counted", rows[5]["note"])
@@ -84,7 +93,7 @@ class AuditTest(unittest.TestCase):
         self.assertEqual(len(rep.RUBRIC), 8)
 
     def test_in_the_real_ledger_fallback_budget_and_end_users_are_proven_from_sealed_receipts_not_from_drills(self):
-        rows = self.rows()
+        rows = self.rows(PRE_GUARD)
         self.assertEqual({n: rows[n]["source"] for n in range(1, 9) if n != 5}, {n: "sealed" for n in (1, 2, 3, 4, 6, 7, 8)})
         self.assertEqual(rows[5]["source"], "none")
         self.assertEqual(rep.summary_line(list(rows.values())), "8 resources: 7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN")
@@ -160,9 +169,11 @@ class AuditTest(unittest.TestCase):
         self.assertEqual(rep.audit([d], [])[6]["status"], "NOT PROVEN")
 
     def test_the_text_report_lists_every_row_and_the_count(self):
-        text = rep.render_audit(rep.audit(LEDGER, EVIDENCE))
+        text = rep.render_audit(rep.audit(PRE_GUARD, EVIDENCE))
         self.assertEqual(len(re.findall(r"^(PASS|NOT PROVEN) ", text, re.M)), 8)
         self.assertIn("7 proven from sealed receipts + 0 from drills (not sealed) + 1 NOT PROVEN", text)
+        full = rep.render_audit(rep.audit(LEDGER, EVIDENCE))
+        self.assertIn("8 proven from sealed receipts + 0 from drills (not sealed) + 0 NOT PROVEN", full)
         self.assertNotIn("NAO", text)
 
 

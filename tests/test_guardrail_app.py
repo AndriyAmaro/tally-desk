@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from tests.test_otari import BODY, HEADERS, KEY, FakeResponse, plain_config
-from tests.test_otari_report import ANSWERED, EVIDENCE, LEDGER, synthetic
+from tests.test_otari_report import ANSWERED, EVIDENCE, LEDGER, PRE_GUARD, synthetic
 from verdict_desk import closure, dossier, llm, otari_report as rep
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -254,8 +254,14 @@ class AuditRowTest(unittest.TestCase):
         self.assertEqual(row["status"], "NOT PROVEN")
         self.assertIn("was asked for on 4 sealed calls but no header said status evaluated (it said no header)", row["note"])
 
-    def test_the_real_ledger_stays_not_proven_with_the_true_reason(self):
+    def test_the_whole_real_ledger_passes_row_5_from_sealed_receipts_of_the_custom_profile(self):
         row = self.row5(LEDGER)
+        self.assertEqual((row["status"], row["source"]), ("PASS", "sealed"))
+        self.assertIn(PROFILE, row["note"])
+        self.assertIn("0 flagged", row["note"])
+
+    def test_the_ledger_before_the_service_stays_not_proven_with_the_true_reason(self):
+        row = self.row5(PRE_GUARD)
         self.assertEqual(row["status"], "NOT PROVEN")
         self.assertIn("from dossier 805 the header says why: status unavailable, reason not_configured", row["note"])
         self.assertIn(f"The custom profile {PROFILE} appears in no sealed receipt yet", row["note"])
@@ -267,8 +273,11 @@ class AuditRowTest(unittest.TestCase):
 
 
 class ClosureTest(unittest.TestCase):
+    # The newest answered dossier that carries no guardrail field at all, so the live ledger cannot add calls to the counts below.
+    BASE = next(d for d in reversed(ANSWERED) if "guardrail" not in json.dumps(d))
+
     def body(self, entry, summary=True):
-        d = with_guardrail(ANSWERED[-1], entry)
+        d = with_guardrail(self.BASE, entry)
         if summary:
             d["llm"]["otari"]["guardrails"] = {"profile": PROFILE, "mode": "monitor", "on_unavailable": "monitor", "roles": ["bull", "bear", "judge", "checker"]}
         return {k: v for k, v in d.items() if k not in ("hash", "closure")}

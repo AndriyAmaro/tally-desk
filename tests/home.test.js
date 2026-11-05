@@ -41,7 +41,7 @@ test("the landing page draws the five figures, the latest cycle and the resource
   await m.settle();
   const card = JSON.parse(payloadText).figures;
   for (const f of card) assert.ok(m.els.figs.innerHTML.includes(`<span class="v">${f.value}</span>`), `figure ${f.label}`);
-  assert.match(m.els.figs.innerHTML, /guardrails not proven/);
+  assert.match(m.els.figs.innerHTML, /all from sealed receipts or drills/);
   assert.equal(m.els.peek.hidden, false);
   assert.match(m.els.peek["innerHTML"] + m.els["peek-strip"].innerHTML, /class="strip"/);
   assert.match(m.els.asof.textContent, /Counted in your browser/);

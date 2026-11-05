@@ -175,7 +175,7 @@ What still stands between this and a full second product: a per-workload replay 
 
 - The chain proves integrity after recording, not honesty at collection time. A packet could in principle be fabricated before it is hashed. Public market data that anyone can re-fetch, the OpenTimestamps stamps and git history narrow that gap and do not close it.
 - Receipts record what the gateway said. The usage record Otari keeps carries cost, tokens and status but not the model, so the model on a receipt cannot be reconciled against Otari's record (feedback log, entry 20).
-- Guardrails are attached to the judge's policy but Otari never reported a result, so that resource is NOT PROVEN and not claimed. `services/guardrail/` is the screen we built for it (below); it is not deployed and the switch is off.
+- Guardrails: `services/guardrail/` is the screen we built (below). It runs on Cloudflare Workers, is mandated in the Otari dashboard, and the switch (`guardrails.enabled`) is on. Otari reports its verdict in the receipt of each screened call, and audit row 5 reads those receipts. Monitor mode: it records and never stops a cycle.
 - Secrets: the only secret is `OTARI_API_KEY`, read from the environment. It is never written to a dossier, a log or an error message, and the runner scans every changed file for it before committing.
 - Every position is simulated. No order is routed anywhere and no key with trading rights exists.
 

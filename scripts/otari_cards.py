@@ -197,7 +197,7 @@ FLOW_STEPS = [
     ("1", "Evidence", ["Market data and news:", "Binance, OKX, GDELT, RSS,", "Telegram previews, frozen."], [("otari", "Web search and fetch")]),
     ("2", "Bull and bear", ["Two analysts on two", "open-weight models argue", "from the same evidence."], [("otari", "Routing, fallback"), ("otari", "Budget per user")]),
     ("3", "Citation checker", ["A third model re-reads", "each claim against the", "evidence it cites."], [("otari", "Routing, fallback")]),
-    ("4", "Judge", ["Weighs only the claims", "that were validated.", "Guardrails: NOT PROVEN."], [("otari", "Routing policy"), ("otari", "Budgets")]),
+    ("4", "Judge", ["Weighs only the claims", "that were validated.", "Guardrails screen inputs."], [("otari", "Routing policy"), ("otari", "Budgets")]),
     ("5", "Rules engine", ["Deterministic code turns", "the judge's lean into a", "paper-trade verdict."], [("local", "Our code, no model")]),
     ("6", "Re-derive and check", ["The verdict is re-run in a", "sandbox, and prices are", "read through MCP."], [("otari", "Code execution"), ("otari", "MCP")]),
     ("7", "Sealed dossier", ["Evidence, verdict and a", "receipt per call, hashed", "into the ledger chain."], [("local", "Hash chain, replayable")]),

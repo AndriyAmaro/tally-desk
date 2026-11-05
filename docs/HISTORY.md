@@ -27,7 +27,7 @@ The ledger is a single chain. Dossiers 1 to 791 were recorded before Otari. The 
 
 - **A receipt per gateway call.** `llm.parse_receipt` seals an `otari-receipt/1` for every model or tool call: request id, the model asked for and the model that answered, provider, attempts, fallback, tokens, cost, how the call stopped, and the end user billed.
 - **Nine roles on open-weight models.** Bull, bear, judge, citation checker and narrator, plus four tool roles (searcher, fetcher, sandbox, MCP), all in `config/otari.json`. Each role is billed to its own end user.
-- **Seven of eight Otari features proven inside the cycle.** Several open-weight models in distinct roles, routing and fallback, budgets, budget per user, web search and fetch, code execution and MCP are read back from sealed receipts. Guardrails are attached, but Otari never reported a result, so that row is NOT PROVEN and not claimed.
+- **Eight of eight Otari features proven inside the cycle.** Several open-weight models in distinct roles, routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP and guardrails are read back from sealed receipts. The guardrail is a service of our own, mandated in the Otari dashboard; the built-in profile had given no verdict.
 - **Rules v7, a checker gate.** A claim the citation checker marks unsupported voids a judge lean that rests on it. The marks are frozen in the dossier and the replay recomputes the outcome.
 - **A cloud runner.** The workflow `otari-cycle` runs `tools/otari_runner.py` from GitHub Actions and pushes each new dossier, with its OpenTimestamps stamp, to the `otari` branch.
 - **A call-by-call page.** [`web/cycle.html`](../web/cycle.html) shows one cycle as a timeline of receipts.
