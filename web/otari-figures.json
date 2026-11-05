@@ -1,14 +1,14 @@
 {
-  "asof": 816,
+  "asof": 817,
   "source": "scripts/otari_cards.py, from ledger/ledger.jsonl and docs/evidence/otari-drills.jsonl",
   "figures": [
     {
-      "value": "25",
+      "value": "26",
       "label": "Otari-era dossiers",
-      "sub": "792 to 816"
+      "sub": "792 to 817"
     },
     {
-      "value": "531",
+      "value": "557",
       "label": "sealed receipts",
       "sub": "one per model or tool call"
     },
@@ -18,17 +18,17 @@
       "sub": "answered, all open weight"
     },
     {
-      "value": "7/8",
+      "value": "8/8",
       "label": "resources proven",
-      "sub": "guardrails not proven"
+      "sub": "all from sealed receipts or drills"
     },
     {
-      "value": "47",
+      "value": "48",
       "label": "backup-route answers",
       "sub": "canary plus real traffic"
     }
   ],
-  "proven": 7,
+  "proven": 8,
   "total": 8,
   "resources": [
     {
@@ -36,7 +36,7 @@
       "resource": "Several open-weight models in distinct roles",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 816
+      "dossier": 817
     },
     {
       "n": 2,
@@ -50,21 +50,21 @@
       "resource": "Budgets and spend limits",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 816
+      "dossier": 817
     },
     {
       "n": 4,
       "resource": "Budget per user",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 816
+      "dossier": 817
     },
     {
       "n": 5,
       "resource": "Guardrails",
-      "status": "NOT PROVEN",
-      "source": "none",
-      "dossier": 815
+      "status": "PASS",
+      "source": "sealed",
+      "dossier": 817
     },
     {
       "n": 6,
@@ -78,14 +78,14 @@
       "resource": "Code execution",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 816
+      "dossier": 817
     },
     {
       "n": 8,
       "resource": "MCP",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 816
+      "dossier": 817
     }
   ]
 }
