@@ -17,11 +17,11 @@ The question it answers is simple: when the agent loses money, which model said 
 
 | Number | Value |
 |---|---|
-| Otari-era dossiers and receipts | 21 dossiers (792 to 812), 433 receipts |
-| Calls answered | 423 of 433; the other 10 are 7 HTTP 409 after five tries and 3 HTTP 402 `pricing_required` |
-| Answers served by a backup route after the first attempt did not succeed | 43 (15 failover canary calls, 28 real calls) |
-| Cost of the receipts | USD 0.736186 in all; median cycle USD 0.038622 |
-| Receipts that needed more than one client try | 139, of which 132 came back as a stored answer (`Otari-Idempotent-Replayed`) |
+| Otari-era dossiers and receipts | 27 dossiers (792 to 818), 583 receipts |
+| Calls answered | 573 of 583; the other 10 are 7 HTTP 409 after five tries and 3 HTTP 402 `pricing_required` |
+| Answers served by a backup route after the first attempt did not succeed | 49 (21 failover canary calls, 28 real calls) |
+| Cost of the receipts | USD 0.967783 in all; median cycle USD 0.038622 |
+| Receipts that needed more than one client try | 189, of which 182 came back as a stored answer (`Otari-Idempotent-Replayed`) |
 
 ## What was hard
 
@@ -37,7 +37,7 @@ The question it answers is simple: when the agent loses money, which model said 
 
 ## What we would ask of Otari
 
-1. A guardrails service on the hosted gateway, and an error instead of a silent pass for an output-side guardrail. The header now says `unavailable, not_configured` (first seen in dossier 805), which helps, but nothing is evaluated.
+1. Built-in guardrail profiles that work on the hosted gateway, so nobody has to host a service to use them, and an error instead of a silent pass for an output-side guardrail. The header says `unavailable, not_configured` for the built-in profile (first seen in dossier 805), which helps; we wrote our own service to get a verdict, and one documented example of such a service would have saved us the guesswork.
 2. A JSON error with a request id when the edge times out, a documented 30 second limit, and a wait instead of a 409 on a retried key.
 3. A notice, or a clear cause in the error, when a model that answered an hour earlier is refused as unpriced.
 4. A per-request list of fallback models, so an app can test failover from code.
