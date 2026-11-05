@@ -20,7 +20,7 @@ from verdict_desk import closure, dossier, llm, otari_report as rep
 ROOT = Path(__file__).resolve().parents[1]
 NODE = shutil.which("node")
 PROFILE = "tally-web-injection"
-ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "OTARI_MIN_INTERVAL": "", "OTARI_CYCLE_CAP_USD": "", "OTARI_TOOL_CAP_USD": "", "OTARI_GUARDRAILS": ""}
+ENV = {"OTARI_API_KEY": KEY, "OTARI_SEND_USER": "", "OTARI_BASE_URL": "", "OTARI_MIN_INTERVAL": "", "OTARI_CYCLE_CAP_USD": "", "OTARI_TOOL_CAP_USD": "", "OTARI_GUARDRAILS": "0"}
 EVALUATED = {"profile": PROFILE, "mode": "monitor", "valid": True, "score": 0.0, "status": "evaluated"}
 UNAVAILABLE = {"profile": PROFILE, "mode": "monitor", "valid": None, "score": None, "status": "unavailable", "reason": "evaluation_failed"}
 POLICY_ENTRY = {"profile": "prompt-injection", "mode": "monitor", "valid": None, "score": None, "status": "unavailable", "reason": "not_configured"}
@@ -45,9 +45,9 @@ class Env(unittest.TestCase):
 
 
 class ConfigTest(unittest.TestCase):
-    def test_the_repo_config_has_the_section_and_the_switch_is_off(self):
+    def test_the_repo_config_has_the_section_and_the_switch_is_on(self):
         g = llm.otari_config()["guardrails"]
-        self.assertEqual((g["enabled"], g["profile"], g["mode"], g["on_unavailable"]), (False, PROFILE, "monitor", "monitor"))
+        self.assertEqual((g["enabled"], g["profile"], g["mode"], g["on_unavailable"]), (True, PROFILE, "monitor", "monitor"))
         self.assertEqual(set(g["roles"]), {"bull", "bear", "judge", "checker", "narrator", "searcher", "fetcher"})
         self.assertNotIn("sandbox", g["roles"])
         self.assertNotIn("mcp", g["roles"])
@@ -92,7 +92,7 @@ class RequestTest(Env):
         cfg["guardrails"]["enabled"] = True
         path = Path(tempfile.mkdtemp()) / "otari.json"
         path.write_text(json.dumps(cfg), encoding="utf-8")
-        with mock.patch.object(llm, "OTARI_CONFIG", path), self.gateway():
+        with mock.patch.dict(os.environ, {"OTARI_GUARDRAILS": ""}), mock.patch.object(llm, "OTARI_CONFIG", path), self.gateway():
             llm.chat("s", "u", role="bull")
             with mock.patch.dict(os.environ, {"OTARI_GUARDRAILS": "0"}):
                 llm.chat("s", "u", role="bull")
