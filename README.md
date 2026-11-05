@@ -363,7 +363,7 @@ Three different things, kept apart on purpose:
 - Proof in this repository: a refusal by a cap is a client-side receipt (`cycle_cap_exceeded`, `source: client`), never an Otari refusal.
 
 
-What is and is not shown: Otari's own `403 budget_exceeded` refusal has been seen once, in a deliberate drill against the USD 0.01 budget, and is **not** in a sealed production dossier. No production cycle has been refused by an Otari budget. The cycle caps are our own code and are not an Otari feature.
+What is and is not shown: Otari's own `403 budget_exceeded` refusal was shown on purpose in a drill against the USD 0.01 budget, and once for real at organization scope (below); neither is in a sealed production dossier. One production cycle was refused by an Otari budget: on 2026-11-05 at 11:04Z the gateway answered bull and bear with `403 budget_exceeded`, scope `organization`; the closure gate refused the dossier and sealed nothing, and the refusal is recorded in [`ledger/closure-refusals.jsonl`](ledger/closure-refusals.jsonl). The cycle caps are our own code and are not an Otari feature.
 
 </details>
 
@@ -427,7 +427,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 
 - **Paper trading only.** No order is routed anywhere and there is no key with trading rights. The verdicts are simulated positions, not advice.
 - **Guardrails run in monitor mode in production.** They record a verdict on every screened call and never stop a cycle; the block is shown in a drill, not in a sealed cycle. The detector is rules, not a model: it misses rephrased and translated attacks, and it flags an article that quotes an attack verbatim. Before our own service, the built-in `prompt-injection` profile gave `valid: null` on every call (since dossier 805 the header says `unavailable, not_configured`; feedback log, entries 11 and 13).
-- **Otari's budget refusal was seen once, in a drill.** No production cycle has been refused by an Otari budget; the per-cycle caps are our own code, not an Otari feature.
+- **Otari's budget refusal is shown by a drill and was met once in production.** The cycle of 2026-11-05 11:04Z was refused at organization scope and the closure gate sealed nothing; the per-cycle caps are our own code, not an Otari feature.
 - **A hash chain shows integrity, not honesty at collection time.** The ledger proves a record was not edited afterwards. The outside witnesses and public market data narrow the gap, they do not close it.
 - **Reconciliation with the scheduled job's key is partial.** The ids of dossier 801 belong to the key the CI job uses, so a local key cannot look them up; they can only be compared with that key. The rest agree with Otari's usage log, which does not carry the model, so the model is not compared.
 - **Earlier era.** Dossiers before 792 have no gateway receipts and are not part of the Otari audit.

@@ -126,6 +126,15 @@ class MustNotFallBackTest(Env):
         self.assertNotIn("role_fallback", r)
         self.assertEqual((r["refusal"]["code"], r["refusal"]["budget_scope"]), ("budget_exceeded", "end_user"))
 
+    def test_an_organization_budget_refusal_stops_at_once_too(self):
+        """The refusal seen in production on 2026-11-05 (scope organization): every model draws on the same money, so none is asked next."""
+        organization = (403, {"Otari-Error-Code": "budget_exceeded", "Otari-Budget-Scope": "organization"})
+        gateway, text, error, r = self.call({BULL[0]: organization})
+        self.assertEqual(gateway.models, BULL[:1])
+        self.assertEqual((error.status, error.code, error.scope), (403, "budget_exceeded", "organization"))
+        self.assertNotIn("role_fallback", r)
+        self.assertEqual((r["refusal"]["code"], r["refusal"]["budget_scope"]), ("budget_exceeded", "organization"))
+
     def test_a_budget_refusal_after_a_skipped_entry_stops_there_and_says_so(self):
         gateway, text, error, r = self.call({BULL[0]: PRICING, BULL[1]: BUDGET})
         self.assertEqual(gateway.models, BULL[:2], "the third entry is never asked")
