@@ -160,7 +160,10 @@ test("a call with no duration says n/a (replayed) and draws no bar; a hard route
   const m = mount({ "../ledger/ledger.jsonl": ledger + JSON.stringify(d) + "\n" }, "?seq=9011");
   await m.settle();
   const calls = m.els.calls.innerHTML;
-  const bull = calls.slice(calls.indexOf('class="role">bull<'), calls.indexOf('class="role">bear<'));
+  // only bull's own card: calls are ordered by start time, so the injected canary (offset 100000) can sit between bull and bear
+  const from = calls.indexOf('class="role">bull<');
+  const to = calls.indexOf('<article class="call', from);
+  const bull = calls.slice(from, to < 0 ? undefined : to);
   assert.match(bull, /n\/a \(replayed\)/);
   assert.ok(!bull.includes('class="track"'), "no bar without a duration");
   assert.ok(!/hard case, larger model/.test(calls), "no policy-like chip for the hard route");
