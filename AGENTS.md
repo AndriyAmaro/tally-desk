@@ -15,7 +15,7 @@ A paper-trading agent whose every model call goes through the Otari gateway and 
 - Browser-code tests: `node --test tests/*.test.js` (always the glob; `node --test tests/` reports a false failure).
 - Verify the ledger: `python3 -m verdict_desk verify && python3 -m verdict_desk replay`
 - Audit the eight Otari resources: `python3 -m verdict_desk otari-audit`
-- Regenerate the README blocks and cards after a number changes: `python3 scripts/refresh_otari_readme.py` and `python3 scripts/otari_cards.py`
+- Regenerate the README blocks, the numbers table of `docs/CASE_STUDY.md` and the cards after a number changes (each live cycle does it): `python3 scripts/refresh_otari_readme.py` and `python3 scripts/otari_cards.py`
 - Page smoke check (needs Chromium): `bash scripts/check_pages.sh`
 - Lint, types, build: unavailable by design (no root package manifest, no compiler step; `services/guardrail/` has its own `package.json` for the Worker, and its tests are `tests/guardrail_*.test.js` and `tests/test_guardrail_*.py`).
 - Verify foundation: the Python tests, the browser-code tests and `verify` plus `replay`, all green.
@@ -35,7 +35,7 @@ A paper-trading agent whose every model call goes through the Otari gateway and 
 
 ## Documentation ownership
 
-`PRODUCT.md` owns scope; `docs/architecture.md`, structure and decisions; `docs/design.md`, the web interface; `docs/onboarding.md`, preparation; `docs/quality.md`, checks; `docs/setup.md`, tool evidence. `README.md` carries generated blocks between `<!-- otari:... -->` markers: regenerate them with the scripts above, do not hand-edit them. Revise the responsible document together with the change.
+`PRODUCT.md` owns scope; `docs/architecture.md`, structure and decisions; `docs/design.md`, the web interface; `docs/onboarding.md`, preparation; `docs/quality.md`, checks; `docs/setup.md`, tool evidence. `README.md` and the numbers table of `docs/CASE_STUDY.md` carry generated blocks between `<!-- otari:... -->` markers: regenerate them with the scripts above, do not hand-edit them. Revise the responsible document together with the change.
 
 ## Delegation and review
 

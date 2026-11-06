@@ -264,6 +264,42 @@ class HostsTableTest(unittest.TestCase):
                 self.assertTrue(h.get(field), (h["host"], field))
 
 
+class CaseStudyNumbersTest(unittest.TestCase):
+    """The table of numbers in docs/CASE_STUDY.md is counted from the receipts and rewritten by the same refresh as the README, so it
+    cannot go stale when a cycle adds a dossier."""
+
+    def rows(self, ledger):
+        return dict(line.strip("| ").split(" | ", 1) for line in rep.case_numbers_markdown(ledger).splitlines()[2:])
+
+    def test_the_counts_come_from_the_receipts(self):
+        calls = [c for d in ERA for c in rep.calls_of(d)]
+        failed = [c for c in calls if rep._failed(c["receipt"])]
+        rows = self.rows(LEDGER)
+        self.assertEqual(rows["Otari-era dossiers and receipts"], f"{len(ERA)} dossiers ({ERA[0]['seq']} to {ERA[-1]['seq']}), {len(calls)} receipts")
+        self.assertTrue(rows["Calls answered"].startswith(f"{len(calls) - len(failed)} of {len(calls)}"))
+        backup = [c for c in calls if not rep._failed(c["receipt"]) and c["receipt"].get("fallback")]
+        self.assertTrue(rows["Answers served by a backup route after the first attempt did not succeed"].startswith(f"{len(backup)} ("))
+
+    def test_a_refusal_and_a_failure_are_named_by_status_and_code_and_nothing_else_moves(self):
+        d = copy.deepcopy(ERA[-1])
+        d["llm"]["bull"]["receipt"] = {**d["llm"]["bull"]["receipt"], "refusal": {"status": 403, "code": "budget_exceeded"}}
+        calls = [c for e in rep.era(LEDGER[:-1] + [d]) for c in rep.calls_of(e)]
+        line = self.rows(LEDGER[:-1] + [d])["Calls answered"]
+        self.assertIn("HTTP 403 `budget_exceeded`", line)
+        self.assertTrue(line.startswith(f"{len([c for c in calls if not rep._failed(c['receipt'])])} of {len(calls)}"))
+
+    def test_the_text_is_replaced_between_its_markers_only_and_twice_changes_nothing(self):
+        text = "before\n<!-- otari:numbers:start -->\nold\n<!-- otari:numbers:end -->\nafter\n"
+        out = rep.refresh_case_study(text, LEDGER)
+        self.assertTrue(out.startswith("before\n") and out.endswith("<!-- otari:numbers:end -->\nafter\n"))
+        self.assertNotIn("old", out)
+        self.assertEqual(rep.refresh_case_study(out, LEDGER), out)
+
+    def test_the_committed_case_study_is_current(self):
+        text = rep.CASE_STUDY.read_text(encoding="utf-8")
+        self.assertEqual(rep.refresh_case_study(text, LEDGER), text, "run scripts/refresh_otari_readme.py")
+
+
 class ReadmeBlocksTest(unittest.TestCase):
     def test_the_blocks_are_replaced_between_their_markers_and_nothing_else_moves(self):
         text = "before\n" + "".join(f"<!-- {m}:start -->\nold\n<!-- {m}:end -->\nmid\n" for m in rep.MARKERS.values()) + "after\n"

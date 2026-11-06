@@ -635,3 +635,46 @@ def refresh_readme(text: str, ledger: list[dict], evidence: list[dict] | None = 
     text = replace_block(text, "board", board_markdown(board(ledger)))
     text = replace_block(text, "models", models_markdown(ledger))
     return replace_block(text, "hosts", hosts_markdown())
+
+
+CASE_STUDY = ROOT / "docs" / "CASE_STUDY.md"
+CASE_MARKER = "otari:numbers"  # its own marker pair, in docs/CASE_STUDY.md only: the README blocks above do not know it
+
+
+def case_numbers_markdown(ledger: list[dict]) -> str:
+    """The table of the case study's numbers, every one counted from the receipts of the Otari era."""
+    dossiers = era(ledger)
+    calls = [(d["seq"], c["label"], c["receipt"]) for d in dossiers for c in calls_of(d)]
+    answered = [c for c in calls if not _failed(c[2])]
+    failed: dict[str, int] = {}
+    for _, _, r in calls:
+        if _failed(r):
+            bad = r.get("refusal") or r.get("error") or {}
+            code = f" `{bad['code']}`" if bad.get("code") else ""
+            key = f"HTTP {bad.get('status')}{code}"
+            failed[key] = failed.get(key, 0) + 1
+    backup = [c for c in answered if c[2].get("fallback")]
+    canary = sum(1 for c in backup if c[1] == "canary")
+    per_cycle: dict[int, Decimal] = {}
+    for seq, _, r in calls:
+        per_cycle[seq] = per_cycle.get(seq, Decimal(0)) + (_dec(r.get("cost_usd")) or Decimal(0))
+    costs = sorted(per_cycle.values())
+    median = (costs[len(costs) // 2] if len(costs) % 2 else (costs[len(costs) // 2 - 1] + costs[len(costs) // 2]) / 2) if costs else Decimal(0)
+    total = sum((_dec(c[2].get("cost_usd")) or Decimal(0) for c in calls), Decimal(0))
+    retried = [c for c in calls if isinstance(c[2].get("client_attempts"), int) and c[2]["client_attempts"] > 1]
+    stored = sum(1 for c in retried if str(c[2].get("replayed")).lower() == "true")
+    other = ", ".join(f"{n} {what}" for what, n in sorted(failed.items(), key=lambda kv: (-kv[1], kv[0])))
+    rows = [
+        ("Otari-era dossiers and receipts", f"{len(dossiers)} dossiers ({dossiers[0]['seq']} to {dossiers[-1]['seq']}), {len(calls)} receipts"),
+        ("Calls answered", f"{len(answered)} of {len(calls)}" + (f"; the other {len(calls) - len(answered)} are {other}" if failed else "")),
+        ("Answers served by a backup route after the first attempt did not succeed", f"{len(backup)} ({canary} failover canary calls, {len(backup) - canary} real calls)"),
+        ("Cost of the receipts", f"USD {total:.6f} in all; median cycle USD {median:.6f}"),
+        ("Receipts that needed more than one client try", f"{len(retried)}, of which {stored} came back as a stored answer (`Otari-Idempotent-Replayed`)"),
+    ]
+    return "\n".join(["| Number | Value |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows])
+
+
+def refresh_case_study(text: str, ledger: list[dict]) -> str:
+    start, end = f"<!-- {CASE_MARKER}:start -->", f"<!-- {CASE_MARKER}:end -->"
+    i, j = text.index(start), text.index(end)
+    return text[:i + len(start)] + "\n" + case_numbers_markdown(ledger) + "\n" + text[j:]

@@ -22,7 +22,7 @@ Combined check before a commit: the two test commands, then `verify` and `replay
 - The fixtures that run a cycle set `OTARI_GUARDRAILS=0` (`tests/test_otari_tools.py`, `tests/test_guardrail_app.py`) so the live config switch does not change their result.
 - A gate is never loosened to make a check pass (closure checks, audit rows, the guardrail rules).
 - No test spends on Otari: no live cycle, no drill, no workflow dispatch.
-- Generated blocks (README between `<!-- otari:... -->`, cards in `docs/readme/`) come from `scripts/refresh_otari_readme.py` and `scripts/otari_cards.py`; a test fails when they are stale.
+- Generated blocks (README and the numbers table of `docs/CASE_STUDY.md` between `<!-- otari:... -->`, cards in `docs/readme/`) come from `scripts/refresh_otari_readme.py` and `scripts/otari_cards.py`; a test fails when they are stale.
 - Lint and types do not apply: there is no root package manifest and no compiler step. This is a choice, not a gap to fill with a tool the code does not need.
 
 ## Testing strategy
