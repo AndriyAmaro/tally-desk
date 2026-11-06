@@ -17,17 +17,19 @@ The question it answers is simple: when the agent loses money, which model said 
 
 | Number | Value |
 |---|---|
-| Otari-era dossiers and receipts | 27 dossiers (792 to 818), 583 receipts |
-| Calls answered | 573 of 583; the other 10 are 7 HTTP 409 after five tries and 3 HTTP 402 `pricing_required` |
-| Answers served by a backup route after the first attempt did not succeed | 49 (21 failover canary calls, 28 real calls) |
-| Cost of the receipts | USD 0.967783 in all; median cycle USD 0.038622 |
-| Receipts that needed more than one client try | 189, of which 182 came back as a stored answer (`Otari-Idempotent-Replayed`) |
+| Otari-era dossiers and receipts | 28 dossiers (792 to 819), 608 receipts |
+| Calls answered | 598 of 608; the other 10 are 7 HTTP 409 after five tries and 3 HTTP 402 `pricing_required` |
+| Answers served by a backup route after the first attempt did not succeed | 50 (22 failover canary calls, 28 real calls) |
+| Cost of the receipts | USD 1.017322 in all; median cycle USD 0.038622 |
+| Receipts that needed more than one client try | 194, of which 187 came back as a stored answer (`Otari-Idempotent-Replayed`) |
 
 ## What was hard
 
 - **Long calls and the edge.** A slow completion is cut at about 30 seconds with an HTML 504 and no request id. The retry then meets a 409 "still in progress". Seven narrator batches never got past it. The app now polls on the same Idempotency-Key.
 - **The built-in guardrail gave no verdict.** The `prompt-injection` profile on the judge's policy has no service behind it on the hosted gateway, so Otari reported `valid: null` on every call (since dossier 805 with a reason: `unavailable, not_configured`). We wrote a guardrails service of our own on Cloudflare Workers and mandated it in the dashboard; Otari now evaluates it on every call that reads outside text, in monitor mode.
 - **A pricing refusal in the middle of a run.** At 16:12 UTC on 2026-11-04 the gateway refused the bull, bear and narrator models with HTTP 402 `pricing_required`, after answering the same models at 15:33. They answered again by 17:10. Dossier 810 was sealed with no argument on either side, because it was recorded before the closure gate and the role fallback chains existed (both were added that same afternoon).
+
+- **An organization budget refusal.** On 2026-11-05 the gateway refused bull and bear with `403 budget_exceeded` at organization scope in the cycles of 11:04 UTC and 18:49 UTC. The closure gate refused both dossiers and sealed nothing; the two refusals are in `ledger/closure-refusals.jsonl` and no model was asked next, because every model draws on the same budget. The cycle of 00:22 UTC on 2026-11-06 was sealed again (dossier 819).
 
 ## What we added
 
