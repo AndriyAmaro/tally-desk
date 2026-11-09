@@ -680,7 +680,8 @@ class SandboxSealTest(Env):
         d["sandbox"] = sandbox_rederive.seal(d, ask=self.honest())
         self.assertEqual(sandbox_rederive.recheck(d), {"sandbox_sealed": True, "sandbox_local_matches": True, "sandbox_equal": True})
         tampered = json.loads(json.dumps(d))
-        tampered["bull"][0]["weight"] += 1
+        side = "bull" if tampered["bull"] else "bear"  # a real dossier can carry no claim on one side (dossier 833 has no bull claim)
+        tampered[side][0]["weight"] += 1
         self.assertFalse(sandbox_rederive.recheck(tampered)["sandbox_local_matches"])
         forged = json.loads(json.dumps(d))
         forged["sandbox"]["local_stdout"] = forged["sandbox"]["local_stdout"].replace("edge", "edgy")
