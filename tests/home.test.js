@@ -44,6 +44,8 @@ test("the landing page draws the five figures, the latest cycle and the resource
   assert.match(m.els.figs.innerHTML, /all from sealed receipts or drills/);
   assert.equal(m.els.peek.hidden, false);
   assert.equal(m.els.rcpt.hidden, false, "the hero shows one real receipt");
+  assert.equal((m.els.proofs.innerHTML.match(/<a class="proof" href="cycle\.html\?rid=[0-9a-f-]{36}"/g) || []).length, 8, "one receipt link per audited feature");
+  assert.equal(m.els["proofs-band"].hidden, false);
   assert.match(m.els["rcpt-rows"].innerHTML, /<dt>answered by<\/dt><dd>[^<]+:[^<]+<\/dd>/);
   assert.match(m.els["rcpt-foot"].innerHTML, /sealed in <b>#\d+<\/b> · hash [0-9a-f]{12}/);
   assert.match(m.els.peek["innerHTML"] + m.els["peek-strip"].innerHTML, /class="strip"/);

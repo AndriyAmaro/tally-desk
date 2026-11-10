@@ -41,6 +41,7 @@ h2{scroll-margin-top:calc(var(--header-h) + 6rem)}
 .call[data-role="bull"]{--role:var(--role-bull)}.call[data-role="bear"]{--role:var(--role-bear)}.call[data-role="judge"]{--role:var(--role-judge)}
 .call[data-role="checker"]{--role:var(--role-checker)}.call[data-role="canary"]{--role:var(--role-canary)}
 .call[data-role="searcher"],.call[data-role="fetcher"],.call[data-role="drift"],.call[data-role="mcp"],.call[data-role="sandbox"]{--role:var(--role-tool)}
+.call.target{border-color:var(--color-accent);box-shadow:0 0 0 3px var(--color-accent-wash)}
 .call.fail{border-color:color-mix(in oklab,var(--color-danger) 60%,var(--color-border))}
 .call.fail::before{background:var(--color-danger)}
 .call-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3)}
@@ -129,10 +130,14 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
   const parseLedger = (text) => text.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
   const usd = (t) => (t == null ? "n/a" : "$" + t);
 
+  // ?rid=<Otari request id> opens the dossier that sealed that call and marks its card: the links of the overview's proof cards land here.
+  const followRid = new URLSearchParams(location.search).get("rid") || "";
+  const followed = (r) => !!followRid && r.request_id === followRid;
+
   function callHtml(c, bar, timed) {
-    const r = c.receipt, f = C.failureOf(r);
+    const r = c.receipt, f = C.failureOf(r), target = followed(r);
     const served = r.served_by || "no answer";
-    const chips = [];
+    const chips = target ? ['<span class="chip ok">the receipt you followed</span>'] : [];
     if (f) chips.push(`<span class="chip bad">${f.source === "client" ? "stopped here" : "refused"}: ${esc(f.code)}</span>`);
     if (r.fallback) chips.push(`<span class="chip warn">fallback &middot; ${esc(r.attempt_count)} attempts</span>`);
     const own = C.roleFallbackOf(r);  // the app's own chain of models for the role, apart from Otari's provider failover above
@@ -147,7 +152,7 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     const start = timed ? `${(bar.startMs / 1000).toFixed(1)} s` : "order only";
     const took = bar.durationMs == null ? (f ? "n/a" : "n/a (replayed)") : `${bar.durationMs} ms`;
     const tokens = r.tokens && r.tokens.prompt != null ? `${esc(r.tokens.prompt)} in, ${esc(r.tokens.completion)} out` : "n/a";
-    return `<article class="call${f ? " fail" : ""}" data-role="${esc(c.label)}">
+    return `<article class="call${f ? " fail" : ""}${target ? " target" : ""}"${target ? ' id="rid-target" tabindex="-1"' : ""} data-role="${esc(c.label)}">
       <div class="call-head"><span class="role">${esc(c.label)}</span><span class="route"><span class="mono">${esc(r.sent_model)}</span>${r.served_by ? ` &rarr; <span class="mono">${esc(served)}</span>` : ""}</span>${chips.length ? `<span class="chips">${chips.join("")}</span>` : ""}</div>
       ${bar.durationMs == null ? "" : `<div class="track" role="img" aria-label="${esc(c.label)}: started at ${esc(start)}, took ${esc(took)}"><div class="bar" style="left:${bar.leftPct}%;width:${bar.widthPct}%"></div></div>`}
       <dl class="tiles">
@@ -188,7 +193,7 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     let nMicros = 0n;
     for (const e of g.narrator) nMicros += C.microsOf(e.call.receipt.cost_usd) || 0n;
     $("calls").innerHTML = block(g.core) + (g.narrator.length
-      ? `<details class="group"><summary><b>Narrator</b>: ${g.narrator.length} batches of headlines, ${g.narrator.filter((e) => C.failureOf(e.call.receipt)).length} refused or failed, $${C.microsText(nMicros)}, ${(nTook / 1000).toFixed(1)} s of call time (open to see each call)</summary>${block(g.narrator)}</details>` : "");
+      ? `<details class="group"${g.narrator.some((e) => followed(e.call.receipt)) ? " open" : ""}><summary><b>Narrator</b>: ${g.narrator.length} batches of headlines, ${g.narrator.filter((e) => C.failureOf(e.call.receipt)).length} refused or failed, $${C.microsText(nMicros)}, ${(nTook / 1000).toFixed(1)} s of call time (open to see each call)</summary>${block(g.narrator)}</details>` : "");
     const h = (d.llm.otari || {}).headroom, rr = (d.llm.judge || {}).route_rule;
     $("headroom").innerHTML = h && h.users ? `<p class="mut">${esc(h.reason)}${rr && rr.gates ? " The router " + (rr.hard ? "sent a hard case to the larger model." : (rr.wanted_hard ? "kept a hard case on the standard route." : "found the case standard.")) : ""}</p>
       <div class="scroll"><table><thead><tr><th>End user</th><th class="n">Used today (USD)</th><th class="n">Of the day limit</th><th>Budget</th></tr></thead><tbody>${Object.entries(h.users).map(([n, u]) =>
@@ -212,8 +217,11 @@ details.group[open]>summary{margin-bottom:var(--space-2)}
     $("pick").innerHTML = era.slice().reverse().map((d) => `<option value="${d.seq}">#${d.seq} ${esc((d.evidence || {}).symbol)} ${esc((d.verdict || {}).action)}</option>`).join("");
     const want = new URLSearchParams(location.search).get("seq");
     if (want && era.some((d) => String(d.seq) === want)) $("pick").value = want;
+    else if (followRid) { const hit = era.find((d) => C.callsOf(d).some((c) => followed(c.receipt))); if (hit) $("pick").value = String(hit.seq); }
     $("status").textContent = `${era.length} Otari-era dossiers, read from ${from}.`;
     render(era.find((d) => String(d.seq) === $("pick").value));
+    const t = followRid ? document.getElementById("rid-target") : null;
+    if (t && typeof t.scrollIntoView === "function") { t.scrollIntoView({ block: "center" }); t.focus({ preventScroll: true }); }
   }
 
   $("pick").addEventListener("change", () => render(C.era(ledger).find((d) => String(d.seq) === $("pick").value)));

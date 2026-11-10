@@ -306,7 +306,8 @@ def figures_payload(ledger: list[dict], evidence: list[dict] | None = None) -> d
         "figures": [{"value": v, "label": label, "sub": sub} for v, label, sub in figures(ledger, evidence)],
         "proven": sum(1 for r in rows if r["status"] == "PASS"),
         "total": len(rows),
-        "resources": [{"n": r["n"], "resource": r["resource"], "status": r["status"], "source": r["source"], "dossier": r["dossier"]} for r in rows],
+        "resources": [{"n": r["n"], "resource": r["resource"], "status": r["status"], "source": r["source"], "dossier": r["dossier"],
+                       "proof": r["proof"][:3]} for r in rows],  # the sealed request ids, so the site can link each one to its receipt
     }
 
 

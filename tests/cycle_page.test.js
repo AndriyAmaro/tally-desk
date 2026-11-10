@@ -212,3 +212,17 @@ test("closure and drift fields of the wrong shape never break the page", async (
   assert.equal(m.els.main.hidden, false);
   assert.match(m.els.gates.innerHTML, /not applied/);
 });
+
+test("?rid= opens the dossier that sealed that request id and marks that call's card, even inside the narrator group", async () => {
+  const C = require("../web/cycle.js");
+  const era = C.era(ledger.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)));
+  const old = era[era.length - 3];
+  const narr = C.callsOf(old).find((c) => c.label === "narrator" && c.receipt.request_id);
+  const m = mount({ "../ledger/ledger.jsonl": ledger, "../config/otari.json": config }, "?rid=" + narr.receipt.request_id);
+  await m.settle();
+  assert.equal(m.els.pick.value, String(old.seq), "the dossier holding the request id is selected, not the newest");
+  const calls = m.els.calls.innerHTML;
+  assert.equal((calls.match(/class="call[^"]* target"/g) || []).length, 1, "exactly one card is marked");
+  assert.match(calls, /<details class="group" open>/);
+  assert.match(calls, /the receipt you followed/);
+});

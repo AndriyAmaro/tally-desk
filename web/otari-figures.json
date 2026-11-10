@@ -36,56 +36,89 @@
       "resource": "Several open-weight models in distinct roles",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "3633a73f-b53f-4e49-806b-3e13e9d85946",
+        "c5e9e650-83dd-4e22-933c-96d1d2ff2170",
+        "3cde096f-af6e-47d4-bf23-973bd430d1da"
+      ]
     },
     {
       "n": 2,
       "resource": "Routing and fallback",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 830
+      "dossier": 830,
+      "proof": [
+        "6a5042fb-5eef-4443-9591-abd3706a4b9a",
+        "abbd74b1-ff6c-45cf-9251-093ef3567fe8",
+        "f7929299-0aa9-46b0-a343-75f0344d7088"
+      ]
     },
     {
       "n": 3,
       "resource": "Budgets and spend limits",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "3cde096f-af6e-47d4-bf23-973bd430d1da"
+      ]
     },
     {
       "n": 4,
       "resource": "Budget per user",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "63b8b626-7150-49e1-9e5e-4c4d84adb1aa",
+        "8cde58d0-d9f8-4aff-a36c-f4411a7cd183",
+        "d333763b-4c18-4a56-ac2f-3e799ec03e75"
+      ]
     },
     {
       "n": 5,
       "resource": "Guardrails",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "63b8b626-7150-49e1-9e5e-4c4d84adb1aa",
+        "8cde58d0-d9f8-4aff-a36c-f4411a7cd183",
+        "d333763b-4c18-4a56-ac2f-3e799ec03e75"
+      ]
     },
     {
       "n": 6,
       "resource": "Web search and fetch",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 820
+      "dossier": 820,
+      "proof": [
+        "a5446f0e-f2e5-41cf-9edd-44a4a8f84bd8",
+        "aa5e54d6-39d7-4203-b7f5-a2060f431219"
+      ]
     },
     {
       "n": 7,
       "resource": "Code execution",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "f48a12b1-faf4-4fcb-8f75-268835c49792"
+      ]
     },
     {
       "n": 8,
       "resource": "MCP",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 836
+      "dossier": 836,
+      "proof": [
+        "d3d123cc-cd8b-4378-9e2c-8a36ef1d33ab"
+      ]
     }
   ]
 }
