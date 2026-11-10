@@ -43,6 +43,9 @@ test("the landing page draws the five figures, the latest cycle and the resource
   for (const f of card) assert.ok(m.els.figs.innerHTML.includes(`<span class="v">${f.value}</span>`), `figure ${f.label}`);
   assert.match(m.els.figs.innerHTML, /all from sealed receipts or drills/);
   assert.equal(m.els.peek.hidden, false);
+  assert.equal(m.els.rcpt.hidden, false, "the hero shows one real receipt");
+  assert.match(m.els["rcpt-rows"].innerHTML, /<dt>answered by<\/dt><dd>[^<]+:[^<]+<\/dd>/);
+  assert.match(m.els["rcpt-foot"].innerHTML, /sealed in <b>#\d+<\/b> · hash [0-9a-f]{12}/);
   assert.match(m.els.peek["innerHTML"] + m.els["peek-strip"].innerHTML, /class="strip"/);
   assert.match(m.els.asof.textContent, /Counted in your browser/);
   assert.match(m.els["earlier-note"].textContent, /Dossiers 1 to 791/);

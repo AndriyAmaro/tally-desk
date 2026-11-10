@@ -61,6 +61,18 @@
 .earlier ul{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-4);list-style:none;margin:0;padding:0}
 .earlier li{margin:0}
 .section-note{color:var(--color-text-muted);max-width:60ch}
+.hero-grid{display:grid;gap:var(--space-6);align-items:center}
+@media (min-width:64em){.hero-grid{grid-template-columns:minmax(0,1fr) 20rem}}
+.rcpt{display:block;text-decoration:none;color:inherit;font:var(--text-xs)/1.6 var(--font-mono);padding:var(--space-4) var(--space-5);background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:0 1px 0 var(--color-border-subtle),0 12px 32px -16px rgba(0,0,0,.35);transition:border-color var(--dur-fast) var(--ease)}
+.rcpt:hover{border-color:var(--color-text-subtle)}
+.rcpt-head{display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);padding-bottom:var(--space-3);border-bottom:1px dashed var(--color-border-strong);font:var(--weight-semibold) var(--text-xs)/1.5 var(--font-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}
+.rcpt-head .badge{letter-spacing:0;text-transform:none}
+.rcpt dl{margin:var(--space-3) 0}
+.rcpt dt{font:var(--weight-medium) .6875rem/1.4 var(--font-sans);letter-spacing:.04em;text-transform:uppercase;color:var(--color-text-subtle);margin-top:var(--space-2)}
+.rcpt dt:first-child{margin-top:0}
+.rcpt dd{margin:0;overflow-wrap:anywhere;color:var(--color-text)}
+.rcpt-foot{padding-top:var(--space-3);border-top:1px dashed var(--color-border-strong);color:var(--color-text-muted)}
+.rcpt-foot b{color:var(--color-accent-text);font-weight:var(--weight-medium)}
 </style>
 </head><body>
 <!-- shell:header:start -->
@@ -70,15 +82,24 @@
 <main id="content">
 
 <section class="hero band" aria-labelledby="hero-title">
+ <div class="hero-grid">
+ <div class="hero-copy">
   <h1 id="hero-title">A trading agent that shows its receipts</h1>
   <p class="lede"><b>Tally Desk decides on paper trades and answers for every model call it makes.</b> Each call goes through the Otari gateway on an open-weight model and leaves a receipt, sealed in a hash-chained ledger that anyone can verify and replay offline.</p>
   <div class="actions">
     <a class="btn p lg" href="cycle.html">See one cycle, call by call</a>
-    <a class="btn lg" href="verify.html">Verify a record in your browser</a>
+    <a class="btn lg" href="verify.html?sample=1">Verify a real record in your browser</a>
     <a class="btn lg quiet" href="https://github.com/AndriyAmaro/tally-desk/tree/otari#proofs-resource-by-resource" rel="noopener">Read the audit</a>
   </div>
   <p class="try">Think a sealed record cannot be faked? <a href="verify.html?real=1#cheat">Try to cheat it</a>: change one thing in the newest real dossier, watch the check name what broke, then undo it.</p>
   <p class="fine">Nothing to install and no account: these pages read the public ledger file and check it in your browser. No real-money order is ever placed. The trading agent is the reference workload: the receipts, the hash chain and the verifier work for any agent that calls models through a gateway (<a href="https://github.com/AndriyAmaro/tally-desk/blob/otari/docs/architecture.md#bring-your-own-agent" rel="noopener">what a second agent plugs in</a>).</p>
+ </div>
+  <a class="rcpt" id="rcpt" href="cycle.html" hidden aria-label="One real receipt from the latest cycle; open the cycle">
+    <div class="rcpt-head"><span id="rcpt-title">Receipt</span><span class="badge ok"><span class="dot"></span>sealed</span></div>
+    <dl id="rcpt-rows"></dl>
+    <div class="rcpt-foot" id="rcpt-foot"></div>
+  </a>
+ </div>
 
   <a class="peek" id="peek" href="cycle.html" hidden aria-label="Open the latest cycle, call by call">
     <div class="peek-head"><b id="peek-title">Latest cycle</b><span id="peek-meta"></span></div>
@@ -173,6 +194,29 @@ python3 -m verdict_desk replay</code></pre></div>
     $("peek").hidden = false;
   }
 
+  /* One real receipt from the newest dossier, as sealed: the bull's call (the judge's if the bull has none). */
+  function drawReceipt(d) {
+    const calls = C.callsOf(d);
+    const c = calls.find((x) => x.label === "bull") || calls.find((x) => x.label === "judge");
+    if (!c) return;
+    const r = c.receipt;
+    const guard = Object.entries(r.guardrail_result || {}).map(([k, v]) => `${k}: ${v}`).join(", ");
+    const rows = [
+      ["asked for", r.sent_model],
+      ["answered by", r.served_by],
+      ["cost", r.cost_usd != null ? "$" + r.cost_usd : null],
+      ["time", Number.isInteger(r.duration_ms) ? r.duration_ms + " ms" : r.replayed ? "replayed, stored answer" : null],
+      ["end user", r.end_user],
+      ["guardrail", guard || null],
+      ["request id", r.request_id_source === "otari" ? r.request_id : null],
+    ].filter(([, v]) => v != null && v !== "");
+    $("rcpt").href = "cycle.html?seq=" + encodeURIComponent(d.seq);
+    $("rcpt-title").textContent = `Receipt · ${c.label} · #${d.seq}`;
+    $("rcpt-rows").innerHTML = rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+    $("rcpt-foot").innerHTML = `sealed in <b>#${esc(d.seq)}</b> · hash ${esc(String(d.hash || "").slice(0, 12))}<br>chained to #${esc(d.seq - 1)} · prev ${esc(String(d.prev_hash || "").slice(0, 12))}`;
+    $("rcpt").hidden = false;
+  }
+
   function drawMap(payload) {
     const byN = new Map(((payload || {}).resources || []).map((r) => [r.n, r]));
     document.querySelectorAll("#map-rows tr[data-res]").forEach((tr) => {
@@ -205,6 +249,8 @@ python3 -m verdict_desk replay</code></pre></div>
       const stale = payload && payload.asof !== live.last ? ` Resources proven are audited as of dossier ${payload.asof}.` : "";
       drawFigures(items, `As of dossier ${live.last}. Counted in your browser from the published ledger.${stale}`);
       drawPeek(ledger);
+      const era = C.era(ledger);
+      drawReceipt(era[era.length - 1]);
       $("earlier-note").textContent = `Dossiers 1 to ${live.first - 1} were recorded before Otari, by the earlier version of this project, with other providers and no gateway receipts.`;
     } else if (payload) {
       drawFigures(payload.figures, `As of dossier ${payload.asof}, from otari-figures.json. The ledger file is not served next to this page, so the figures were not recounted here.`);

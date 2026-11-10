@@ -75,9 +75,9 @@
   <p class="mut">One JSON object, a JSON array, or JSONL.</p>
   <textarea id="input" spellcheck="false" aria-label="Record to verify" placeholder='{"seq": 80, "prev_hash": "...", "hash": "...", ...}'></textarea>
   <div class="row">
-    <button id="go" class="primary" type="button">Verify</button>
+    <button id="sample" class="primary" type="button">Load a real record from the published ledger</button>
+    <button id="go" type="button">Verify what I pasted</button>
     <label class="field">or open a file <input id="file" type="file" accept=".json,.jsonl,.txt"></label>
-    <button id="sample" type="button">Load a real record from the published ledger</button>
   </div>
   <p class="mut" id="status" role="status" aria-live="polite"></p>
 </section>
