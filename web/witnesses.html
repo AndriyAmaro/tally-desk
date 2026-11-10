@@ -128,6 +128,7 @@ button[disabled]{opacity:.5;cursor:default}
   }
 
   function row(r) {
+    if (r.error) return `<tr id="h${r.seq}"><td><b>#${r.seq}</b></td><td colspan="4" class="mut">? could not download this head's files (${esc(r.error)}); reload to check it</td></tr>`;
     const when = r.bitcoin
       ? `Bitcoin block <b>${r.bitcoin.height}</b>${r.bitcoin.time ? `<br><span class="mut">mined ${utc(r.bitcoin.time)}</span>` : ""}`
       : `<span class="warn">pending</span><br><span class="mut">${r.pending} calendar promise${r.pending === 1 ? "" : "s"}, no block yet</span>`;
@@ -142,11 +143,15 @@ button[disabled]{opacity:.5;cursor:default}
     const heads = index.heads;
 
     // 1 + 2. Every head against the ledger; the earliest and the latest confirmed ones against Bitcoin.
-    const first = await Promise.all(heads.map((h) => inspect(h, ledger, false).catch((e) => ({ seq: h.seq, digestOk: false, ledgerOk: false, error: String(e), pending: 0, checks: [] }))));
-    const agree = first.filter((r) => r.digestOk && r.ledgerOk).length;
-    $("agree").innerHTML = agree === first.length && first.length
-      ? `<div class="verdict ok">✓ ${agree} of ${first.length} stamped heads match this ledger (${ledger.length} dossiers, head #${ledger[ledger.length - 1].seq})</div>`
-      : `<div class="verdict bad">✗ ${first.length - agree} of ${first.length} stamped heads DISAGREE with this ledger</div>`;
+    // A download that fails is retried once; if it fails again the head is reported as not fetched, never as a disagreement.
+    const first = await Promise.all(heads.map((h) => inspect(h, ledger, false).catch(() => inspect(h, ledger, false))
+      .catch((e) => ({ seq: h.seq, error: String(e && e.message || e), pending: 0, checks: [] }))));
+    const checked = first.filter((r) => !r.error), unfetched = first.length - checked.length;
+    const agree = checked.filter((r) => r.digestOk && r.ledgerOk).length;
+    const retry = unfetched ? ` ${unfetched} could not be downloaded this time; reload the page to check them.` : "";
+    $("agree").innerHTML = agree === checked.length && checked.length
+      ? `<div class="verdict ok">✓ ${agree} of ${checked.length} stamped heads match this ledger (${ledger.length} dossiers, head #${ledger[ledger.length - 1].seq}).${retry}</div>`
+      : `<div class="verdict bad">✗ ${checked.length - agree} of ${checked.length} stamped heads DISAGREE with this ledger.${retry}</div>`;
 
     const tbody = $("btc").querySelector("tbody");
     const rows = {};
