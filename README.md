@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="web/cycle.html"><img src="docs/readme/otari-header.svg" width="100%" alt="Tally Desk on Otari: a paper-trading agent whose every model call goes through the Otari gateway and leaves a receipt that anyone can re-verify offline"></a>
+  <a href="https://andriyamaro.github.io/tally-desk/web/cycle.html"><img src="docs/readme/otari-header.svg" width="100%" alt="Tally Desk on Otari: a paper-trading agent whose every model call goes through the Otari gateway and leaves a receipt that anyone can re-verify offline"></a>
 </p>
 <p align="center">
   <img src="docs/readme/otari-figures.svg" width="100%" alt="Figures counted from the ledger: Otari-era dossiers, sealed receipts, provider and model routes that answered, resources proven, backup-route answers">
@@ -8,13 +8,15 @@
   <img src="docs/readme/otari-features.svg" width="100%" alt="The eight Otari resources with the status the audit gives each one: all eight proven from sealed receipts">
 </p>
 <p align="center">
-  <a href="web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="40" alt="Call-by-call view"></a>
-  <a href="web/verify.html"><img src="docs/readme/otari-button-verify.svg" height="40" alt="Verify a record"></a>
+  <a href="https://andriyamaro.github.io/tally-desk/web/cycle.html"><img src="docs/readme/otari-button-cycle.svg" height="40" alt="Call-by-call view"></a>
+  <a href="https://andriyamaro.github.io/tally-desk/web/verify.html"><img src="docs/readme/otari-button-verify.svg" height="40" alt="Verify a record"></a>
   <a href="#proofs-resource-by-resource"><img src="docs/readme/otari-button-audit.svg" height="40" alt="Proofs table"></a>
   <a href="docs/FEEDBACK_LOG.md"><img src="docs/readme/otari-button-feedback.svg" height="40" alt="Feedback to Otari"></a>
 </p>
 
 **Tally Desk decides on paper trades and answers for every model call it makes.** It is an autonomous trading agent that runs on [Otari](https://otari.ai), the gateway that sits between an app and its model providers. Each of its four decision roles (a bull analyst, a bear analyst, a citation checker and a judge) runs on a different open-weight model, and every call, to a model or to a tool, leaves a receipt: who asked, which model answered through which provider, what it cost, how it stopped. The receipts are sealed into a hash-chained ledger that anyone can verify and replay offline. No real-money order is ever placed.
+
+**Live site:** [andriyamaro.github.io/tally-desk](https://andriyamaro.github.io/tally-desk/), rebuilt from this branch after every cycle.
 
 The trading agent is the reference workload. What the project really builds is a tamper-evident receipt layer for an agent that calls models through a gateway: the receipts, the hash chain, the replay and the verifier know nothing about markets. [`docs/architecture.md`](docs/architecture.md) splits the code into four parts and says, function by function, what a second agent would plug in.
 
@@ -56,7 +58,7 @@ Three safeguards sit around those steps, each with its own receipts or sealed fi
 | Open-weight models (30) | Four roles (bull, bear, judge, citation checker) each answer on a different open-weight model, and every call in the Otari era went to an open-weight model | [Proofs](#proofs-resource-by-resource) row 1, [model scoreboard](#open-model-scoreboard), [models and roles](#models-and-roles) |
 | Otari features, 10 each, max 6 (60) | Six features proven from inside the app: routing and fallback, budgets, budget per user, web search and fetch, code execution, MCP | [Proofs](#proofs-resource-by-resource) rows 2, 3, 4, 6, 7, 8, each with request ids |
 | Guardrails | **Proven.** Our own prompt-injection screen ([`services/guardrail/`](services/guardrail/README.md), on Cloudflare Workers) is mandated in the Otari dashboard in monitor mode, and Otari evaluates it on every call that reads outside text. A live drill in block mode served a normal headline and refused an injection with a 403 | [Proofs](#proofs-resource-by-resource) row 5 |
-| Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](web/cycle.html) |
+| Working app (5) | One command records a cycle through Otari; `verify` and `replay` re-check the whole chain offline | [Quickstart](#quickstart) and [`web/cycle.html`](https://andriyamaro.github.io/tally-desk/web/cycle.html) |
 | Our feedback to Otari | Every real snag met with the gateway, with symptom, steps to reproduce and status | [`docs/FEEDBACK_LOG.md`](docs/FEEDBACK_LOG.md) |
 
 Receipts are also checked against Otari's own usage log with free GET calls. The latest run, [`docs/evidence/otari-reconcile-798-801.txt`](docs/evidence/otari-reconcile-798-801.txt), compared 54 request ids and found no divergence in status, tokens, cost or usage rows. The 20 ids of dossier 801 belong to the key of the scheduled job and can only be checked with that key.
@@ -131,13 +133,13 @@ Python 3 and its standard library are enough; there is no install step. To see a
 You need no key, no account and none of our word for the first four.
 
 - **Offline, from a clone:** `python3 -m verdict_desk verify` recomputes every hash and link of the chain, and `python3 -m verdict_desk replay` re-derives each verdict from its frozen evidence. An edited or forged dossier fails one of the two.
-- **In your browser:** [`web/verify.html`](web/verify.html) takes a dossier, recomputes its hash, checks its link in the chain and re-derives the verdict, with JavaScript that is tested against the Python implementation.
-- **Try to cheat it:** [`web/verify.html?real=1#cheat`](web/verify.html?real=1#cheat) loads the newest dossier and lets you change one thing in an in-memory copy: a call's cost, the verdict, a sentence of a claim, or the link to the previous record.
+- **In your browser:** [`web/verify.html`](https://andriyamaro.github.io/tally-desk/web/verify.html) takes a dossier, recomputes its hash, checks its link in the chain and re-derives the verdict, with JavaScript that is tested against the Python implementation.
+- **Try to cheat it:** [`web/verify.html?real=1#cheat`](https://andriyamaro.github.io/tally-desk/web/verify.html?real=1#cheat) loads the newest dossier and lets you change one thing in an in-memory copy: a call's cost, the verdict, a sentence of a claim, or the link to the previous record.
   The same three checks run again and name which one failed, with the recomputed hash beside the stored one; Undo puts the original back and it verifies again. Nothing is uploaded or saved.
-- **Call by call:** [`web/cycle.html`](web/cycle.html) shows one cycle as a timeline of receipts: the model asked for and the model that answered, provider, cost, latency, fallback, request id, budget headroom and who saw each prompt. [`web/index.html`](web/index.html) is the landing page.
+- **Call by call:** [`web/cycle.html`](https://andriyamaro.github.io/tally-desk/web/cycle.html) shows one cycle as a timeline of receipts: the model asked for and the model that answered, provider, cost, latency, fallback, request id, budget headroom and who saw each prompt. [`web/index.html`](https://andriyamaro.github.io/tally-desk/web/index.html) is the landing page.
 - **Against Otari:** `python3 -m verdict_desk otari-audit --reconcile` compares each receipt with Otari's own usage record by request id (free GET calls, a key is required).
 
-The pages are static: serve the repository as shown in the quickstart to see them rendered.
+The pages are static and live at [andriyamaro.github.io/tally-desk](https://andriyamaro.github.io/tally-desk/), rebuilt after every cycle; to run them locally, serve the repository as shown in the quickstart.
 
 <img src="docs/readme/icons/proofs.svg" width="44" height="44" alt="">
 
@@ -312,7 +314,7 @@ Putting a real agent behind the gateway turned up friction worth reporting. Ever
 - the `Otari-Guardrails` header says a guardrail is attached but not whether it ran, and `valid` stays null (entries 11 and 13);
 - MCP activity is invisible on Chat Completions, so the proof needs a streamed Messages request (entry 16).
 
-The log also records what worked on the first try (entry 19), since that is feedback too. No GitHub issue has been opened for these yet, so the log is the one place to read them.
+The log also records what worked on the first try (entry 19), since that is feedback too. Two of them reached the Otari repository: a docs pull request on which credential reaches which route ([#2894](https://github.com/mozilla-ai/otari/pull/2894), merged) and an issue on the edge 504 and the 409 that follows on the same-key retry, with request ids counted from this ledger ([#3131](https://github.com/mozilla-ai/otari/issues/3131)).
 
 <img src="docs/readme/icons/details.svg" width="44" height="44" alt="">
 
@@ -446,7 +448,7 @@ The suite guards the chain (edit, delete, swap, forge and truncate attacks must 
 
 ## About this repository
 
-It started as a snapshot of the earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9`, which is kept frozen as it was; [`docs/HISTORY.md`](docs/HISTORY.md) says what carried over and what is new. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` is defined on `main` and runs `tools/otari_runner.py` against the `otari` branch. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
+It started as a snapshot of the earlier project, [AndriyAmaro/verdict-desk](https://github.com/AndriyAmaro/verdict-desk) at commit `c65bab9`, which is kept frozen as it was; [`docs/HISTORY.md`](docs/HISTORY.md) says what carried over and what is new. The Otari work lives on the `otari` branch. The scheduled job `otari-cycle` runs from `otari`, the default branch, and records each cycle with `tools/otari_runner.py`; the `pages` workflow then rebuilds the live site. The other scheduled workflows belong to the earlier project and stay in its repository; `test_workflows` and `test_rekor_workflow`, which read those files, skip cleanly when they are absent.
 
 ## License and credits
 
