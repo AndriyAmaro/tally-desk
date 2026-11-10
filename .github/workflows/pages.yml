@@ -1,0 +1,57 @@
+name: pages
+
+# Publishes the site the way its pages expect it: the repository root (the redirect page), web/ with the ledger beside
+# the pages, and the files the earlier-era pages read (witness index, market candles, evidence packs, tamper battery).
+# A push made by the cycle runner's token starts no workflow, so the site is also rebuilt after every otari-cycle run.
+on:
+  push:
+    branches: [otari]
+  workflow_run:
+    workflows: [otari-cycle]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: otari
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Build the site
+        run: |
+          mkdir site
+          cp index.html .nojekyll site/
+          cp -r web site/web
+          cp -r ledger site/ledger
+          cp -r config site/config
+          cp -r ledger site/web/ledger
+          python -m verdict_desk witnesses --out site/web/witnesses.json
+          python -m verdict_desk market --out site/web/market.json
+          python -m verdict_desk packs --recent 24 --outdir site/web/pack
+          python -m verdict_desk battery --trials 500 --out site/web/battery.json || echo "::warning::tamper battery skipped this run"
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
