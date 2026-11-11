@@ -18,6 +18,8 @@
 
 **Live site:** [andriyamaro.github.io/tally-desk](https://andriyamaro.github.io/tally-desk/), rebuilt from this branch after every cycle.
 
+**Demo video (4:55):** [play it](https://andriyamaro.github.io/tally-desk/web/demo/tally-desk-demo.mp4). A screen recording of the real app, narrated in Brazilian Portuguese by the author, with English subtitles. Where each Otari feature appears: open-weight models in their roles 0:18 · receipts, call by call 0:39 · budgets and per-user budgets 0:59 · routing and failover 1:28 · web search and fetch 1:51 · code execution 2:16 · MCP 2:35 · guardrails, live drill 2:49 · closure gate and a real incident 3:31 · tamper test 4:15.
+
 The trading agent is the reference workload. What the project really builds is a tamper-evident receipt layer for an agent that calls models through a gateway: the receipts, the hash chain, the replay and the verifier know nothing about markets. [`docs/architecture.md`](docs/architecture.md) splits the code into four parts and says, function by function, what a second agent would plug in.
 
 <img src="docs/readme/icons/why.svg" width="44" height="44" alt="">
