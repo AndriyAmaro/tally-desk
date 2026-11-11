@@ -108,7 +108,7 @@ class RunnerTest(unittest.TestCase):
         return [" ".join(c[:4]) if c[0] == "git" else " ".join(c[1:4] if "verdict_desk" in c else c[:2]) for c in self.world.calls]
 
     def test_the_constants_are_the_approved_ones(self):
-        self.assertEqual((R.INTERVAL_S, R.MAX_CYCLES_PER_DAY, R.TOTAL_CAP_USD, R.MAX_FAILURES), (10800, 8, Decimal("2.00"), 2))
+        self.assertEqual((R.INTERVAL_S, R.MAX_CYCLES_PER_DAY, R.TOTAL_CAP_USD, R.MAX_FAILURES), (10800, 8, Decimal("4.00"), 2))
         self.assertEqual(R.SYMBOLS, ("BTCUSDT", "ETHUSDT", "SOLUSDT"))
 
     def test_one_good_tick_runs_the_steps_in_order_and_commits_only_the_dossier_files_as_the_author_with_no_model_trailer(self):
@@ -203,10 +203,10 @@ class RunnerTest(unittest.TestCase):
     def test_failed_cycles_spend_eats_the_total_cap_too(self):
         r = self.make(fail_decide=True)
         state = r.load()
-        state["total_usd"] = "1.95"
+        state["total_usd"] = str(R.TOTAL_CAP_USD - Decimal("0.05"))
         r.save(state)
         r.tick()
-        self.assertEqual(r.load()["total_usd"], "2.03")
+        self.assertEqual(Decimal(r.load()["total_usd"]), R.TOTAL_CAP_USD + Decimal("0.03"))
         self.clock.advance(R.RETRY_S)
         self.assertTrue(r.tick().startswith("stopped"))
 
@@ -354,19 +354,35 @@ class RunnerTest(unittest.TestCase):
         r.save(state)
         self.assertEqual(r.tick(), "deferred")
 
-    def test_the_total_cap_of_two_dollars_stops_it_for_good(self):
+    def test_a_stop_for_the_cap_lifts_when_the_cap_is_raised(self):
         r = self.make()
         state = r.load()
-        state["total_usd"] = "2.00"
+        state["total_usd"] = "2.03"
+        state["stopped"] = "the total cap of USD 2.00 is reached (spent 2.03)"
+        r.save(state)
+        self.assertEqual(r.tick(), "ok")
+        self.assertIsNone(r.load()["stopped"])
+
+    def test_other_stops_do_not_lift_by_themselves(self):
+        r = self.make()
+        state = r.load()
+        state["stopped"] = "2 cycles failed in a row; the last: boom"
+        r.save(state)
+        self.assertTrue(r.tick().startswith("stopped"))
+
+    def test_the_total_cap_stops_it(self):
+        r = self.make()
+        state = r.load()
+        state["total_usd"] = str(R.TOTAL_CAP_USD)
         r.save(state)
         result = r.tick()
         self.assertTrue(result.startswith("stopped") and "total cap" in result, result)
         self.assertEqual([c for c in self.world.calls if "decide-v7" in c], [])
-        state["total_usd"] = "1.99"
+        state["total_usd"] = str(R.TOTAL_CAP_USD - Decimal("0.01"))
         state["stopped"] = None
         r.save(state)
         self.assertEqual(r.tick(), "ok")
-        self.assertEqual(r.load()["total_usd"], "2.026000")
+        self.assertEqual(Decimal(r.load()["total_usd"]), R.TOTAL_CAP_USD + Decimal("0.026"))
         self.clock.advance(R.INTERVAL_S)
         self.assertTrue(r.tick().startswith("stopped"))
 

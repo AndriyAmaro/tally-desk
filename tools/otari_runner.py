@@ -4,7 +4,7 @@
 Every three hours, one cycle: `decide-v7` on one symbol (BTCUSDT, ETHUSDT, SOLUSDT in turn), then verify, replay, an OpenTimestamps stamp of
 the new head (and a request to the calendars to upgrade the newest earlier proofs to Bitcoin attestations), a refresh of the README blocks, a scan for secrets, a commit and a push of the new dossier to `origin otari`. It keeps inside
 the budgets the dashboard enforces (USD 0.10 a day per end user, USD 1.50 a day for the organization) with a margin of its own, counts what
-it spends from the receipts, never spends more than USD 2.00 in all, and stops by itself (a line in the log says why) when:
+it spends from the receipts, never spends more than USD 4.00 in all, and stops by itself (a line in the log says why) when:
 
   - a cycle fails twice in a row (a dossier the closure gate refuses is not a failure: the refusal is logged and written to
     ledger/closure-refusals.jsonl, the money it cost is counted like any other cycle's, and the next cycle goes on);
@@ -41,7 +41,7 @@ KEY_FILE = Path(os.environ.get("OTARI_KEY_FILE") or "/root/.config/otari/key")  
 INTERVAL_S = 3 * 3600
 RETRY_S = 30 * 60  # after one failure the next try comes sooner; a second failure in a row stops the runner
 MAX_CYCLES_PER_DAY = 8
-TOTAL_CAP_USD = Decimal("2.00")
+TOTAL_CAP_USD = Decimal("4.00")  # was 2.00 until 2026-11-11; raised to keep the cycles alive through judging
 ORG_DAY_CAP_USD = Decimal("1.20")  # of the dashboard's 1.50 a day
 USER_DAY_BUDGET_USD = Decimal("0.10")  # the dashboard's budget per end user per day
 DEFAULT_USER_CYCLE_USD = Decimal("0.0125")  # until a cycle of its own has been seen
@@ -308,6 +308,8 @@ class Runner:
     def tick(self, force: bool = False) -> str:
         """One decision: returns what happened (also logged). Never raises for the reasons it stops on."""
         state = self.load()
+        if (state["stopped"] or "").startswith("the total cap") and Decimal(state["total_usd"]) < TOTAL_CAP_USD:
+            state["stopped"] = None  # the cap was raised: a stop for the cap alone lifts by itself
         if state["stopped"]:
             return f"stopped: {state['stopped']}"
         now = self.now()

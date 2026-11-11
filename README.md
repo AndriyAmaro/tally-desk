@@ -365,7 +365,7 @@ Three different things, kept apart on purpose:
 
 **3. Cycle caps and runner limits** &nbsp;|&nbsp; **the app alone** (`llm._cycle_check`, `tools/otari_runner.py`)
 
-- What it is: no new call starts once a cycle has spent USD 0.02 on the core roles or USD 0.06 on the tool roles; the runner stops at USD 2.00 in all and at 8 cycles a day.
+- What it is: no new call starts once a cycle has spent USD 0.02 on the core roles or USD 0.06 on the tool roles; the runner stops at USD 4.00 in all and at 8 cycles a day.
 - Proof in this repository: a refusal by a cap is a client-side receipt (`cycle_cap_exceeded`, `source: client`), never an Otari refusal.
 
 
