@@ -17,6 +17,7 @@
   "roles": {
     "bull": {
       "model": "openai/gpt-oss-120b",
+      "max_tokens": 6000,
       "vendor": "OpenAI",
       "fallbacks": [
         "alibaba/qwen3-235b-a22b-instruct-2507",
@@ -26,6 +27,7 @@
     },
     "bear": {
       "model": "nvidia/nemotron-3-super-120b-a12b",
+      "max_tokens": 8000,
       "vendor": "NVIDIA",
       "fallbacks": [
         "openai/gpt-oss-120b",
