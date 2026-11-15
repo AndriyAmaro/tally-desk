@@ -75,37 +75,37 @@ Each role is billed to its own end user and asked for one open-weight catalog id
 **Bull analyst** &nbsp;|&nbsp; argues the long case
 
 - Asked for (open weights): `openai/gpt-oss-120b` (OpenAI)
-- Answered by, from the receipts: `deepinfra:openai/gpt-oss-120b` (54), `ovhcloud:gpt-oss-120b` (2)
+- Answered by, from the receipts: `deepinfra:openai/gpt-oss-120b` (55), `ovhcloud:gpt-oss-120b` (2)
 - Why this model: an open-weight 120B model from a different vendor than the bear, so the two sides do not echo one model
 
 **Bear analyst** &nbsp;|&nbsp; argues the short case
 
 - Asked for (open weights): `nvidia/nemotron-3-super-120b-a12b` (NVIDIA)
-- Answered by, from the receipts: `bedrock:nvidia.nemotron-super-3-120b` (51), `deepinfra:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B` (5)
+- Answered by, from the receipts: `bedrock:nvidia.nemotron-super-3-120b` (51), `deepinfra:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B` (6)
 - Why this model: an open-weight 120B model from another vendor, so a claim's side can be traced to one model
 
 **Judge** &nbsp;|&nbsp; weighs the validated claims
 
 - Asked for (open weights): `deepseek/deepseek-v4-flash-0731` (DeepSeek)
-- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Pro` (38), `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (18)
+- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Pro` (39), `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (18)
 - Why this model: a fast model by default; the router may take the larger route of the same family only while the judge's end user is under 80 percent of its daily budget
 
 **Citation checker** &nbsp;|&nbsp; re-reads each claim against the evidence it cites
 
 - Asked for (open weights): `google/gemma-3-27b-it` (Google)
-- Answered by, from the receipts: `nebius:google/gemma-3-27b-it` (56)
+- Answered by, from the receipts: `nebius:google/gemma-3-27b-it` (57)
 - Why this model: small on purpose, since it only compares a claim with its source; a Llama 4 route was tried first and dropped for 504s (feedback log, entry 1)
 
 **Narrator** &nbsp;|&nbsp; reads news headlines in batches
 
 - Asked for (open weights): `alibaba/qwen3-235b-a22b-instruct-2507` (Alibaba)
-- Answered by, from the receipts: `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` (742), `bedrock:qwen.qwen3-235b-a22b-2507-v1:0` (29)
+- Answered by, from the receipts: `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` (754), `bedrock:qwen.qwen3-235b-a22b-2507-v1:0` (29)
 - Why this model: a large open-weight model for the highest-volume reading job, sent as a plain catalog id so Otari's own provider failover applies
 
 **Tool drivers** &nbsp;|&nbsp; search, fetch, sandbox, MCP
 
 - Asked for (open weights): `deepseek/deepseek-v4-flash-0731` (DeepSeek)
-- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (256)
+- Answered by, from the receipts: `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` (261)
 - Why this model: the tool does the work and the model only drives it, so a small fast model is enough
 <!-- otari:models:end -->
 
@@ -150,29 +150,29 @@ The pages are static and live at [andriyamaro.github.io/tally-desk](https://andr
 <!-- otari:proofs:start -->
 | # | Resource | Status | Dossier |
 |---|---|---|---|
-| 1 | Several open-weight models in distinct roles | **PASS** | 848 |
+| 1 | Several open-weight models in distinct roles | **PASS** | 849 |
 | 2 | Routing and fallback | **PASS** | 843 |
-| 3 | Budgets and spend limits | **PASS** | 848 |
-| 4 | Budget per user | **PASS** | 848 |
-| 5 | Guardrails | **PASS** | 848 |
+| 3 | Budgets and spend limits | **PASS** | 849 |
+| 4 | Budget per user | **PASS** | 849 |
+| 5 | Guardrails | **PASS** | 849 |
 | 6 | Web search and fetch | **PASS** | 820 |
-| 7 | Code execution | **PASS** | 848 |
-| 8 | MCP | **PASS** | 848 |
+| 7 | Code execution | **PASS** | 849 |
+| 8 | MCP | **PASS** | 849 |
 
 **8 resources: 8 proven from sealed receipts + 0 from drills (not sealed) + 0 NOT PROVEN.**
 
 #### 1. Several open-weight models in distinct roles
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
 > bull, bear, judge and checker each answered on a different open model: bull openai/gpt-oss-120b, bear nvidia/NVIDIA-Nemotron-3-Super-120B-A12B, judge deepseek-ai/DeepSeek-V4-Pro, checker google/gemma-3-27b-it
 
 Request ids:
 
-- `46088358-689d-41c7-a1d5-cf665dcaa0ed`
-- `804eac00-89ee-4383-926d-5e3eecbbacfb`
-- `90c9e34e-c0f2-4c3c-8d31-c53d3d08dd9c`
-- `9b801a0d-eefe-4292-89ef-bfead7784de0`
+- `48aa3e11-227a-4b1f-900a-812707cc64c5`
+- `44fcadff-f4c7-423e-b47e-695edc8c4504`
+- `75872be0-736c-4c69-a2b6-caaf114f0b9d`
+- `f19bdfb2-5f9c-4b8c-87ab-929a03c5cfaa`
 
 Code: `config/otari.json`, `llm.py`
 
@@ -180,13 +180,13 @@ Code: `config/otari.json`, `llm.py`
 
 **PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 843
 
-> 32 real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count 2), in dossiers 800, 801, 802, 805, 822, 830, 843; newest: a bear call sent as nvidia/nemotron-3-super-120b-a12b (the plain catalog id, no routing policy of ours, so this is Otari's own provider failover and not the vd-judge policy) was answered on its second attempt by bedrock:nvidia.nemotron-super-3-120b. Besides, the failover canary of dossier 848 is the deliberate test of the same route: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true). All sealed in the ledger. Drill, not sealed in the ledger: on 2026-11-11 the role-fallback drill asked the bull role with a first model the gateway does not know (drill/does-not-exist); it was refused with HTTP 400 invalid_model before any model ran and without charge, and the app moved to alibaba/qwen3-235b-a22b-instruct-2507, which answered. That is the app's own role chain, not Otari's provider failover, and it is not counted in the proof above
+> 32 real calls were answered by a backup route after the first attempt did not succeed (Otari-Fallback true, attempt count 2), in dossiers 800, 801, 802, 805, 822, 830, 843; newest: a bear call sent as nvidia/nemotron-3-super-120b-a12b (the plain catalog id, no routing policy of ours, so this is Otari's own provider failover and not the vd-judge policy) was answered on its second attempt by bedrock:nvidia.nemotron-super-3-120b. Besides, the failover canary of dossier 849 is the deliberate test of the same route: policy vd-judge-drill served by deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731 after 2 attempts (Otari-Fallback true). All sealed in the ledger. Drill, not sealed in the ledger: on 2026-11-11 the role-fallback drill asked the bull role with a first model the gateway does not know (drill/does-not-exist); it was refused with HTTP 400 invalid_model before any model ran and without charge, and the app moved to alibaba/qwen3-235b-a22b-instruct-2507, which answered. That is the app's own role chain, not Otari's provider failover, and it is not counted in the proof above
 
 Request ids:
 
 - `3dba5916-2f91-488f-b3da-28dbd1c7208a`
 - `6a5042fb-5eef-4443-9591-abd3706a4b9a`
-- `1ae961a3-a30d-4dd1-b2ad-412dfe4f23cc`
+- `8864482e-0311-4a8e-bf8d-575126897864`
 - `1dd7daa2-c2ea-4c8f-81b7-aec04e383a71` (drill, not sealed)
 - `967a11d1-6538-4f7b-9d5d-51cb60b33c62` (drill, not sealed)
 - `07fed39c-fdfc-4e25-955f-96195a606a96` (drill, not sealed)
@@ -195,43 +195,43 @@ Code: `otari_canary.py`
 
 #### 3. Budgets and spend limits
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
-> budget-aware routing: Otari's spend for the judge's end user (USD 0.001244 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed)
+> budget-aware routing: Otari's spend for the judge's end user (USD 0.002515 of USD 0.10) was read and sealed, and the router allowed the hard route on it; per-cycle caps sealed too. Otari's own 403 budget_exceeded refusal is shown by the drill only (not sealed)
 
 Request ids:
 
-- `90c9e34e-c0f2-4c3c-8d31-c53d3d08dd9c`
+- `75872be0-736c-4c69-a2b6-caaf114f0b9d`
 - `d9b44c76-c18e-4f75-8ed1-4a5781e0d8e7` (drill, not sealed)
 
 Code: `llm.read_headroom`, `llm.route_decision`
 
 #### 4. Budget per user
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
 > 10 of the 10 end users found sit on the vd-analyst budget; 10 of 10 asked were found (vd-bull, vd-bear, vd-judge, vd-checker, vd-narrator, vd-searcher, vd-sandbox, vd-mcp, vd-fetcher, vd-canary) (read back from Otari, sealed in the dossier); Otari echoed the budget on the receipts
 
 Request ids:
 
-- `e07939b5-3fed-4fcd-95b3-a0f51f9ef56a`
-- `5496b364-6bde-4dc0-96c9-72556b07bfcf`
-- `72dd4a81-c0ba-49d0-b3b6-2b3fba6d93d5`
-- `af43e969-aef2-456c-a503-1904846a9605`
+- `26dff1de-a64f-406f-8ddd-ecdef6a4cbab`
+- `7b6cc076-f281-470a-9af6-10066172fffd`
+- `614ecb38-aaa1-4257-8532-e8afdde862d8`
+- `e5232a2a-3b98-48cf-8878-7ca685443207`
 
 Code: `llm._end_user`, `llm.read_headroom`
 
 #### 5. Guardrails
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
-> the custom profile tally-web-injection was evaluated by Otari on 762 sealed calls (762 passed, 0 flagged) in dossiers 843, 844, 845, 846, 847, 848 and earlier; newest: dossier 848, narrator call, request e07939b5-3fed-4fcd-95b3-a0f51f9ef56a, header status evaluated, mode monitor, valid true, score 0. The guardrail drill (block mode, not sealed, not counted) served a benign headline with an evaluated verdict and refused a malicious one with 403 guardrail_violation (score 0.985)
+> the custom profile tally-web-injection was evaluated by Otari on 784 sealed calls (784 passed, 0 flagged) in dossiers 844, 845, 846, 847, 848, 849 and earlier; newest: dossier 849, narrator call, request 26dff1de-a64f-406f-8ddd-ecdef6a4cbab, header status evaluated, mode monitor, valid true, score 0. The guardrail drill (block mode, not sealed, not counted) served a benign headline with an evaluated verdict and refused a malicious one with 403 guardrail_violation (score 0.985)
 
 Request ids:
 
-- `e07939b5-3fed-4fcd-95b3-a0f51f9ef56a`
-- `5496b364-6bde-4dc0-96c9-72556b07bfcf`
-- `72dd4a81-c0ba-49d0-b3b6-2b3fba6d93d5`
+- `26dff1de-a64f-406f-8ddd-ecdef6a4cbab`
+- `7b6cc076-f281-470a-9af6-10066172fffd`
+- `614ecb38-aaa1-4257-8532-e8afdde862d8`
 - `ba84b7f6-ab92-4a3b-8478-16245a48155d` (drill, not sealed)
 - `456b4ef5-51e0-4aeb-b59b-21785e1b8e2e` (drill, not sealed)
 
@@ -252,25 +252,25 @@ Code: `otari_web.py`
 
 #### 7. Code execution
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
 > the verdict re-derived in Otari's sandbox: its own result block is identical to the local run, the nonce proof matches and the code that ran is the code sent
 
 Request ids:
 
-- `c6486493-fe2c-46d5-b493-4bff5ae64321`
+- `8f1edc0b-b839-4c0d-8203-ad1df3d895bd`
 
 Code: `sandbox_rederive.py`
 
 #### 8. MCP
 
-**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 848
+**PASS** &nbsp;|&nbsp; Sealed receipts in the ledger &nbsp;|&nbsp; dossier 849
 
 > prices read from coingecko through Otari's MCP loop, from the server's own result block (check: ok)
 
 Request ids:
 
-- `0f411a4a-2e56-4265-8a03-018c5f03cde9`
+- `9c1782bd-cdc7-4722-89eb-9876563f2959`
 
 Code: `otari_mcp.py`
 <!-- otari:proofs:end -->
@@ -287,15 +287,15 @@ Code: `otari_mcp.py`
 <!-- otari:board:start -->
 | Model (provider:model) | Calls | OK | Refusals / failures | p50 ms | p95 ms | Fallbacks | Accepted claims | USD per claim |
 |---|---|---|---|---|---|---|---|---|
-| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 742 | 742 | - | 17423 | 28654 | 0 | - | - |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 325 | 325 | - | 2724 | 9937 | 51 | - | - |
-| `nebius:google/gemma-3-27b-it` | 56 | 56 | - | 5926 | 17787 | 0 | - | - |
-| `deepinfra:openai/gpt-oss-120b` | 54 | 54 | - | 23739 | 28870 | 0 | 212 | 0.000087 |
+| `deepinfra:Qwen/Qwen3-235B-A22B-Instruct-2507` | 754 | 754 | - | 17427 | 28654 | 0 | - | - |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Flash-0731` | 331 | 331 | - | 2724 | 9937 | 52 | - | - |
+| `nebius:google/gemma-3-27b-it` | 57 | 57 | - | 5944 | 17787 | 0 | - | - |
+| `deepinfra:openai/gpt-oss-120b` | 55 | 55 | - | 24705 | 28870 | 0 | 216 | 0.000087 |
 | `bedrock:nvidia.nemotron-super-3-120b` | 51 | 51 | - | 1985 | 2802 | 1 | 196 | 0.000164 |
-| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 38 | 38 | - | 2103 | 6808 | 0 | - | - |
+| `deepinfra:deepseek-ai/DeepSeek-V4-Pro` | 39 | 39 | - | 2125 | 6808 | 0 | - | - |
 | `bedrock:qwen.qwen3-235b-a22b-2507-v1:0` | 29 | 29 | - | 7211 | 13228 | 29 | - | - |
-| `(no answer) alibaba/qwen3-235b-a22b-instruct-2507` | 20 | 0 | 409 x19, pricing_required x1 | - | - | 0 | - | - |
-| `deepinfra:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B` | 5 | 5 | - | 14345 | 21875 | 0 | 19 | 0.000528 |
+| `(no answer) alibaba/qwen3-235b-a22b-instruct-2507` | 24 | 0 | 409 x23, pricing_required x1 | - | - | 0 | - | - |
+| `deepinfra:nvidia/NVIDIA-Nemotron-3-Super-120B-A12B` | 6 | 6 | - | 16060 | 21875 | 0 | 23 | 0.000496 |
 | `ovhcloud:gpt-oss-120b` | 2 | 2 | - | - | - | 2 | 8 | 0.000249 |
 | `(no answer) nvidia/nemotron-3-super-120b-a12b` | 1 | 0 | pricing_required x1 | - | - | 0 | - | - |
 | `(no answer) openai/gpt-oss-120b` | 1 | 0 | pricing_required x1 | - | - | 0 | - | - |
