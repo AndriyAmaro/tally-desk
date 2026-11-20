@@ -18,11 +18,11 @@ The question it answers is simple: when the agent loses money, which model said 
 <!-- otari:numbers:start -->
 | Number | Value |
 |---|---|
-| Otari-era dossiers and receipts | 75 dossiers (792 to 866), 1775 receipts |
-| Calls answered | 1747 of 1775; the other 28 are 23 HTTP 409, 3 HTTP 402 `pricing_required`, 2 HTTP 502 |
-| Answers served by a backup route after the first attempt did not succeed | 129 (69 failover canary calls, 60 real calls) |
-| Cost of the receipts | USD 3.232496 in all; median cycle USD 0.048021 |
-| Receipts that needed more than one client try | 364, of which 331 came back as a stored answer (`Otari-Idempotent-Replayed`) |
+| Otari-era dossiers and receipts | 76 dossiers (792 to 867), 1801 receipts |
+| Calls answered | 1771 of 1801; the other 30 are 25 HTTP 409, 3 HTTP 402 `pricing_required`, 2 HTTP 502 |
+| Answers served by a backup route after the first attempt did not succeed | 138 (70 failover canary calls, 68 real calls) |
+| Cost of the receipts | USD 3.273354 in all; median cycle USD 0.047932 |
+| Receipts that needed more than one client try | 372, of which 337 came back as a stored answer (`Otari-Idempotent-Replayed`) |
 <!-- otari:numbers:end -->
 
 ## What was hard
