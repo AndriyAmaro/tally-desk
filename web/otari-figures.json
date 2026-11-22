@@ -1,14 +1,14 @@
 {
-  "asof": 873,
+  "asof": 874,
   "source": "scripts/otari_cards.py, from ledger/ledger.jsonl and docs/evidence/otari-drills.jsonl",
   "figures": [
     {
-      "value": "82",
+      "value": "83",
       "label": "Otari-era dossiers",
-      "sub": "792 to 873"
+      "sub": "792 to 874"
     },
     {
-      "value": "1957",
+      "value": "1983",
       "label": "sealed receipts",
       "sub": "one per model or tool call"
     },
@@ -23,7 +23,7 @@
       "sub": "all from sealed receipts or drills"
     },
     {
-      "value": "144",
+      "value": "146",
       "label": "backup-route answers",
       "sub": "canary plus real traffic"
     }
@@ -36,11 +36,11 @@
       "resource": "Several open-weight models in distinct roles",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "62c82213-2fbf-4a9f-a241-8d53ff4ff564",
-        "ba7fad7b-ad1d-47b9-b8a7-050481300d1c",
-        "009c6acf-6f56-4b0c-ad4e-d0a800d5740e"
+        "6b91bc9a-4bf7-4477-b35a-4befef0aff73",
+        "b19d12b3-bda2-4203-b478-ab0d5089487c",
+        "7fe77b4c-a0b9-461a-95f9-88f510e40a4d"
       ]
     },
     {
@@ -48,11 +48,11 @@
       "resource": "Routing and fallback",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 867,
+      "dossier": 874,
       "proof": [
+        "e2f91666-f80b-487d-a743-c8131b83372f",
         "1d6bf51f-43ab-4c2d-b403-94bb02fe7da5",
-        "1add07a9-0d2b-4b2c-9443-e5acd8ebd4d0",
-        "c6bad0a8-18e5-422f-88b9-961278dff069"
+        "4b8cca12-11ce-4e8d-b8b1-9cbda2d045fd"
       ]
     },
     {
@@ -60,9 +60,9 @@
       "resource": "Budgets and spend limits",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "009c6acf-6f56-4b0c-ad4e-d0a800d5740e"
+        "7fe77b4c-a0b9-461a-95f9-88f510e40a4d"
       ]
     },
     {
@@ -70,11 +70,11 @@
       "resource": "Budget per user",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "b8b092dc-65b8-4fa4-a01d-b743c147532b",
-        "bdef783e-ced0-46de-b531-ecf69fe0c54c",
-        "a190d62d-dd43-448a-ac8e-0d6657415cb0"
+        "925308be-c915-44f2-8c71-d8dbe380b14c",
+        "96edaa61-3b11-43f8-8022-46cdcee25e8b",
+        "07a062b8-c5d0-4de0-bbc6-7e79ea8af62f"
       ]
     },
     {
@@ -82,11 +82,11 @@
       "resource": "Guardrails",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "b8b092dc-65b8-4fa4-a01d-b743c147532b",
-        "bdef783e-ced0-46de-b531-ecf69fe0c54c",
-        "a190d62d-dd43-448a-ac8e-0d6657415cb0"
+        "925308be-c915-44f2-8c71-d8dbe380b14c",
+        "96edaa61-3b11-43f8-8022-46cdcee25e8b",
+        "07a062b8-c5d0-4de0-bbc6-7e79ea8af62f"
       ]
     },
     {
@@ -94,10 +94,10 @@
       "resource": "Web search and fetch",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 862,
+      "dossier": 874,
       "proof": [
-        "18b80c44-6a53-45a9-8d45-807c28d158a2",
-        "38fcbad9-e233-4506-8097-70bc7d34981a"
+        "31c9f5a7-0a94-4979-87ad-6de512932d46",
+        "52224acd-eed3-469e-b06a-502bc3438fd4"
       ]
     },
     {
@@ -105,9 +105,9 @@
       "resource": "Code execution",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "efebd988-d370-48c4-b16f-aac272254861"
+        "26d53ee5-34e1-4d5b-b298-1d59adc61f1d"
       ]
     },
     {
@@ -115,9 +115,9 @@
       "resource": "MCP",
       "status": "PASS",
       "source": "sealed",
-      "dossier": 873,
+      "dossier": 874,
       "proof": [
-        "b6cbedfd-d29a-4167-aa38-46a187dbc2f0"
+        "e2559f68-2539-44e3-9bfa-aca997e1c0c5"
       ]
     }
   ]
